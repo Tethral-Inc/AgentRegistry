@@ -1,0 +1,35 @@
+name: Nightly
+on:
+  schedule:
+    - cron: '0 6 * * *'
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - working-directory: terraform/environments/staging
+        env:
+          TF_VAR_cockroach_connection_string: ${{ secrets.COCKROACH_CONNECTION_STRING_STAGING }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform plan -detailed-exitcode -no-color 2>&1 || {
+            if [ $? -eq 2 ]; then
+              curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+                -H 'Content-type: application/json' \
+                -d '{"text":"ACR infrastructure drift detected. Check GitHub Actions."}'
+            fi
+          }
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high || curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} -H 'Content-type:application/json' -d '{"text":"ACR dependency audit found vulnerabilities."}'

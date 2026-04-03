@@ -1,0 +1,16 @@
+{
+  "name": "@acr/intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc && node scripts/bundle.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@acr/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0"
+  }
+}

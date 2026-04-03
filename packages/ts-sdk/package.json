@@ -1,0 +1,19 @@
+{
+  "name": "@tethral/acr-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@acr/shared": "workspace:*"
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

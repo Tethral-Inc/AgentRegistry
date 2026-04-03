@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.tfstate
+*.tfstate.backup
+.terraform/
+.vercel
+.wrangler
+__pycache__/
+*.egg-info/
+coverage/
+.turbo

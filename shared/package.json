@@ -1,0 +1,30 @@
+{
+  "name": "@acr/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./schemas": "./dist/schemas/index.js",
+    "./types": "./dist/types/index.js",
+    "./crypto": "./dist/crypto/index.js",
+    "./db": "./dist/db/index.js",
+    "./logger": "./dist/logger/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jose": "^5.6.0",
+    "pg": "^8.12.0",
+    "pino": "^9.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0"
+  }
+}

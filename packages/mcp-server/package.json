@@ -1,0 +1,28 @@
+{
+  "name": "@tethral/acr-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "bin": {
+    "acr-mcp": "dist/src/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@acr/shared": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.11.0"
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

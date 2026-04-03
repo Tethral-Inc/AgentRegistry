@@ -1,0 +1,21 @@
+{
+  "name": "ingestion-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/serve.ts",
+    "build": "tsc",
+    "start": "node dist/src/serve.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.4.0",
+    "@hono/node-server": "^1.11.0",
+    "@acr/shared": "workspace:*",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.11.0"
+  }
+}

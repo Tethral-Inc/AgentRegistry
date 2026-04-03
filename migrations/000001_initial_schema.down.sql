@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS api_keys;
+DROP TABLE IF EXISTS skill_versions;
+DROP TABLE IF EXISTS daily_summaries;
+DROP TABLE IF EXISTS canonical_name_mappings;
+DROP TABLE IF EXISTS system_health;
+DROP TABLE IF EXISTS friction_baselines;
+DROP TABLE IF EXISTS skill_hashes;
+DROP TABLE IF EXISTS interaction_receipts;
+DROP TABLE IF EXISTS composition_snapshots;
+DROP TABLE IF EXISTS agents;

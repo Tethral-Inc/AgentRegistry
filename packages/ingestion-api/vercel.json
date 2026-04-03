@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/lookup", "destination": "/public/lookup.html" },
+    { "source": "/(.*)", "destination": "/api/[[...route]]" }
+  ]
+}

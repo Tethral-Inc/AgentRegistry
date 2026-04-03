@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACR Skill Lookup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #fff; }
+    .subtitle { color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+    .search-box { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 1rem; }
+    input[type="text"] { width: 100%; padding: 0.75rem 1rem; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 0.95rem; font-family: monospace; }
+    input[type="text"]:focus { outline: none; border-color: #4a9eff; }
+    .or-divider { text-align: center; color: #666; font-size: 0.85rem; }
+    input[type="file"] { display: none; }
+    .file-label { display: block; padding: 0.75rem 1rem; background: #1a1a1a; border: 1px dashed #444; border-radius: 8px; text-align: center; cursor: pointer; color: #888; font-size: 0.9rem; }
+    .file-label:hover { border-color: #4a9eff; color: #aaa; }
+    button { padding: 0.75rem 1.5rem; background: #4a9eff; color: #fff; border: none; border-radius: 8px; font-size: 0.95rem; cursor: pointer; }
+    button:hover { background: #3a8eef; }
+    button:disabled { background: #333; color: #666; cursor: not-allowed; }
+    #result { margin-top: 2rem; width: 100%; max-width: 600px; }
+    .result-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 1.5rem; }
+    .result-card h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+    .field { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #222; }
+    .field:last-child { border-bottom: none; }
+    .field-label { color: #888; }
+    .field-value { font-family: monospace; }
+    .threat-none { color: #4ade80; }
+    .threat-low { color: #a3e635; }
+    .threat-medium { color: #facc15; }
+    .threat-high { color: #f97316; }
+    .threat-critical { color: #ef4444; font-weight: bold; }
+    .not-found { color: #888; text-align: center; padding: 2rem; }
+    .error { color: #ef4444; text-align: center; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>ACR Skill Lookup</h1>
+  <p class="subtitle">Check if a skill is known to the Agent Composition Records network</p>
+
+  <div class="search-box">
+    <input type="text" id="hashInput" placeholder="Paste a SHA-256 skill hash..." />
+    <div class="or-divider">or</div>
+    <label class="file-label" for="fileInput" id="fileLabel">Upload a SKILL.md file to hash it</label>
+    <input type="file" id="fileInput" accept=".md" />
+    <button id="searchBtn" onclick="search()">Look Up</button>
+  </div>
+
+  <div id="result"></div>
+
+  <script>
+    const RESOLVER_URL = 'https://acr.tethral.ai/v1';
+    const hashInput = document.getElementById('hashInput');
+    const fileInput = document.getElementById('fileInput');
+    const fileLabel = document.getElementById('fileLabel');
+    const resultDiv = document.getElementById('result');
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      fileLabel.textContent = file.name;
+      const content = await file.text();
+      const normalized = content.replace(/\r\n/g, '\n').trim();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      hashInput.value = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    });
+
+    async function search() {
+      const hash = hashInput.value.trim();
+      if (!hash) return;
+
+      resultDiv.innerHTML = '<p style="text-align:center;color:#888;">Searching...</p>';
+
+      try {
+        const res = await fetch(`${RESOLVER_URL}/skill/${hash}`);
+        const data = await res.json();
+
+        if (!data.found) {
+          resultDiv.innerHTML = `<div class="result-card"><p class="not-found">This skill hash is unknown to the ACR network.<br/>It has not been seen before. Exercise caution.</p></div>`;
+          return;
+        }
+
+        const threatClass = 'threat-' + (data.threat_level || 'none');
+        resultDiv.innerHTML = `
+          <div class="result-card">
+            <h3>Skill Found</h3>
+            <div class="field"><span class="field-label">Hash</span><span class="field-value">${data.skill_hash.substring(0, 16)}...</span></div>
+            ${data.skill_name ? `<div class="field"><span class="field-label">Name</span><span class="field-value">${data.skill_name}</span></div>` : ''}
+            ${data.skill_source ? `<div class="field"><span class="field-label">Source</span><span class="field-value">${data.skill_source}</span></div>` : ''}
+            <div class="field"><span class="field-label">Threat Level</span><span class="field-value ${threatClass}">${(data.threat_level || 'none').toUpperCase()}</span></div>
+            <div class="field"><span class="field-label">Agents Using</span><span class="field-value">${data.agent_count ?? 0}</span></div>
+            <div class="field"><span class="field-label">Interactions</span><span class="field-value">${data.interaction_count ?? 0}</span></div>
+            <div class="field"><span class="field-label">Anomaly Rate</span><span class="field-value">${data.anomaly_rate != null ? (data.anomaly_rate * 100).toFixed(1) + '%' : 'N/A'}</span></div>
+            <div class="field"><span class="field-label">First Seen</span><span class="field-value">${data.first_seen ? new Date(data.first_seen).toLocaleDateString() : 'N/A'}</span></div>
+          </div>`;
+      } catch (err) {
+        resultDiv.innerHTML = `<div class="result-card"><p class="error">Failed to reach ACR network. Try again later.</p></div>`;
+      }
+    }
+
+    hashInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+  </script>
+</body>
+</html>

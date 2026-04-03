@@ -1,0 +1,13 @@
+{
+  "name": "@acr/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@acr/shared": "workspace:*",
+    "vitest": "^1.6"
+  }
+}

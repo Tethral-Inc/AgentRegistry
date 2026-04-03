@@ -1,0 +1,29 @@
+name = "acr-resolver"
+main = "src/worker.ts"
+compatibility_date = "2024-04-01"
+
+[vars]
+COCKROACH_CONNECTION_STRING = ""
+
+[[kv_namespaces]]
+binding = "SKILL_CACHE"
+id = ""
+
+[[kv_namespaces]]
+binding = "THREAT_STATE"
+id = ""
+
+[[kv_namespaces]]
+binding = "SYSTEM_HEALTH"
+id = ""
+
+[[kv_namespaces]]
+binding = "RATE_LIMITS"
+id = ""
+
+[[kv_namespaces]]
+binding = "SKILL_VERSION"
+id = ""
+
+[routes]
+pattern = "acr.tethral.ai/v1/*"
