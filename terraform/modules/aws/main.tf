@@ -34,6 +34,19 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "lambda_dlq" {
+  name = "acr-sqs-dlq"
+  role = aws_iam_role.lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action   = ["sqs:SendMessage"]
+      Effect   = "Allow"
+      Resource = aws_sqs_queue.dlq.arn
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "lambda_secrets" {
   name = "acr-secrets"
   role = aws_iam_role.lambda.id
