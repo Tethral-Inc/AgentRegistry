@@ -7,23 +7,20 @@ COCKROACH_CONNECTION_STRING = ""
 
 [[kv_namespaces]]
 binding = "SKILL_CACHE"
-id = ""
+id = "c412c0b8f2d94bb58dda132852947dff"
 
 [[kv_namespaces]]
 binding = "THREAT_STATE"
-id = ""
+id = "46d7047c15d7493688092fede3e09125"
 
 [[kv_namespaces]]
 binding = "SYSTEM_HEALTH"
-id = ""
+id = "b1926a28988145268e695250a9e27b6a"
 
 [[kv_namespaces]]
 binding = "RATE_LIMITS"
-id = ""
+id = "4cb3eacec0cb47168c7b5459001e9c92"
 
 [[kv_namespaces]]
 binding = "SKILL_VERSION"
-id = ""
-
-[routes]
-pattern = "acr.tethral.ai/v1/*"
+id = "5f447ab4f922497888d50ed8d9b7d238"

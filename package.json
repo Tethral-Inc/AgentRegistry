@@ -11,6 +11,9 @@
     "migrate:up": "migrate -database $COCKROACH_CONNECTION_STRING -path migrations up",
     "migrate:down": "migrate -database $COCKROACH_CONNECTION_STRING -path migrations down 1"
   },
+  "dependencies": {
+    "hono": "^4.4.0"
+  },
   "devDependencies": {
     "typescript": "^5.4",
     "@types/node": "^20",
