@@ -69,7 +69,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
   }>(
     `SELECT target_system_id AS "target_system_id",
             target_system_type AS "target_system_type",
-            duration_ms AS "duration_ms",
+            COALESCE(duration_ms, 0)::int AS "duration_ms",
             status AS "status"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1

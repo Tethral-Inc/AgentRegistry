@@ -34,6 +34,16 @@ export async function getPool() {
   if (!Pool) {
     const pg = await import('pg');
     Pool = pg.default?.Pool ?? pg.Pool;
+
+    // Fix pg returning INT/BIGINT as strings instead of numbers
+    // OID 20 = INT8/BIGINT, OID 23 = INT4, OID 700 = FLOAT4, OID 701 = FLOAT8
+    const types = pg.default?.types ?? pg.types;
+    if (types) {
+      types.setTypeParser(20, (val: string) => parseInt(val, 10));   // BIGINT
+      types.setTypeParser(23, (val: string) => parseInt(val, 10));   // INT4
+      types.setTypeParser(700, (val: string) => parseFloat(val));    // FLOAT4
+      types.setTypeParser(701, (val: string) => parseFloat(val));    // FLOAT8
+    }
   }
 
   const connectionString = process.env.COCKROACH_CONNECTION_STRING;
