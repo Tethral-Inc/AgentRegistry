@@ -14,7 +14,7 @@
  */
 
 const DB_TIMEOUT_MS = 3000;
-const PROXY_URL = 'https://acr.tethral.ai';
+const PROXY_URL = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
 
 /**
  * Execute a read-only SQL query by proxying through the ingestion API.
