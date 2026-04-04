@@ -1,6 +1,15 @@
-variable "cockroach_connection_string" { type = string; sensitive = true }
-variable "slack_webhook_url" { type = string; sensitive = true }
-variable "region" { type = string; default = "us-east-1" }
+variable "cockroach_connection_string" {
+  type      = string
+  sensitive = true
+}
+variable "slack_webhook_url" {
+  type      = string
+  sensitive = true
+}
+variable "region" {
+  type    = string
+  default = "us-east-1"
+}
 
 provider "aws" { region = var.region }
 

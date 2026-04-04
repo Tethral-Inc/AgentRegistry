@@ -7,10 +7,21 @@ terraform {
   }
 }
 
-variable "cockroach_connection_string" { type = string; sensitive = true }
-variable "cloudflare_account_id" { type = string }
-variable "cloudflare_api_token" { type = string; sensitive = true }
-variable "slack_webhook_url" { type = string; sensitive = true }
+variable "cockroach_connection_string" {
+  type      = string
+  sensitive = true
+}
+variable "cloudflare_account_id" {
+  type = string
+}
+variable "cloudflare_api_token" {
+  type      = string
+  sensitive = true
+}
+variable "slack_webhook_url" {
+  type      = string
+  sensitive = true
+}
 
 module "cloudflare" {
   source     = "../../modules/cloudflare"

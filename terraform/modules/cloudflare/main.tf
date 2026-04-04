@@ -1,9 +1,17 @@
-variable "account_id" { type = string }
-variable "api_token" { type = string; sensitive = true }
+variable "account_id" {
+  type = string
+}
+variable "api_token" {
+  type      = string
+  sensitive = true
+}
 
 terraform {
   required_providers {
-    cloudflare = { source = "cloudflare/cloudflare"; version = "~> 4.0" }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
   }
 }
 
