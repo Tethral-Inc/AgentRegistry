@@ -4,7 +4,8 @@ export async function query<T>(
   text: string,
   params?: unknown[],
 ): Promise<T[]> {
-  const client = await getPool().connect();
+  const pool = await getPool();
+  const client = await pool.connect();
   try {
     const result = await client.query(text, params);
     return result.rows as T[];
@@ -25,7 +26,8 @@ export async function execute(
   text: string,
   params?: unknown[],
 ): Promise<number> {
-  const client = await getPool().connect();
+  const pool = await getPool();
+  const client = await pool.connect();
   try {
     const result = await client.query(text, params);
     return result.rowCount ?? 0;

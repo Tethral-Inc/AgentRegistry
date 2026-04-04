@@ -1,6 +1,7 @@
 {
   "name": "acr",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "turbo build",
     "test": "turbo test",

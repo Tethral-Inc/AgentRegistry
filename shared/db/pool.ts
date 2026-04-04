@@ -1,10 +1,9 @@
-import { Pool, type PoolConfig } from 'pg';
-
-let pool: Pool | null = null;
+let Pool: typeof import('pg').Pool;
+let pool: InstanceType<typeof import('pg').Pool> | null = null;
 
 type Environment = 'vercel' | 'lambda' | 'local';
 
-const POOL_PRESETS: Record<Environment, Partial<PoolConfig>> = {
+const POOL_PRESETS: Record<Environment, Record<string, number>> = {
   vercel: {
     max: 1,
     idleTimeoutMillis: 10000,
@@ -28,8 +27,14 @@ function detectEnvironment(): Environment {
   return 'local';
 }
 
-export function getPool(): Pool {
+export async function getPool() {
   if (pool) return pool;
+
+  // Lazy import pg to avoid crashing in edge runtime
+  if (!Pool) {
+    const pg = await import('pg');
+    Pool = pg.default?.Pool ?? pg.Pool;
+  }
 
   const connectionString = process.env.COCKROACH_CONNECTION_STRING;
   if (!connectionString) {
@@ -39,15 +44,13 @@ export function getPool(): Pool {
   const env = detectEnvironment();
   const preset = POOL_PRESETS[env];
 
-  const config: PoolConfig = {
+  pool = new Pool({
     connectionString,
     ssl: { rejectUnauthorized: true },
     ...preset,
-  };
+  });
 
-  pool = new Pool(config);
-
-  pool.on('error', (err) => {
+  pool.on('error', (err: Error) => {
     console.error('Unexpected database pool error:', err);
   });
 

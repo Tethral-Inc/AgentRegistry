@@ -1,0 +1,10 @@
+{
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @acr/shared build",
+  "outputDirectory": "public",
+  "framework": null,
+  "rewrites": [
+    { "source": "/lookup", "destination": "/lookup.html" },
+    { "source": "/api/(.*)", "destination": "/api/[[...route]]" }
+  ]
+}

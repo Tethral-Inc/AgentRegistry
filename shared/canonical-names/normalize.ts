@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const seedData: Record<string, string[]> = require('./seed.json');
+const _require = createRequire(import.meta.url);
+const seedData: Record<string, string[]> = _require('./seed.json');
 
 const reverseMap = new Map<string, string>();
 
