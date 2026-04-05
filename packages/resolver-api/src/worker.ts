@@ -1,5 +1,6 @@
 import type { Env } from './types.js';
 import { checkRateLimit } from './lib/rate-limiter.js';
+import { setInternalSecret } from './lib/db.js';
 import { handleSkillLookup } from './routes/skill.js';
 import { handleAgentLookup } from './routes/agent.js';
 import { handleSystemHealth } from './routes/system-health.js';
@@ -30,6 +31,11 @@ function errorResponse(code: string, message: string, status: number): Response 
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    // Set internal query secret from env on each request
+    if (env.INTERNAL_QUERY_SECRET) {
+      setInternalSecret(env.INTERNAL_QUERY_SECRET);
+    }
+
     const url = new URL(request.url);
     const path = url.pathname;
 

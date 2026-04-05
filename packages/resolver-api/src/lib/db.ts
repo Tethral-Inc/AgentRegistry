@@ -21,16 +21,22 @@ const PROXY_URL = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
  * Uses INTERNAL_QUERY_SECRET for auth (falls back to connection string prefix).
  * Times out after 3 seconds to enable stale-while-revalidate fallback.
  */
+// Module-level secret cache — set once from env on first call
+let _internalSecret: string | undefined;
+
+export function setInternalSecret(secret: string) {
+  _internalSecret = secret;
+}
+
 export async function dbQuery<T>(
   connectionString: string,
   sql: string,
   params: unknown[] = [],
-  internalSecret?: string,
 ): Promise<T[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DB_TIMEOUT_MS);
 
-  const authKey = internalSecret || connectionString.substring(0, 16);
+  const authKey = _internalSecret || connectionString.substring(0, 16);
 
   try {
     const response = await fetch(`${PROXY_URL}/api/internal/query`, {
