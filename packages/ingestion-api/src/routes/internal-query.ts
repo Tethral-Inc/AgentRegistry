@@ -52,10 +52,10 @@ function isSafeReadQuery(sql: string): boolean {
  * - Rejects CTEs containing mutation operations
  */
 app.post('/internal/query', async (c) => {
-  // Validate internal auth with exact match
+  // Validate internal auth — shared secret derived from connection string
   const internalKey = c.req.header('x-internal-key');
-  const expectedSecret = process.env.INTERNAL_QUERY_SECRET
-    ?? (process.env.COCKROACH_CONNECTION_STRING ?? '').substring(0, 16);
+  const connStr = process.env.COCKROACH_CONNECTION_STRING ?? '';
+  const expectedSecret = connStr.substring(0, 32);
 
   if (!internalKey || !expectedSecret || internalKey !== expectedSecret) {
     return c.json(makeError('UNAUTHORIZED', 'Invalid internal key'), 401);
