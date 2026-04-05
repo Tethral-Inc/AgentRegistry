@@ -7,9 +7,9 @@ import { makeError } from '@acr/shared';
  * Uses Upstash's REST API for sliding-window rate limiting.
  * Each check is a single HTTP roundtrip.
  *
- * Requires env vars:
- * - UPSTASH_REDIS_REST_URL
- * - UPSTASH_REDIS_REST_TOKEN
+ * Accepts env vars from either Vercel KV integration or direct Upstash:
+ * - KV_REST_API_URL / UPSTASH_REDIS_REST_URL
+ * - KV_REST_API_TOKEN / UPSTASH_REDIS_REST_TOKEN
  */
 
 const WINDOW_SECONDS = 60;
@@ -32,8 +32,8 @@ async function upstashCommand(
 
 export function rateLimiter() {
   return createMiddleware(async (c, next) => {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 
     // Skip rate limiting if Upstash is not configured
     if (!url || !token) {
