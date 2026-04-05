@@ -25,7 +25,7 @@ describe('JWT', () => {
     expect(payload.agent_id).toBe('acr_test123456');
     expect(payload.provider_class).toBe('openclaw');
     expect(payload.composition_hash).toBe('abc123');
-    expect(payload.iss).toBe('https://acr.tethral.ai');
+    expect(payload.iss).toBe('https://acr.nfkey.ai');
   });
 
   it('rejects tampered tokens', async () => {

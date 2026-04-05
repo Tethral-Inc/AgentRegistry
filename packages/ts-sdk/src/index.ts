@@ -16,7 +16,7 @@ export class ACRClient {
   private resolverUrl: string;
 
   constructor(config: ACRClientConfig = {}) {
-    this.apiUrl = config.apiUrl ?? process.env.ACR_API_URL ?? 'https://acr.tethral.ai';
+    this.apiUrl = config.apiUrl ?? process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
     this.resolverUrl = config.resolverUrl ?? this.apiUrl;
   }
 

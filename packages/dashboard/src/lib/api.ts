@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_ACR_API_URL ?? 'https://acr.tethral.ai';
+const API_URL = process.env.NEXT_PUBLIC_ACR_API_URL ?? 'https://acr.nfkey.ai';
 const RESOLVER_URL = process.env.NEXT_PUBLIC_ACR_RESOLVER_URL ?? API_URL;
 
 export async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {

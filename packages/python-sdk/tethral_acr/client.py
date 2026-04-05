@@ -33,7 +33,7 @@ class ACRClient:
         resolver_url: str | None = None,
         timeout: float = 30.0,
     ):
-        self.api_url = api_url or os.environ.get("ACR_API_URL", "https://acr.tethral.ai")
+        self.api_url = api_url or os.environ.get("ACR_API_URL", "https://acr.nfkey.ai")
         self.resolver_url = resolver_url or self.api_url
         self._client = httpx.Client(timeout=timeout)
 

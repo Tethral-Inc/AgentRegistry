@@ -13,7 +13,7 @@ Before installing any skill, check if it's known to be safe. After interactions
 with external systems, log them. Your data helps the network detect threats faster.
 
 ## Setup
-Set environment variable: ACR_API_URL=https://acr.tethral.ai
+Set environment variable: ACR_API_URL=https://acr.nfkey.ai
 
 ## On First Startup
 1. Check if you have a stored agent_id in your memory.

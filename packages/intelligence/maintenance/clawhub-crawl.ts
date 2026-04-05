@@ -42,7 +42,7 @@ async function discoverSkills(): Promise<SkillEntry[]> {
   // Method 1: Try public API
   try {
     const res = await fetch(`${CLAWHUB_BASE}/api/skills`, {
-      headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.tethral.ai)' },
+      headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.nfkey.ai)' },
     });
     if (res.ok) {
       const data = await res.json() as { skills?: SkillEntry[] };
@@ -59,7 +59,7 @@ async function discoverSkills(): Promise<SkillEntry[]> {
   try {
     const res = await fetch(
       'https://raw.githubusercontent.com/clawhub/registry/main/skills.json',
-      { headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.tethral.ai)' } },
+      { headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.nfkey.ai)' } },
     );
     if (res.ok) {
       const data = await res.json() as SkillEntry[];
@@ -75,7 +75,7 @@ async function discoverSkills(): Promise<SkillEntry[]> {
   // Method 3: Scrape the web page
   try {
     const res = await fetch(`${CLAWHUB_BASE}/skills`, {
-      headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.tethral.ai)' },
+      headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.nfkey.ai)' },
     });
     if (res.ok) {
       const html = await res.text();
@@ -104,7 +104,7 @@ async function discoverSkills(): Promise<SkillEntry[]> {
 async function fetchSkillContent(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.tethral.ai)' },
+      headers: { 'User-Agent': 'ACR-Crawler/0.1 (+https://acr.nfkey.ai)' },
     });
     if (res.ok) {
       return res.text();

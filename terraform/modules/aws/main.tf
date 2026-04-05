@@ -82,7 +82,7 @@ resource "aws_lambda_function" "health_check" {
     variables = {
       COCKROACH_CONNECTION_STRING = var.cockroach_connection_string
       SLACK_WEBHOOK_URL           = var.slack_webhook_url
-      ACR_API_URL                 = "https://acr.tethral.ai"
+      ACR_API_URL                 = "https://acr.nfkey.ai"
     }
   }
   lifecycle { ignore_changes = [filename] }

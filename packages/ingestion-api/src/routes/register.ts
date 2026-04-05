@@ -3,7 +3,6 @@ import {
   RegistrationRequestSchema,
   generateAgentId,
   computeCompositionHash,
-  hashSkillFile,
   getSigningKeyPair,
   issueCredential,
   execute,

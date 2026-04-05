@@ -7,7 +7,7 @@ import { checkEntityTool } from './tools/check-entity.js';
 import { checkEnvironmentTool } from './tools/check-environment.js';
 import { getFrictionReportTool } from './tools/get-friction-report.js';
 
-const ACR_API_URL = process.env.ACR_API_URL ?? 'https://acr.tethral.ai';
+const ACR_API_URL = process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
 const ACR_RESOLVER_URL = process.env.ACR_RESOLVER_URL ?? ACR_API_URL;
 
 const server = new McpServer({
