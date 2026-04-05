@@ -1,8 +1,9 @@
 name = "acr-resolver"
 main = "src/worker.ts"
 compatibility_date = "2024-04-01"
+# Route: acr.nfkey.ai/* via Cloudflare CNAME proxy → acr-resolver.nfkey.workers.dev
 
-# COCKROACH_CONNECTION_STRING set via: wrangler secret put COCKROACH_CONNECTION_STRING
+# Secrets set via wrangler: COCKROACH_CONNECTION_STRING, INTERNAL_QUERY_SECRET
 
 [[kv_namespaces]]
 binding = "SKILL_CACHE"

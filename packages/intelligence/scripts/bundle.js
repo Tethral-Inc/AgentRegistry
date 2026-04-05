@@ -42,21 +42,20 @@ async function bundleAll() {
       bundle: true,
       platform: 'node',
       target: 'node20',
-      format: 'esm',
+      format: 'cjs',
       outfile: resolve(outdir, 'index.js'),
       external: ['pg-native'],
-      banner: {
-        js: `
-          import { createRequire } from 'module';
-          const require = createRequire(import.meta.url);
-        `,
-      },
     });
 
     // Create zip for Lambda deployment
-    execSync(`cd "${outdir}" && tar -cf "${resolve(distFunctions, fn.name + '.zip')}" index.js`, {
-      stdio: 'pipe',
-    });
+    // Use PowerShell on Windows, zip on Unix
+    const zipPath = resolve(distFunctions, fn.name + '.zip');
+    try {
+      execSync(`cd "${outdir}" && zip -j "${zipPath}" index.js`, { stdio: 'pipe' });
+    } catch {
+      // Fallback for Windows (no zip command)
+      execSync(`powershell Compress-Archive -Path "${resolve(outdir, 'index.js')}" -DestinationPath "${zipPath}" -Force`, { stdio: 'pipe' });
+    }
 
     console.log(`  Bundled ${fn.name}`);
   }

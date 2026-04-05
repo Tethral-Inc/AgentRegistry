@@ -5,10 +5,12 @@ import { handleAgentLookup } from './routes/agent.js';
 import { handleSystemHealth } from './routes/system-health.js';
 import { handleActiveThreats } from './routes/threats.js';
 
+const VERCEL_ORIGIN = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Api-Key, X-Internal-Key',
 };
 
 function jsonResponse(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -36,12 +38,22 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    // Only allow GET
-    if (request.method !== 'GET') {
-      return errorResponse('INVALID_INPUT', 'Only GET requests allowed', 405);
+    // Proxy non-/v1/ routes to Vercel (ingestion API, lookup page, etc.)
+    if (!path.startsWith('/v1/') && path !== '/v1/health') {
+      const proxyUrl = new URL(path, VERCEL_ORIGIN);
+      proxyUrl.search = url.search;
+      const proxyReq = new Request(proxyUrl.toString(), {
+        method: request.method,
+        headers: request.headers,
+        body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
+      });
+      const proxyRes = await fetch(proxyReq);
+      const res = new Response(proxyRes.body, proxyRes);
+      res.headers.set('Access-Control-Allow-Origin', '*');
+      return res;
     }
 
-    // Rate limiting
+    // Rate limiting for resolver routes only
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     const rateCheck = await checkRateLimit(env.RATE_LIMITS, ip);
     if (!rateCheck.allowed) {

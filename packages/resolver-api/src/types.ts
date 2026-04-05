@@ -5,6 +5,7 @@ export interface Env {
   RATE_LIMITS: KVNamespace;
   SKILL_VERSION: KVNamespace;
   COCKROACH_CONNECTION_STRING: string;
+  INTERNAL_QUERY_SECRET?: string;
 }
 
 export interface CachedValue<T> {

@@ -1,13 +1,14 @@
 import { execute, query, hashSkillFile, createLogger } from '@acr/shared';
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
-const threatIntel: {
-  known_malicious_authors: string[];
-  known_malicious_skill_names: string[];
-  known_c2_ips: string[];
-  hashes: Record<string, string>;
-} = require('../../../shared/threat-intel/clawhavoc-hashes.json');
+const threatIntel = {
+  known_malicious_authors: ['hightower6eu', 'moonshine-100rze'],
+  known_malicious_skill_names: [
+    'solana-wallet-tracker', 'youtube-summarize-pro',
+    'clawhub-oihpl', 'auto-updater-sxdg2', 'openclaw-agent',
+  ],
+  known_c2_ips: ['91.92.242.30'],
+  hashes: {} as Record<string, string>,
+};
 
 const log = createLogger({ name: 'clawhub-crawl' });
 

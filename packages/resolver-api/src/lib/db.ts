@@ -18,23 +18,26 @@ const PROXY_URL = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
 
 /**
  * Execute a read-only SQL query by proxying through the ingestion API.
+ * Uses INTERNAL_QUERY_SECRET for auth (falls back to connection string prefix).
  * Times out after 3 seconds to enable stale-while-revalidate fallback.
  */
 export async function dbQuery<T>(
   connectionString: string,
   sql: string,
   params: unknown[] = [],
+  internalSecret?: string,
 ): Promise<T[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DB_TIMEOUT_MS);
+
+  const authKey = internalSecret || connectionString.substring(0, 16);
 
   try {
     const response = await fetch(`${PROXY_URL}/api/internal/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Simple shared-secret auth: first 16 chars of connection string
-        'X-Internal-Key': connectionString.substring(0, 16),
+        'X-Internal-Key': authKey,
       },
       body: JSON.stringify({ sql, params }),
       signal: controller.signal,
