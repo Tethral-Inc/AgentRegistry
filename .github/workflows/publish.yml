@@ -1,0 +1,60 @@
+name: Publish Packages
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish'
+        required: true
+        type: choice
+        options: [all, mcp-server, ts-sdk, python-sdk]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-mcp:
+    if: github.event_name == 'push' || github.event.inputs.package == 'all' || github.event.inputs.package == 'mcp-server'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, registry-url: 'https://registry.npmjs.org' }
+      - run: pnpm install --frozen-lockfile
+      - working-directory: packages/mcp-server
+        run: pnpm build && npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-sdk:
+    if: github.event_name == 'push' || github.event.inputs.package == 'all' || github.event.inputs.package == 'ts-sdk'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, registry-url: 'https://registry.npmjs.org' }
+      - run: pnpm install --frozen-lockfile
+      - working-directory: packages/ts-sdk
+        run: pnpm build && npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-python:
+    if: github.event_name == 'push' || github.event.inputs.package == 'all' || github.event.inputs.package == 'python-sdk'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install build twine
+      - working-directory: packages/python-sdk
+        run: python -m build && twine check dist/* && twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

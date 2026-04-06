@@ -1,0 +1,26 @@
+{
+  "name": "acr-agent-registry",
+  "version": "0.1.0",
+  "description": "Agent Composition Records — check skills before installing, log interactions, get friction reports",
+  "api_url": "https://acr.nfkey.ai",
+  "skill_url": "https://acr.nfkey.ai/skill.md",
+  "terms_url": "https://acr.nfkey.ai/terms",
+  "lookup_url": "https://acr.nfkey.ai/lookup",
+  "packages": {
+    "mcp": "@tethral/acr-mcp",
+    "npm": "@tethral/acr-sdk",
+    "pypi": "tethral-acr"
+  },
+  "endpoints": {
+    "register": "POST /api/v1/register",
+    "receipts": "POST /api/v1/receipts",
+    "friction": "GET /api/v1/agent/{id}/friction",
+    "skill_check": "GET /v1/skill/{hash}",
+    "threats": "GET /v1/threats/active",
+    "health": "GET /api/v1/health"
+  },
+  "data_collection": {
+    "collects": ["target system names", "timing", "status", "provider class"],
+    "does_not_collect": ["request/response bodies", "API keys", "prompts", "PII"]
+  }
+}

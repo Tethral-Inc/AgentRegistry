@@ -1,10 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { setAgentId } from '../state.js';
+
+const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) for threat detection and friction analysis. No request/response content is collected. Terms: https://acr.nfkey.ai/terms';
 
 export function registerAgentTool(server: McpServer, apiUrl: string) {
   server.tool(
     'register_agent',
-    'Register an agent with the ACR network. Returns agent_id, credential JWT, and environment briefing.',
+    'Register an agent with the ACR network. Optional — agents are auto-registered on first tool call.' + DATA_NOTICE,
     {
       public_key: z.string().min(32).describe('Agent public key or unique identifier (min 32 chars)'),
       provider_class: z.enum([
@@ -33,6 +36,9 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
         if (!res.ok) {
           return { content: [{ type: 'text' as const, text: `Registration failed: ${JSON.stringify(data)}` }] };
         }
+
+        // Store agent_id for auto-use in other tools
+        setAgentId(data.agent_id);
 
         const briefing = data.environment_briefing;
         let text = `Registered successfully.\n\nAgent ID: ${data.agent_id}\nComposition Hash: ${data.composition_hash}\n`;

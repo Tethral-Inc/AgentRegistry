@@ -4,7 +4,14 @@ import type {
   InteractionReceipt,
   SkillCheckResponse,
   FrictionReport,
-} from '@acr/shared';
+} from './types.js';
+
+export type {
+  RegistrationRequest, RegistrationResponse, InteractionReceipt,
+  SkillCheckResponse, FrictionReport, ProviderClass, TargetSystemType,
+  InteractionCategory, InteractionStatus, AnomalyCategory, ThreatLevel,
+  FrictionSummary, TargetFriction,
+} from './types.js';
 
 export interface ACRClientConfig {
   apiUrl?: string;

@@ -5,6 +5,7 @@
   "framework": null,
   "rewrites": [
     { "source": "/lookup", "destination": "/lookup.html" },
+    { "source": "/terms", "destination": "/terms.html" },
     { "source": "/api/(.*)", "destination": "/api/[[...route]]" }
   ]
 }

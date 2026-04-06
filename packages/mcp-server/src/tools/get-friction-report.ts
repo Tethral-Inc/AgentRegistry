@@ -1,17 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { ensureRegistered, getAgentId } from '../state.js';
 
 export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.tool(
     'get_friction_report',
-    "Get a friction analysis report showing what's costing this agent the most time and money. Shows which external systems are the biggest bottlenecks.",
+    "Get a friction analysis report showing what's costing this agent the most time and money. Shows which external systems are the biggest bottlenecks. This is a read-only query of your own data.",
     {
-      agent_id: z.string().describe('Your registered ACR agent ID'),
+      agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
       scope: z.enum(['session', 'day', 'week']).optional().default('day').describe('Time window for the report'),
     },
     async ({ agent_id, scope }) => {
+      const id = agent_id || getAgentId() || await ensureRegistered();
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${agent_id}/friction?scope=${scope}`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=${scope}`);
         const data = await res.json();
 
         if (data.error) {

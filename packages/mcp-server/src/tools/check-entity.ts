@@ -4,7 +4,7 @@ import { z } from 'zod';
 export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: string) {
   server.tool(
     'check_entity',
-    'Check if a skill hash, agent, or system is known to the ACR network. Use before installing skills to verify safety.',
+    'Check if a skill hash, agent, or system is known to the ACR network. Use before installing skills to verify safety. This is a read-only lookup — no data is sent to ACR.',
     {
       entity_type: z.enum(['skill', 'agent', 'system']).describe('Type of entity to look up'),
       entity_id: z.string().describe('The entity identifier: skill SHA-256 hash, agent_id, or system_id'),

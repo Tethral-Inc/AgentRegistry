@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACR Terms of Use</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; padding: 2rem 1rem; line-height: 1.6; }
+    .container { max-width: 700px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; color: #fff; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.1rem; color: #4a9eff; margin: 2rem 0 0.5rem; }
+    p, li { color: #ccc; margin-bottom: 0.75rem; font-size: 0.95rem; }
+    ul { padding-left: 1.5rem; }
+    .updated { color: #666; font-size: 0.85rem; margin-bottom: 2rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #222; font-size: 0.9rem; }
+    th { color: #888; }
+    .risk-low { color: #4ade80; }
+    .risk-med { color: #facc15; }
+    .risk-high { color: #f97316; }
+    code { background: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9rem; }
+    a { color: #4a9eff; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>ACR Terms of Use</h1>
+  <p class="updated">Last updated: April 2026 | Tethral, Inc.</p>
+
+  <h2>What ACR Collects</h2>
+  <p>ACR collects <strong>interaction metadata only</strong>. Each receipt contains:</p>
+  <table>
+    <tr><th>Field</th><th>Description</th><th>Risk</th></tr>
+    <tr><td><code>agent_id</code></td><td>Pseudonymous identifier</td><td class="risk-low">Low</td></tr>
+    <tr><td><code>provider_class</code></td><td>Framework (anthropic, openai, etc.)</td><td class="risk-low">Low</td></tr>
+    <tr><td><code>target.system_id</code></td><td>What system was called (e.g., mcp:github)</td><td class="risk-med">Medium</td></tr>
+    <tr><td><code>duration_ms</code></td><td>How long the call took</td><td class="risk-med">Medium</td></tr>
+    <tr><td><code>status</code></td><td>Success, failure, timeout</td><td class="risk-low">Low</td></tr>
+    <tr><td><code>anomaly.detail</code></td><td>Free text (operator-provided)</td><td class="risk-high">High</td></tr>
+  </table>
+
+  <h2>What We Do NOT Collect</h2>
+  <ul>
+    <li>No request or response bodies</li>
+    <li>No API keys, credentials, or tokens</li>
+    <li>No user prompts or agent outputs</li>
+    <li>No personally identifiable information</li>
+    <li>No IP addresses</li>
+    <li>No file contents or source code</li>
+  </ul>
+
+  <h2>How Data Is Used</h2>
+  <ul>
+    <li><strong>Friction analysis:</strong> Your own receipts are used to compute what's costing your agent the most. Only you see your individual data.</li>
+    <li><strong>Threat detection:</strong> Anomaly signals are correlated across agents. If multiple independent agents report a skill as suspicious, its threat level is elevated.</li>
+    <li><strong>Population baselines:</strong> Aggregate statistics (median latency, failure rates) are computed across all agents for benchmarking. These are aggregate — no individual operator data is exposed.</li>
+  </ul>
+
+  <h2>What Is NOT Shared</h2>
+  <p>Individual receipts are never exposed to other operators. Population baselines are aggregate statistics only. Your agent's specific targets, timing, and activity patterns are visible only to you via the friction report.</p>
+
+  <h2>Anomaly Detail Field</h2>
+  <p><strong>Do not include credentials, API keys, tokens, or sensitive business information</strong> in the <code>anomaly.detail</code> field. This field is stored as-is. You are solely responsible for what you include.</p>
+
+  <h2>Target Redaction</h2>
+  <p>If you don't want the ACR network to know about a particular target system, don't submit receipts for it. ACR cannot retroactively redact target names from submitted receipts.</p>
+
+  <h2>Data Retention</h2>
+  <ul>
+    <li>Raw receipts: archived after 90 days, aggregated into daily summaries</li>
+    <li>Daily summaries: retained indefinitely</li>
+    <li>Agent registrations: expire after 90 days of inactivity</li>
+  </ul>
+
+  <h2>Opt Out</h2>
+  <p>Stop submitting receipts at any time by removing the ACR MCP server, skill, or SDK from your agent. No further data will be collected.</p>
+
+  <h2>Data Deletion</h2>
+  <p>To request deletion of all data associated with an agent_id, contact <a href="mailto:privacy@tethral.ai">privacy@tethral.ai</a> with your agent_id.</p>
+
+  <h2>Changes</h2>
+  <p>We may update these terms. Changes will be reflected on this page with an updated date.</p>
+</div>
+</body>
+</html>
