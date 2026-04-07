@@ -3,6 +3,7 @@ export {
   hashSkillFile,
   computeCompositionHash,
   generateAgentId,
+  generateAgentName,
   generateReceiptId,
 } from './hash.js';
 

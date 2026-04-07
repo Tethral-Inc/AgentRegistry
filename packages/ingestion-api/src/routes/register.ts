@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   RegistrationRequestSchema,
   generateAgentId,
+  generateAgentName,
   computeCompositionHash,
   getSigningKeyPair,
   issueCredential,
@@ -30,6 +31,7 @@ app.post('/register', async (c) => {
   const data = parsed.data;
   const timestamp = Date.now();
   const agentId = generateAgentId(data.public_key, timestamp);
+  const agentName = data.name ?? generateAgentName(data.provider_class, data.public_key);
 
   // Compute composition hash from skill_hashes if provided
   const componentHashes = data.composition?.skill_hashes ?? [];
@@ -48,11 +50,12 @@ app.post('/register', async (c) => {
 
   // Store agent
   await execute(
-    `INSERT INTO agents (agent_id, public_key, provider_class, current_composition_hash,
+    `INSERT INTO agents (agent_id, name, public_key, provider_class, current_composition_hash,
      operational_domain, registration_method, status, registered, credential_jwt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       agentId,
+      agentName,
       data.public_key,
       data.provider_class,
       compositionHash,
@@ -106,10 +109,11 @@ app.post('/register', async (c) => {
      ORDER BY first_seen_at DESC LIMIT 10`,
   );
 
-  log.info({ agentId, provider: data.provider_class }, 'Agent registered');
+  log.info({ agentId, name: agentName, provider: data.provider_class }, 'Agent registered');
 
   return c.json({
     agent_id: agentId,
+    name: agentName,
     credential,
     composition_hash: compositionHash,
     environment_briefing: {

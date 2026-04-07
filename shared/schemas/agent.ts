@@ -5,6 +5,7 @@ export const AgentStatus = z.enum(['active', 'expired']);
 
 export const AgentSchema = z.object({
   agent_id: z.string(),
+  name: z.string().nullable().optional(),
   public_key: z.string(),
   provider_class: ProviderClass,
   current_composition_hash: z.string().optional(),
@@ -20,6 +21,7 @@ export const AgentSchema = z.object({
 export const RegistrationRequestSchema = z.object({
   public_key: z.string().min(32, 'public_key must be at least 32 characters'),
   provider_class: ProviderClass,
+  name: z.string().max(64).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, 'name must be lowercase alphanumeric with hyphens').optional(),
   composition: z.object({
     mcps: z.array(z.string()).optional(),
     tools: z.array(z.string()).optional(),
@@ -52,6 +54,7 @@ export const EnvironmentBriefingSchema = z.object({
 
 export const RegistrationResponseSchema = z.object({
   agent_id: z.string(),
+  name: z.string(),
   credential: z.string(),
   composition_hash: z.string(),
   environment_briefing: EnvironmentBriefingSchema,

@@ -5,16 +5,29 @@
 import { randomBytes } from 'node:crypto';
 
 let agentId: string | null = null;
+let agentName: string | null = null;
 let registering = false;
 
 const ACR_API_URL = process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
+
+export function getApiUrl(): string {
+  return ACR_API_URL;
+}
 
 export function getAgentId(): string | null {
   return agentId;
 }
 
+export function getAgentName(): string | null {
+  return agentName;
+}
+
 export function setAgentId(id: string): void {
   agentId = id;
+}
+
+export function setAgentName(name: string): void {
+  agentName = name;
 }
 
 /**
@@ -44,8 +57,9 @@ export async function ensureRegistered(): Promise<string> {
     });
 
     if (res.ok) {
-      const data = await res.json() as { agent_id: string };
+      const data = await res.json() as { agent_id: string; name: string };
       agentId = data.agent_id;
+      agentName = data.name;
       return agentId;
     }
 

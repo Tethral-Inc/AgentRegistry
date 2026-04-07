@@ -1,19 +1,51 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId } from '../state.js';
+import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+
+/**
+ * Resolve an agent name to an agent_id via the lookup endpoint.
+ */
+async function resolveAgentId(nameOrId: string): Promise<string> {
+  if (nameOrId.startsWith('acr_') || nameOrId.startsWith('pseudo_')) {
+    return nameOrId;
+  }
+  const apiUrl = getApiUrl();
+  const res = await fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(nameOrId)}`);
+  if (!res.ok) {
+    throw new Error(`Agent "${nameOrId}" not found`);
+  }
+  const data = await res.json() as { agent_id: string };
+  return data.agent_id;
+}
 
 export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.tool(
     'get_friction_report',
-    "Get a friction analysis report showing what's costing this agent the most time and money. Shows which external systems are the biggest bottlenecks. This is a read-only query of your own data.",
+    "Get a friction analysis report showing what's costing this agent the most time and money. Shows which external systems are the biggest bottlenecks. Data comes from log_interaction — if the report is empty, you need to start logging your external calls.",
     {
       agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
+      agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
       scope: z.enum(['session', 'day', 'week']).optional().default('day').describe('Time window for the report'),
     },
-    async ({ agent_id, scope }) => {
-      const id = agent_id || getAgentId() || await ensureRegistered();
+    async ({ agent_id, agent_name, scope }) => {
+      let id: string;
+      try {
+        if (agent_name) {
+          id = await resolveAgentId(agent_name);
+        } else {
+          id = agent_id || getAgentId() || await ensureRegistered();
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        return { content: [{ type: 'text' as const, text: `Error: ${msg}` }] };
+      }
+
       try {
         const res = await fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=${scope}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => `HTTP ${res.status}`);
+          return { content: [{ type: 'text' as const, text: `Friction report error: ${errText}` }] };
+        }
         const data = await res.json();
 
         if (data.error) {
@@ -21,33 +53,98 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         }
 
         const s = data.summary;
+        const displayName = data.name || agent_name || getAgentName() || id;
 
         if (s.total_interactions === 0) {
           return {
             content: [{
               type: 'text' as const,
-              text: `No interactions recorded for scope "${scope}". Start logging interactions to see friction data.`,
+              text: `No interactions recorded for ${displayName} (scope "${scope}"). Call log_interaction after each external tool call or API request to populate your friction data.`,
             }],
           };
         }
 
-        let text = `Friction Report (${scope})\n`;
-        text += `Period: ${data.period_start} to ${data.period_end}\n\n`;
-        text += `Total interactions: ${s.total_interactions}\n`;
-        text += `Total wait time: ${(s.total_wait_time_ms / 1000).toFixed(1)}s\n`;
-        text += `Friction: ${s.friction_percentage.toFixed(2)}% of active time spent waiting\n`;
-        text += `Failures: ${s.total_failures} (${(s.failure_rate * 100).toFixed(1)}% failure rate)\n`;
+        let text = `Friction Report for ${displayName} (${scope})\n`;
+        text += `Agent ID: ${data.agent_id}\n`;
+        text += `Period: ${data.period_start} to ${data.period_end}\n`;
+        text += `Tier: ${data.tier || 'free'}\n\n`;
 
+        // Summary metrics
+        text += `── Summary ──\n`;
+        text += `  Interactions: ${s.total_interactions}\n`;
+        text += `  Total wait: ${(s.total_wait_time_ms / 1000).toFixed(1)}s\n`;
+        text += `  Friction: ${s.friction_percentage.toFixed(2)}% of active time\n`;
+        text += `  Failures: ${s.total_failures} (${(s.failure_rate * 100).toFixed(1)}% rate)\n`;
+
+        // Category breakdown
+        if (data.by_category && data.by_category.length > 0) {
+          text += `\n── By Category ──\n`;
+          for (const cat of data.by_category) {
+            const avgMs = cat.interaction_count > 0 ? Math.round(cat.total_duration_ms / cat.interaction_count) : 0;
+            text += `  ${cat.category}: ${cat.interaction_count} calls, ${(cat.total_duration_ms / 1000).toFixed(1)}s total, avg ${avgMs}ms`;
+            if (cat.failure_count > 0) text += `, ${cat.failure_count} failures`;
+            text += `\n`;
+          }
+        }
+
+        // Top targets with full metrics
         if (data.top_targets && data.top_targets.length > 0) {
-          text += `\nTop Bottlenecks:\n`;
+          text += `\n── Top Targets ──\n`;
           for (const t of data.top_targets) {
             const pct = (t.proportion_of_total * 100).toFixed(1);
-            text += `\n  ${t.target_system_id}\n`;
-            text += `    ${pct}% of wait time | ${t.interaction_count} calls | median ${t.median_duration_ms}ms\n`;
-            if (t.failure_count > 0) {
+            text += `\n  ${t.target_system_id} (${t.target_system_type})\n`;
+            text += `    ${t.interaction_count} calls | ${pct}% of wait time\n`;
+            text += `    median ${t.median_duration_ms}ms`;
+            if (t.p95_duration_ms != null) text += ` | p95 ${t.p95_duration_ms}ms`;
+            text += `\n`;
+
+            // Status breakdown
+            if (t.status_breakdown) {
+              const statuses = Object.entries(t.status_breakdown as Record<string, number>)
+                .map(([s, c]) => `${s}: ${c}`)
+                .join(', ');
+              text += `    statuses: ${statuses}\n`;
+            }
+
+            // Baseline comparison (paid tier)
+            if (t.vs_baseline != null) {
+              const dir = t.vs_baseline > 1 ? 'slower' : t.vs_baseline < 1 ? 'faster' : 'same as';
+              const pctDiff = Math.abs(Math.round((t.vs_baseline - 1) * 100));
+              text += `    vs population: ${pctDiff}% ${dir} baseline`;
+              if (t.baseline_median_ms != null) text += ` (baseline median ${t.baseline_median_ms}ms, p95 ${t.baseline_p95_ms}ms)`;
+              if (t.volatility != null) text += `, volatility ${t.volatility}`;
+              text += `\n`;
+            }
+
+            // Recent anomalies
+            if (t.recent_anomalies && t.recent_anomalies.length > 0) {
+              text += `    recent anomalies:\n`;
+              for (const a of t.recent_anomalies) {
+                text += `      [${a.timestamp}] ${a.category || 'unknown'}`;
+                if (a.detail) text += ` — ${a.detail}`;
+                text += `\n`;
+              }
+            }
+
+            if (t.failure_count > 0 && !t.recent_anomalies?.length) {
               text += `    ${t.failure_count} failures\n`;
             }
+
+            // Network health context
+            if (t.network_health_status) {
+              text += `    network: ${(t.network_health_status as string).toUpperCase()}`;
+              text += ` — failure ${((t.network_failure_rate ?? 0) * 100).toFixed(1)}%`;
+              text += `, anomaly ${((t.network_anomaly_rate ?? 0) * 100).toFixed(1)}%`;
+              text += ` across ${t.network_agent_count ?? 0} agents\n`;
+            }
           }
+        }
+
+        // Population comparison (paid tier)
+        if (data.population_comparison) {
+          text += `\n── Population ──\n`;
+          text += `  ${data.population_comparison.total_agents_in_period} agents active in period\n`;
+          text += `  ${data.population_comparison.baselines_available} baselines available\n`;
         }
 
         return { content: [{ type: 'text' as const, text }] };

@@ -1,6 +1,6 @@
 # @tethral/acr-mcp
 
-MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) network. Check skills before installing, log interactions, and get friction reports showing what's costing your agent the most.
+MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) network. Observability for AI agents — friction reports, threat detection, and network health.
 
 ## Quick Start
 
@@ -15,16 +15,29 @@ MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) netwo
 }
 ```
 
-That's it. The server auto-registers your agent on first use.
+That's it. Your agent auto-registers on first use and gets a human-readable name (e.g. `anthropic-amber-fox`).
+
+## How It Works
+
+Once installed, the agent calls `log_interaction` after every external tool call, API request, or MCP interaction. This happens automatically — the tool description instructs the agent to do it. No user configuration needed.
+
+Logged data powers:
+- **Friction reports** — what's costing you the most time
+- **Threat detection** — anomaly patterns across the agent population
+- **Network health** — which systems are degraded or failing
 
 ## Tools
 
-| Tool | Description | Required Params |
-|------|-------------|----------------|
-| `log_interaction` | Log an external interaction | `target_system_id`, `category`, `status` |
+| Tool | Purpose | Params |
+|------|---------|--------|
+| `log_interaction` | Log every external call (called automatically) | `target_system_id`, `category`, `status` |
+| `get_friction_report` | See what's costing you the most | (none) |
+| `get_interaction_log` | View raw interaction history | `mode` (list/detail), filters |
+| `get_network_status` | Network dashboard — systems, threats, escalations | (none) |
+| `get_skill_tracker` | Skill adoption and threat tracking | `skill_hash` for deep-dive |
+| `get_my_agent` | Your agent identity | (none) |
 | `check_entity` | Check if a skill/agent/system is known | `entity_type`, `entity_id` |
-| `get_friction_report` | See what's costing you the most | (none — uses auto-assigned ID) |
-| `check_environment` | Get network threat overview | (none) |
+| `check_environment` | Quick threat check | (none) |
 | `register_agent` | Custom registration (optional) | `public_key`, `provider_class` |
 
 ## Configuration

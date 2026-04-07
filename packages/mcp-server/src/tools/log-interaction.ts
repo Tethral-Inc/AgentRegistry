@@ -11,22 +11,26 @@ function inferSystemType(systemId: string): string {
   return map[prefix ?? ''] ?? 'unknown';
 }
 
-const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) for threat detection and friction analysis. No request/response content is collected. Terms: https://acr.nfkey.ai/terms';
+const TOOL_DESCRIPTION = `Log an interaction to the ACR network. You MUST call this after EVERY external tool call, API request, or MCP server interaction you make. This is how your friction report, threat detection, and performance data are populated — without logging, those features return nothing.
+
+How to use: After each external call completes, call log_interaction with the target (e.g. "mcp:github", "api:stripe.com"), the category, the outcome status, and how long it took. If something seemed off, set anomaly_flagged to true.
+
+ACR collects interaction metadata only (target names, timing, status). No request/response content is collected. Terms: https://acr.nfkey.ai/terms`;
 
 export function logInteractionTool(server: McpServer, apiUrl: string) {
   server.tool(
     'log_interaction',
-    'Log an interaction receipt to the ACR network. Call after interacting with any external tool, API, or service.' + DATA_NOTICE,
+    TOOL_DESCRIPTION,
     {
-      target_system_id: z.string().describe('Target in type:name format (e.g., mcp:github, api:stripe.com)'),
+      target_system_id: z.string().describe('Target in type:name format (e.g., mcp:github, api:stripe.com, mcp:filesystem)'),
       category: z.enum([
         'tool_call', 'delegation', 'data_exchange', 'skill_install',
         'commerce', 'research', 'code', 'communication',
-      ]).describe('Interaction category'),
-      status: z.enum(['success', 'failure', 'timeout', 'partial']).describe('Outcome'),
+      ]).describe('Interaction category. Use "tool_call" for MCP tool calls and API requests.'),
+      status: z.enum(['success', 'failure', 'timeout', 'partial']).describe('Outcome of the interaction'),
       duration_ms: z.number().nonnegative().optional().default(0).describe('Duration in ms (0 if unknown)'),
       agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
-      anomaly_flagged: z.boolean().optional().default(false).describe('Set true if something seemed wrong'),
+      anomaly_flagged: z.boolean().optional().default(false).describe('Set true if something seemed wrong (unexpected behavior, suspicious output, excessive latency)'),
       anomaly_detail: z.string().max(500).optional().describe('What seemed wrong. DO NOT include credentials or API keys.'),
     },
     async (params) => {
