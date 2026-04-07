@@ -140,6 +140,22 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
+        // Transport breakdown
+        if (data.by_transport && data.by_transport.length > 0) {
+          text += `\n── By Transport ──\n`;
+          for (const t of data.by_transport) {
+            text += `  ${t.transport}: ${t.interaction_count} calls, ${(t.total_duration_ms / 1000).toFixed(1)}s total\n`;
+          }
+        }
+
+        // Source breakdown (server self-logs vs agent-initiated)
+        if (data.by_source && data.by_source.length > 0) {
+          text += `\n── By Source ──\n`;
+          for (const s of data.by_source) {
+            text += `  ${s.source}: ${s.interaction_count} interactions\n`;
+          }
+        }
+
         // Population comparison (paid tier)
         if (data.population_comparison) {
           text += `\n── Population ──\n`;

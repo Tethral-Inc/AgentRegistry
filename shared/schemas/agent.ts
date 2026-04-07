@@ -18,6 +18,14 @@ export const AgentSchema = z.object({
   last_active_at: z.string(),
 });
 
+export const EnvironmentContextSchema = z.object({
+  device_class: z.enum(['desktop', 'server', 'sbc', 'mobile', 'unknown']).optional(),
+  platform: z.string().optional(),
+  arch: z.string().optional(),
+  client_type: z.string().optional(),
+  transport_type: z.enum(['stdio', 'streamable-http']).optional(),
+});
+
 export const RegistrationRequestSchema = z.object({
   public_key: z.string().min(32, 'public_key must be at least 32 characters'),
   provider_class: ProviderClass,
@@ -30,6 +38,7 @@ export const RegistrationRequestSchema = z.object({
   }).optional(),
   operational_domain: z.string().max(200).optional(),
   system_prompt_hash: z.string().optional(),
+  environment: EnvironmentContextSchema.optional(),
 });
 
 export const SystemStatusSchema = z.object({

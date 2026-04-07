@@ -17,6 +17,11 @@ app.get('/agent/:identifier', async (c) => {
     provider_class: string;
     status: string;
     operational_domain: string | null;
+    device_class: string | null;
+    platform: string | null;
+    arch: string | null;
+    client_type: string | null;
+    transport_type: string | null;
     created_at: string;
     last_active_at: string;
   }>(
@@ -25,6 +30,11 @@ app.get('/agent/:identifier', async (c) => {
             provider_class AS "provider_class",
             status AS "status",
             operational_domain AS "operational_domain",
+            device_class AS "device_class",
+            platform AS "platform",
+            arch AS "arch",
+            client_type AS "client_type",
+            transport_type AS "transport_type",
             created_at::text AS "created_at",
             last_active_at::text AS "last_active_at"
      FROM agents

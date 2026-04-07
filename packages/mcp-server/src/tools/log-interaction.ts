@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ensureRegistered, getAgentId } from '../state.js';
+import { defaultSession } from '../session-state.js';
 
 function inferSystemType(systemId: string): string {
   const prefix = systemId.split(':')[0];
@@ -59,6 +60,8 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
               flagged: params.anomaly_flagged,
               detail: params.anomaly_detail,
             },
+            transport_type: defaultSession.transportType,
+            source: 'agent' as const,
           }),
         });
 

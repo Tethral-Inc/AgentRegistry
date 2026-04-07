@@ -58,12 +58,17 @@ export const AnomalySchema = z.object({
   detail: z.string().max(500).optional(),
 });
 
+export const TransportType = z.enum(['stdio', 'streamable-http']);
+export const ReceiptSource = z.enum(['agent', 'server']);
+
 export const InteractionReceiptSchema = z.object({
   receipt_id: z.string().optional(),
   emitter: EmitterSchema,
   target: TargetSchema,
   interaction: InteractionSchema,
   anomaly: AnomalySchema.default({ flagged: false }),
+  transport_type: TransportType.optional(),
+  source: ReceiptSource.default('agent'),
 });
 
 export const ReceiptBatchSchema = z.object({

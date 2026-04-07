@@ -48,11 +48,13 @@ app.post('/register', async (c) => {
     composition_hash: compositionHash,
   });
 
-  // Store agent
+  // Store agent (including optional environment context)
+  const env = data.environment;
   await execute(
     `INSERT INTO agents (agent_id, name, public_key, provider_class, current_composition_hash,
-     operational_domain, registration_method, status, registered, credential_jwt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+     operational_domain, registration_method, status, registered, credential_jwt,
+     device_class, platform, arch, client_type, transport_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
     [
       agentId,
       agentName,
@@ -64,6 +66,11 @@ app.post('/register', async (c) => {
       'active',
       true,
       credential,
+      env?.device_class ?? null,
+      env?.platform ?? null,
+      env?.arch ?? null,
+      env?.client_type ?? null,
+      env?.transport_type ?? null,
     ],
   );
 

@@ -28,6 +28,11 @@ export function getMyAgentTool(server: McpServer) {
           provider_class: string;
           status: string;
           operational_domain: string | null;
+          device_class: string | null;
+          platform: string | null;
+          arch: string | null;
+          client_type: string | null;
+          transport_type: string | null;
           created_at: string;
           last_active_at: string;
         };
@@ -42,7 +47,16 @@ export function getMyAgentTool(server: McpServer) {
         if (agent.operational_domain) {
           text += `Domain: ${agent.operational_domain}\n`;
         }
-        text += `Registered: ${agent.created_at}\n`;
+        // Environment context
+        if (agent.platform || agent.device_class || agent.transport_type) {
+          text += `\nEnvironment:\n`;
+          if (agent.device_class) text += `  Device: ${agent.device_class}\n`;
+          if (agent.platform) text += `  Platform: ${agent.platform}\n`;
+          if (agent.arch) text += `  Arch: ${agent.arch}\n`;
+          if (agent.client_type) text += `  Client: ${agent.client_type}\n`;
+          if (agent.transport_type) text += `  Transport: ${agent.transport_type}\n`;
+        }
+        text += `\nRegistered: ${agent.created_at}\n`;
         text += `Last active: ${agent.last_active_at}\n`;
 
         return { content: [{ type: 'text' as const, text }] };

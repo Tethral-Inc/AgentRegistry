@@ -7,7 +7,8 @@ export type {
 } from './types/receipt.js';
 export type {
   Agent, RegistrationRequest, RegistrationResponse,
-  CompositionUpdate, EnvironmentBriefing, SystemStatus, ThreatNotice,
+  CompositionUpdate, EnvironmentBriefing, EnvironmentContext,
+  SystemStatus, ThreatNotice,
 } from './types/agent.js';
 export type { SkillHash, SkillCheckResponse } from './types/skill.js';
 export type {

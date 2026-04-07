@@ -61,12 +61,27 @@ app.get('/agent/:agent_id/friction', async (c) => {
   const { start, end } = getScopeWindow(scope);
   const scopeMs = end.getTime() - start.getTime();
 
+  // Optional transport_type and source filters
+  const transportFilter = c.req.query('transport_type');
+  const sourceFilter = c.req.query('source');
+
   // Resolve name or agent_id
   const resolved = await resolveAgentId(identifier);
   const agentId = resolved.agent_id;
   const agentName = resolved.name;
 
   // Query receipts for this agent within the time scope
+  const queryParams: unknown[] = [agentId, start.toISOString(), end.toISOString()];
+  let whereExtra = '';
+  if (transportFilter) {
+    queryParams.push(transportFilter);
+    whereExtra += ` AND transport_type = $${queryParams.length}`;
+  }
+  if (sourceFilter) {
+    queryParams.push(sourceFilter);
+    whereExtra += ` AND source = $${queryParams.length}`;
+  }
+
   const rows = await query<{
     target_system_id: string;
     target_system_type: string;
@@ -76,6 +91,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
     anomaly_flagged: boolean;
     anomaly_category: string | null;
     anomaly_detail: string | null;
+    transport_type: string | null;
+    source: string | null;
     created_at: string;
   }>(
     `SELECT target_system_id AS "target_system_id",
@@ -86,13 +103,15 @@ app.get('/agent/:agent_id/friction', async (c) => {
             anomaly_flagged AS "anomaly_flagged",
             anomaly_category AS "anomaly_category",
             anomaly_detail AS "anomaly_detail",
+            transport_type AS "transport_type",
+            source AS "source",
             created_at::text AS "created_at"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
-       AND created_at <= $3
+       AND created_at <= $3${whereExtra}
      ORDER BY created_at DESC`,
-    [agentId, start.toISOString(), end.toISOString()],
+    queryParams,
   );
 
   if (rows.length === 0) {
@@ -300,6 +319,31 @@ app.get('/agent/:agent_id/friction', async (c) => {
     baselines_available: baselines.length,
   } : undefined;
 
+  // Transport breakdown
+  const transportBreakdown = new Map<string, { count: number; total_ms: number }>();
+  const sourceBreakdown = new Map<string, number>();
+  for (const row of rows) {
+    const t = row.transport_type ?? 'unknown';
+    const entry = transportBreakdown.get(t) ?? { count: 0, total_ms: 0 };
+    entry.count++;
+    entry.total_ms += row.duration_ms ?? 0;
+    transportBreakdown.set(t, entry);
+
+    const s = row.source ?? 'agent';
+    sourceBreakdown.set(s, (sourceBreakdown.get(s) ?? 0) + 1);
+  }
+
+  const byTransport = Array.from(transportBreakdown.entries()).map(([transport, data]) => ({
+    transport,
+    interaction_count: data.count,
+    total_duration_ms: data.total_ms,
+  }));
+
+  const bySource = Array.from(sourceBreakdown.entries()).map(([source, count]) => ({
+    source,
+    interaction_count: count,
+  }));
+
   return c.json({
     agent_id: agentId,
     name: agentName,
@@ -315,6 +359,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
     },
     by_category: categories,
     top_targets: visibleTargets,
+    by_transport: byTransport,
+    by_source: bySource,
     population_comparison: populationComparison,
     tier: isPaidTier ? 'paid' : 'free',
   });

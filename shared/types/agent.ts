@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   AgentSchema,
+  EnvironmentContextSchema,
   RegistrationRequestSchema,
   RegistrationResponseSchema,
   CompositionUpdateSchema,
@@ -10,6 +11,7 @@ import {
 } from '../schemas/agent.js';
 
 export type Agent = z.infer<typeof AgentSchema>;
+export type EnvironmentContext = z.infer<typeof EnvironmentContextSchema>;
 export type RegistrationRequest = z.infer<typeof RegistrationRequestSchema>;
 export type RegistrationResponse = z.infer<typeof RegistrationResponseSchema>;
 export type CompositionUpdate = z.infer<typeof CompositionUpdateSchema>;

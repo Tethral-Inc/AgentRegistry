@@ -11,11 +11,14 @@ export {
   InteractionReceiptSchema,
   ReceiptBatchSchema,
   ReceiptSubmissionSchema,
+  TransportType,
+  ReceiptSource,
 } from './receipt.js';
 
 export {
   AgentStatus,
   AgentSchema,
+  EnvironmentContextSchema,
   RegistrationRequestSchema,
   RegistrationResponseSchema,
   CompositionUpdateSchema,
