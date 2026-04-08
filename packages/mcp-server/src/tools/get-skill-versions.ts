@@ -8,6 +8,7 @@ export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolver
     {
       skill_hash: z.string().describe('The skill hash to look up version history for'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ skill_hash }) => {
       try {
         // First look up the skill via resolver to get catalog data

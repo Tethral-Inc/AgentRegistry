@@ -5,6 +5,7 @@ export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolver
     'check_environment',
     'Check the current ACR network environment: active threats and system health. Call on startup or when assessing risk. Remember to call log_interaction after every external tool call so ACR can detect threats and track friction.',
     {},
+    { readOnlyHint: true, destructiveHint: false },
     async () => {
       try {
         const [threatsRes, healthRes] = await Promise.all([

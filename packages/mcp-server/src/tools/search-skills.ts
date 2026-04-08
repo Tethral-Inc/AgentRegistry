@@ -13,6 +13,7 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
       limit: z.number().min(1).max(50).optional().default(10).describe('Max results to return'),
       min_scan_score: z.number().min(0).max(100).optional().describe('Minimum security scan score (0-100)'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ query: searchQuery, source, category, threat_level, limit, min_scan_score }) => {
       try {
         const params = new URLSearchParams({ q: searchQuery });

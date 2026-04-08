@@ -11,6 +11,7 @@ export function acknowledgeThreatTool(server: McpServer, apiUrl: string, getSess
       agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
       reason: z.string().optional().describe('Why the threat is being acknowledged (e.g., "user reviewed and accepted risk")'),
     },
+    { readOnlyHint: false, destructiveHint: false },
     async ({ notification_id, agent_id, reason }) => {
       try {
         const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);

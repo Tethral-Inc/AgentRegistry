@@ -19,6 +19,7 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
       skill_hashes: z.array(z.string()).optional().describe('SHA-256 hashes of installed SKILL.md files'),
       operational_domain: z.string().max(200).optional().describe('What domain this agent operates in'),
     },
+    { readOnlyHint: false, destructiveHint: false },
     async ({ public_key, provider_class, name, skills, skill_hashes, operational_domain }) => {
       try {
         const res = await fetch(`${apiUrl}/api/v1/register`, {

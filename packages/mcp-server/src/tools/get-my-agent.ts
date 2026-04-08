@@ -6,6 +6,7 @@ export function getMyAgentTool(server: McpServer) {
     'get_my_agent',
     'Get your agent profile — name, ID, provider, status, and registration date. Zero-config: uses the auto-assigned agent identity.',
     {},
+    { readOnlyHint: true, destructiveHint: false },
     async () => {
       const id = getAgentId() || await ensureRegistered();
       const name = getAgentName();

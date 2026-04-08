@@ -46,6 +46,7 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
       anomaly_only: z.boolean().optional().default(false).describe('Show only anomaly-flagged interactions'),
       since: z.string().optional().describe('Show interactions after this ISO timestamp'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ agent_id, agent_name, receipt_id, mode, limit, target, category, status, anomaly_only, since }) => {
       let id: string;
       try {

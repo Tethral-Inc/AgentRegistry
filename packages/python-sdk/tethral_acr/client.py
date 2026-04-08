@@ -171,6 +171,9 @@ class ACRClient:
         """List crawl sources with status."""
         return self._get("/api/v1/skill-catalog/sources")
 
+    def get_subscriptions(self, agent_id: str) -> dict:
+        return self._get(f"/api/v1/agent/{agent_id}/subscriptions")
+
     def close(self) -> None:
         """Close the HTTP client."""
         self._client.close()

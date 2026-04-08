@@ -175,7 +175,7 @@ export async function handler() {
              'Threat escalation: skill flagged as ' + u.threatLevel,
              u.reporterCount + ' agents reported anomalies. Anomaly rate: ' + (u.anomalyRate * 100).toFixed(1) + '%.',
              JSON.stringify({ reporter_count: u.reporterCount, anomaly_rate: u.anomalyRate })],
-          ).catch(() => {});
+          ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
         }
       }
     }

@@ -9,6 +9,7 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
       entity_type: z.enum(['skill', 'agent', 'system']).describe('Type of entity to look up'),
       entity_id: z.string().describe('The entity identifier: skill SHA-256 hash, agent_id, or system_id'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ entity_type, entity_id }) => {
       try {
         let url: string;

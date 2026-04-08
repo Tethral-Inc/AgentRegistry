@@ -5,6 +5,7 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
     'get_network_status',
     'Get the full ACR network dashboard — agent/system totals, system health sorted worst-first, active skill threats, and recent cross-agent escalations. The COVID-tracker view for agent infrastructure.',
     {},
+    { readOnlyHint: true, destructiveHint: false },
     async () => {
       try {
         const res = await fetch(`${apiUrl}/api/v1/network/status`);

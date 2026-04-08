@@ -34,6 +34,7 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
       anomaly_flagged: z.boolean().optional().default(false).describe('Set true if something seemed wrong (unexpected behavior, suspicious output, excessive latency)'),
       anomaly_detail: z.string().max(500).optional().describe('What seemed wrong. DO NOT include credentials or API keys.'),
     },
+    { readOnlyHint: false, destructiveHint: false },
     async (params) => {
       try {
         const id = params.agent_id || getAgentId() || await ensureRegistered();

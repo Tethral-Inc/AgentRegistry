@@ -11,6 +11,7 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
       sort: z.enum(['agent_count', 'interaction_count', 'anomaly_signal_rate', 'threat_level']).optional().default('agent_count').describe('Sort field'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Max skills to show'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ skill_hash, threat_level, sort, limit }) => {
       try {
         // Deep-dive mode

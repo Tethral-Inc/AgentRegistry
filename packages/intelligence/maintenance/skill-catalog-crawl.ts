@@ -131,7 +131,7 @@ async function processSkill(
       `INSERT INTO crawl_errors (skill_name, skill_source, source_url, error_type, error_detail, http_status)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [skill.name, skill.source, skill.sourceUrl, classifyError(error ?? '', httpStatus), error, httpStatus ?? null],
-    ).catch(() => {});
+    ).catch((err) => { log.debug({ err }, 'Failed to log crawl error'); });
 
     // If known skill returned 404, mark as removed
     if (httpStatus === 404) {
@@ -139,7 +139,7 @@ async function processSkill(
         `UPDATE skill_catalog SET status = 'removed', last_crawled_at = now(), last_crawl_error = $1, updated_at = now()
          WHERE skill_name = $2 AND skill_source = $3 AND status = 'active'`,
         [error, skill.name, skill.source],
-      ).catch(() => {});
+      ).catch((err) => { log.debug({ err }, 'Failed to mark removed skill'); });
     }
 
     return;
@@ -248,7 +248,7 @@ async function processSkill(
              'BLOCKED: ' + name + ' flagged by security scanner',
              'The skill "' + name + '" you have installed has been flagged with ' + scanResult.threat_patterns.length + ' security issue(s). Consider uninstalling. Patterns: ' + scanResult.threat_patterns.join(', '),
              JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
-          ).catch(() => {});
+          ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
         }
       }
     }
@@ -328,7 +328,7 @@ async function processSkill(
         body: JSON.stringify({
           text: `ACR Skill Update: *${name}* (${skill.source}) changed [${changeType}]\nOld: ${existing.version ?? 'unknown'} → New: ${version ?? 'unknown'}\nHash: ${skillHash.slice(0, 16)}...`,
         }),
-      }).catch(() => {});
+      }).catch((err) => { log.debug({ err }, 'Slack notification failed'); });
     }
 
     // Notify subscribed agents about the threat
@@ -348,7 +348,7 @@ async function processSkill(
            'BLOCKED: ' + name + ' flagged by security scanner',
            'The skill "' + name + '" you have installed has been flagged with ' + scanResult.threat_patterns.length + ' security issue(s). Consider uninstalling. Patterns: ' + scanResult.threat_patterns.join(', '),
            JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
-        ).catch(() => {});
+        ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
       }
     }
   }
@@ -366,8 +366,8 @@ export async function handler() {
   };
 
   try {
-    // Find sources due for crawling
-    const sources = await query<CrawlSourceRow>(
+    // Find sources that might be due for crawling (interval check only, no running filter)
+    const potentialSources = await query<CrawlSourceRow>(
       `SELECT source_id AS "source_id", source_type AS "source_type",
               base_url AS "base_url", crawl_interval_mins AS "crawl_interval_mins",
               last_crawl_at::text AS "last_crawl_at",
@@ -376,24 +376,30 @@ export async function handler() {
        FROM crawl_sources
        WHERE enabled = true
          AND (last_crawl_at IS NULL
-              OR last_crawl_at < now() - (crawl_interval_mins || ' minutes')::INTERVAL)
-         AND (last_crawl_status != 'running'
-              OR last_crawl_at < now() - INTERVAL '${STALE_LOCK_HOURS} hours')`,
+              OR last_crawl_at < now() - (crawl_interval_mins || ' minutes')::INTERVAL)`,
     );
 
-    if (sources.length === 0) {
+    if (potentialSources.length === 0) {
       log.info('No sources due for crawling');
       return { statusCode: 200, body: JSON.stringify({ message: 'No sources due', ...totalResult }) };
     }
 
-    for (const source of sources) {
-      log.info({ sourceId: source.source_id }, 'Starting crawl');
-
-      // Acquire lock
-      await execute(
-        `UPDATE crawl_sources SET last_crawl_status = 'running', last_crawl_at = now() WHERE source_id = $1`,
+    for (const source of potentialSources) {
+      // Atomic lock acquisition — only proceeds if THIS invocation won the lock
+      const locked = await queryOne<{ source_id: string }>(
+        `UPDATE crawl_sources SET last_crawl_status = 'running', last_crawl_at = now()
+         WHERE source_id = $1
+           AND (last_crawl_status != 'running' OR last_crawl_at < now() - INTERVAL '${STALE_LOCK_HOURS} hours')
+         RETURNING source_id AS "source_id"`,
         [source.source_id],
       );
+
+      if (!locked) {
+        log.info({ sourceId: source.source_id }, 'Source already locked by another invocation');
+        continue;
+      }
+
+      log.info({ sourceId: source.source_id }, 'Starting crawl');
 
       const sourceResult: CrawlResult = {
         totalDiscovered: 0, totalCrawled: 0, newSkills: 0,
@@ -427,7 +433,7 @@ export async function handler() {
           `UPDATE crawl_sources SET last_crawl_status = 'failed',
            last_crawl_stats = $1 WHERE source_id = $2`,
           [JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown' }), source.source_id],
-        ).catch(() => {});
+        ).catch((err2) => { log.debug({ err: err2 }, 'Failed to update source status after crawl failure'); });
       }
 
       // Accumulate totals

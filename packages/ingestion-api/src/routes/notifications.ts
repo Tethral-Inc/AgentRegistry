@@ -12,6 +12,13 @@ app.get('/agent/:agent_id/notifications', async (c) => {
   const unreadOnly = c.req.query('read') !== 'true';
   const limit = Math.min(Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)), 200);
   const since = c.req.query('since');
+  if (since) {
+    // Validate ISO 8601 format
+    const parsed = new Date(since);
+    if (isNaN(parsed.getTime())) {
+      return c.json(makeError('INVALID_INPUT', 'Parameter "since" must be a valid ISO 8601 timestamp'), 400);
+    }
+  }
 
   const conditions: string[] = ['agent_id = $1'];
   const params: unknown[] = [agentId];

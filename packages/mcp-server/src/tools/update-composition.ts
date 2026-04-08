@@ -15,6 +15,7 @@ export function updateCompositionTool(server: McpServer, apiUrl: string, getSess
         tools: z.array(z.string()).optional().describe('Tool names'),
       }).describe('Your current skill/tool composition'),
     },
+    { readOnlyHint: false, destructiveHint: false },
     async ({ agent_id, composition }) => {
       try {
         const resolvedAgentId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);

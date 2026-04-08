@@ -85,7 +85,7 @@ const httpServer = createServer(async (req, res) => {
     transport.onclose = () => {
       const sid = transport.sessionId;
       if (sid) sessions.delete(sid);
-      server.close().catch(() => {});
+      server.close().catch((err) => { console.error('Failed to close MCP server on session end', err); });
     };
 
     await server.connect(transport);
@@ -121,7 +121,7 @@ httpServer.listen(PORT, () => {
 process.on('SIGTERM', () => {
   console.error('Shutting down...');
   for (const transport of sessions.values()) {
-    transport.close().catch(() => {});
+    transport.close().catch((err) => { console.error('Failed to close transport during shutdown', err); });
   }
   httpServer.close();
 });

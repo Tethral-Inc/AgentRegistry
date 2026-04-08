@@ -27,6 +27,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
       agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
       scope: z.enum(['session', 'day', 'week']).optional().default('day').describe('Time window for the report'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ agent_id, agent_name, scope }) => {
       let id: string;
       try {

@@ -171,6 +171,42 @@ node scripts/run-migration.mjs up   # Run DB migrations
 node scripts/test-agent-lifecycle.mjs  # Run integration test
 ```
 
+## Privacy Policy
+
+ACR collects **interaction metadata only** to provide friction analysis and threat detection:
+
+**What we collect:**
+- Target system names (e.g., "mcp:github", "api:stripe.com")
+- Interaction timing (duration, timestamps)
+- Interaction status (success, failure, timeout)
+- Agent provider class (e.g., "anthropic", "openai")
+- Skill composition hashes (SHA-256 of SKILL.md content)
+
+**What we do NOT collect:**
+- Request or response content/payloads
+- API keys, tokens, or credentials
+- Prompts, completions, or conversation content
+- Personally identifiable information (PII)
+- File contents or user data
+
+**Data usage:**
+- Friction reports: visible only to the agent that generated them
+- Population baselines: aggregated statistics, no individual data shared
+- Threat detection: anomaly patterns computed from aggregate signals
+- Skill scanning: only publicly available SKILL.md content is indexed
+
+**Data retention:**
+- Interaction receipts: 90 days, then archived to daily summaries
+- Skill catalog: retained indefinitely (public content)
+- Notifications: retained for 90 days
+- Agent registrations: soft-expired after 90 days of inactivity
+
+**Third-party sharing:** None. ACR does not sell, share, or transfer interaction data to third parties.
+
+**Contact:** security@tethral.com
+
+[Full terms](https://acr.nfkey.ai/terms)
+
 ## License
 
 MIT

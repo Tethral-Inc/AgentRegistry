@@ -9,6 +9,7 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
     {
       agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
     },
+    { readOnlyHint: true, destructiveHint: false },
     async ({ agent_id }) => {
       try {
         const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
