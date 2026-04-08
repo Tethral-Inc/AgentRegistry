@@ -17,15 +17,7 @@ export function updateCompositionTool(server: McpServer, apiUrl: string, getSess
     },
     async ({ agent_id, composition }) => {
       try {
-        const resolvedAgentId = agent_id ?? getSession().agentId;
-        if (!resolvedAgentId) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'No agent ID available. Either provide agent_id or register first.',
-            }],
-          };
-        }
+        const resolvedAgentId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
 
         const res = await fetch(`${apiUrl}/api/v1/composition/update`, {
           method: 'POST',

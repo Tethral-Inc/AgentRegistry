@@ -72,6 +72,7 @@ app.get('/skill-catalog/search', async (c) => {
     agent_count: number | null;
     last_crawled_at: string | null;
     content_changed_at: string | null;
+    quality_score: number | null;
     rank: number;
   }>(
     `SELECT sc.skill_id AS "skill_id", sc.skill_name AS "skill_name",
@@ -84,6 +85,7 @@ app.get('/skill-catalog/search', async (c) => {
             sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
+            sc.quality_score AS "quality_score",
             ts_rank(sc.search_vector, plainto_tsquery('english', $${tsQueryParam})) AS "rank"
      FROM skill_catalog sc
      LEFT JOIN skill_hashes sh ON sh.skill_hash = sc.current_hash
@@ -106,7 +108,7 @@ app.get('/skill-catalog/search', async (c) => {
       author: string | null; tags: string[]; requires: string[]; category: string | null;
       content_snippet: string | null; status: string; threat_level: string | null;
       agent_count: number | null; last_crawled_at: string | null;
-      content_changed_at: string | null; rank: number;
+      content_changed_at: string | null; quality_score: number | null; rank: number;
     }>(
       `SELECT sc.skill_id AS "skill_id", sc.skill_name AS "skill_name",
               sc.skill_source AS "skill_source", sc.source_url AS "source_url",
@@ -118,6 +120,7 @@ app.get('/skill-catalog/search', async (c) => {
               sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
               sc.last_crawled_at::text AS "last_crawled_at",
               sc.content_changed_at::text AS "content_changed_at",
+              sc.quality_score AS "quality_score",
               0 AS "rank"
        FROM skill_catalog sc
        LEFT JOIN skill_hashes sh ON sh.skill_hash = sc.current_hash
@@ -163,6 +166,7 @@ app.get('/skill-catalog', async (c) => {
     skill_name: 'sc.skill_name',
     content_changed_at: 'sc.content_changed_at',
     agent_count: 'sh.agent_count',
+    quality_score: 'sc.quality_score',
   };
   const sortExpr = validSorts[sortKey] ?? 'sc.updated_at';
 
@@ -203,6 +207,7 @@ app.get('/skill-catalog', async (c) => {
     agent_count: number | null;
     last_crawled_at: string | null;
     content_changed_at: string | null;
+    quality_score: number | null;
   }>(
     `SELECT sc.skill_id AS "skill_id", sc.skill_name AS "skill_name",
             sc.skill_source AS "skill_source", sc.source_url AS "source_url",
@@ -213,7 +218,8 @@ app.get('/skill-catalog', async (c) => {
             sc.status AS "status",
             sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
             sc.last_crawled_at::text AS "last_crawled_at",
-            sc.content_changed_at::text AS "content_changed_at"
+            sc.content_changed_at::text AS "content_changed_at",
+            sc.quality_score AS "quality_score"
      FROM skill_catalog sc
      LEFT JOIN skill_hashes sh ON sh.skill_hash = sc.current_hash
      ${whereClause}
@@ -322,6 +328,7 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     created_at: string;
     threat_level: string | null;
     agent_count: number | null;
+    quality_score: number | null;
   }>(
     `SELECT sc.skill_id AS "skill_id", sc.skill_name AS "skill_name",
             sc.skill_source AS "skill_source", sc.source_url AS "source_url",
@@ -333,7 +340,8 @@ app.get('/skill-catalog/:skill_id', async (c) => {
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
             sc.created_at::text AS "created_at",
-            sh.threat_level AS "threat_level", sh.agent_count AS "agent_count"
+            sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
+            sc.quality_score AS "quality_score"
      FROM skill_catalog sc
      LEFT JOIN skill_hashes sh ON sh.skill_hash = sc.current_hash
      WHERE sc.skill_id = $1`,
@@ -368,7 +376,20 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     [skillId],
   );
 
-  return c.json({ ...skill, versions });
+  // Query for related skills (same name, different source)
+  const related = await query<{
+    skill_id: string; skill_name: string; skill_source: string;
+    version: string | null; current_hash: string | null;
+  }>(
+    `SELECT skill_id AS "skill_id", skill_name AS "skill_name",
+            skill_source AS "skill_source", version AS "version",
+            current_hash AS "current_hash"
+     FROM skill_catalog
+     WHERE skill_name = $1 AND skill_id != $2 AND status = 'active'`,
+    [skill.skill_name, skillId],
+  );
+
+  return c.json({ ...skill, versions, related_skills: related });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

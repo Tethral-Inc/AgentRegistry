@@ -134,6 +134,7 @@ export interface SkillCatalogEntry {
   agent_count?: number;
   last_crawled_at: string | null;
   content_changed_at: string | null;
+  quality_score?: number;
   versions?: SkillVersionEntry[];
 }
 

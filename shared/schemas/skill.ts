@@ -62,6 +62,7 @@ export const SkillCatalogSchema = z.object({
   agent_count: z.number().optional(),
   last_crawled_at: z.string().nullable(),
   content_changed_at: z.string().nullable(),
+  quality_score: z.number().optional(),
 });
 
 export const SkillSearchRequestSchema = z.object({

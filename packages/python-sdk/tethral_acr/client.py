@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -130,6 +131,45 @@ class ACRClient:
     def health(self) -> dict[str, Any]:
         """Check API health."""
         return self._get("/api/v1/health")
+
+    def search_skills(
+        self,
+        query: str,
+        source: str | None = None,
+        category: str | None = None,
+        threat_level: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Search the skill catalog."""
+        params: dict[str, str] = {"q": query, "limit": str(limit), "offset": str(offset)}
+        if source:
+            params["source"] = source
+        if category:
+            params["category"] = category
+        if threat_level:
+            params["threat_level"] = threat_level
+        return self._get(f"/api/v1/skill-catalog/search?{urlencode(params)}")
+
+    def get_skill_catalog(self, skill_id: str) -> dict[str, Any]:
+        """Get a single skill detail with version history."""
+        return self._get(f"/api/v1/skill-catalog/{skill_id}")
+
+    def get_skill_versions(self, skill_id: str) -> dict[str, Any]:
+        """Get complete version history for a skill."""
+        return self._get(f"/api/v1/skill-catalog/{skill_id}/versions")
+
+    def get_skill_changes(self, since: str | None = None) -> dict[str, Any]:
+        """Get recent skill changes feed."""
+        params: dict[str, str] = {}
+        if since:
+            params["since"] = since
+        qs = f"?{urlencode(params)}" if params else ""
+        return self._get(f"/api/v1/skill-catalog/changes{qs}")
+
+    def get_crawl_sources(self) -> dict[str, Any]:
+        """List crawl sources with status."""
+        return self._get("/api/v1/skill-catalog/sources")
 
     def close(self) -> None:
         """Close the HTTP client."""

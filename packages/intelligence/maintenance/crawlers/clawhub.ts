@@ -17,9 +17,11 @@ function sleep(ms: number): Promise<void> {
 export class ClawHubCrawler implements CrawlSourceAdapter {
   readonly sourceId = 'clawhub';
   private baseUrl: string;
+  private config: Record<string, unknown>;
 
   constructor(source: CrawlSourceRow) {
     this.baseUrl = source.base_url;
+    this.config = source.config ?? {};
   }
 
   async discover(): Promise<DiscoveredSkill[]> {
@@ -87,6 +89,26 @@ export class ClawHubCrawler implements CrawlSourceAdapter {
       }
     } catch {
       log.warn('Web scraping failed');
+    }
+
+    // Method 4: Configurable fallback URL
+    const fallbackUrl = (this.config?.fallback_registry_url as string)
+      ?? 'https://raw.githubusercontent.com/clawhub/registry/main/skills.json';
+    try {
+      const res = await fetch(fallbackUrl, { headers: { 'User-Agent': USER_AGENT } });
+      if (res.ok) {
+        const data = (await res.json()) as Array<{ name: string; url?: string }>;
+        if (Array.isArray(data)) {
+          log.info({ method: 'fallback', count: data.length }, 'Discovered skills via fallback registry');
+          return data.map((s) => ({
+            name: s.name,
+            source: this.sourceId,
+            sourceUrl: s.url || `${this.baseUrl}/skills/${s.name}/SKILL.md`,
+          }));
+        }
+      }
+    } catch {
+      log.warn('Fallback registry fetch failed');
     }
 
     log.error('No ClawHub discovery method succeeded');

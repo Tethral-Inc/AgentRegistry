@@ -1,4 +1,4 @@
-import { query, execute, createLogger } from '@acr/shared';
+import { query, queryOne, execute, createLogger } from '@acr/shared';
 
 const log = createLogger({ name: 'skill-threat-update' });
 
@@ -129,13 +129,29 @@ export async function handler() {
     // 9. Alert on high/critical
     const critical = updates.filter((u) => u.threatLevel === 'high' || u.threatLevel === 'critical');
     if (critical.length > 0) {
+      // Enrich with catalog metadata
+      const catalogLookups = new Map<string, { skill_name: string; description: string; version: string } | null>();
+      for (const c of critical) {
+        const catalogInfo = await queryOne<{ skill_name: string; description: string; version: string }>(
+          `SELECT skill_name AS "skill_name", description AS "description", version AS "version"
+           FROM skill_catalog WHERE current_hash = $1 LIMIT 1`,
+          [c.skillHash],
+        ).catch(() => null);
+        catalogLookups.set(c.skillHash, catalogInfo ?? null);
+      }
+
       const slackUrl = process.env.SLACK_WEBHOOK_URL;
       if (slackUrl) {
         await fetch(slackUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: `ACR Threat Alert: ${critical.length} skill(s) reached high/critical threat level.\n${critical.map((c) => `- ${c.skillHash.substring(0, 12)}... (${c.threatLevel}, ${c.reporterCount} reporters, ${(c.anomalyRate * 100).toFixed(1)}% anomaly rate)`).join('\n')}`,
+            text: `ACR Threat Alert: ${critical.length} skill(s) reached high/critical threat level.\n${critical.map((c) => {
+              const info = catalogLookups.get(c.skillHash);
+              const label = info?.skill_name ?? c.skillHash.substring(0, 12) + '...';
+              const ver = info?.version ? ` v${info.version}` : '';
+              return `- *${label}*${ver} (${c.threatLevel}, ${c.reporterCount} reporters, ${(c.anomalyRate * 100).toFixed(1)}% anomaly rate)`;
+            }).join('\n')}`,
           }),
         });
       }

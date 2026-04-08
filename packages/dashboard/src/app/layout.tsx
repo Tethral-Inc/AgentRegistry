@@ -23,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           alignItems: 'center',
         }}>
           <strong style={{ color: '#fff' }}>ACR</strong>
+          <a href="/skills" style={{ color: '#888', textDecoration: 'none' }}>Skills</a>
           <a href="/operator" style={{ color: '#888', textDecoration: 'none' }}>Operator</a>
           <a href="/internal" style={{ color: '#888', textDecoration: 'none' }}>Internal</a>
         </nav>

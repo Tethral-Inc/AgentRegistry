@@ -9,8 +9,8 @@
     "test:integration": "vitest run --project integration",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
-    "migrate:up": "migrate -database $COCKROACH_CONNECTION_STRING -path migrations up",
-    "migrate:down": "migrate -database $COCKROACH_CONNECTION_STRING -path migrations down 1"
+    "migrate:up": "node scripts/run-migration.mjs up",
+    "migrate:down": "node scripts/run-migration.mjs down"
   },
   "dependencies": {
     "hono": "^4.4.0"

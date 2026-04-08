@@ -13,6 +13,7 @@ import {
   extractRequires,
   createLogger,
 } from '@acr/shared';
+import type { ParsedFrontmatter } from '@acr/shared';
 import { getCrawler } from './crawlers/index.js';
 import type { CrawlSourceRow, CrawlResult, DiscoveredSkill } from './crawlers/types.js';
 
@@ -37,6 +38,27 @@ function isKnownBad(skillName: string): boolean {
   if (KNOWN_BAD_NAMES.includes(skillName)) return true;
   if (KNOWN_BAD_AUTHORS.some((a) => skillName.includes(a))) return true;
   return false;
+}
+
+function computeQualityScore(params: {
+  frontmatter: ParsedFrontmatter | null;
+  content: string;
+  tags: string[];
+  requires: string[];
+  threatLevel: string;
+}): number {
+  let score = 0;
+  const fm = params.frontmatter;
+  if (fm?.name) score += 10;
+  if (fm?.description && String(fm.description).length > 20) score += 20;
+  if (fm?.version) score += 15;
+  if (fm?.author) score += 10;
+  if (params.tags.length > 0) score += 5;
+  if (fm?.category) score += 5;
+  if (params.requires.length > 0) score += 5;
+  if (params.content.length > 500) score += 10;
+  if (params.threatLevel === 'none') score += 10;
+  return Math.min(score, 100);
 }
 
 function compareSemver(oldVer: string | null, newVer: string | null): string {
@@ -132,6 +154,7 @@ async function processSkill(
   const requires = extractRequires(frontmatter);
   const category = frontmatter?.category ?? null;
   const threatLevel = isKnownBad(name) ? 'critical' : 'none';
+  const qualityScore = computeQualityScore({ frontmatter, content, tags, requires, threatLevel });
 
   // Check existing catalog entry
   const existing = await queryOne<CatalogRow>(
@@ -150,14 +173,15 @@ async function processSkill(
       `INSERT INTO skill_catalog
        (skill_name, skill_source, source_url, current_hash, skill_content, content_snippet,
         description, version, author, tags, requires, category, frontmatter_raw,
-        status, last_crawled_at, content_changed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
+        status, quality_score, last_crawled_at, content_changed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now())
        RETURNING skill_id AS "skill_id"`,
       [
         name, skill.source, skill.sourceUrl, skillHash, content, contentSnippet,
         description, version, author, tags, requires, category,
         JSON.stringify(frontmatter ?? {}),
         threatLevel === 'critical' ? 'flagged' : 'active',
+        qualityScore,
       ],
     );
 
@@ -217,13 +241,14 @@ async function processSkill(
         category = $10, frontmatter_raw = $11,
         last_crawled_at = now(), last_crawl_error = NULL, content_changed_at = now(),
         status = CASE WHEN $12 = 'critical' THEN 'flagged' ELSE 'active' END,
+        quality_score = $13,
         updated_at = now()
-       WHERE skill_id = $13`,
+       WHERE skill_id = $14`,
       [
         skillHash, existing.current_hash, content, contentSnippet,
         description, version, author, tags, requires,
         category, JSON.stringify(frontmatter ?? {}),
-        threatLevel, existing.skill_id,
+        threatLevel, qualityScore, existing.skill_id,
       ],
     );
 
@@ -247,6 +272,18 @@ async function processSkill(
       { name, source: skill.source, oldHash: existing.current_hash?.slice(0, 12), newHash: skillHash.slice(0, 12), changeType },
       'Skill content changed',
     );
+
+    // Slack notification for content changes
+    const slackUrl = process.env.SLACK_WEBHOOK_URL;
+    if (slackUrl) {
+      await fetch(slackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `ACR Skill Update: *${name}* (${skill.source}) changed [${changeType}]\nOld: ${existing.version ?? 'unknown'} → New: ${version ?? 'unknown'}\nHash: ${skillHash.slice(0, 16)}...`,
+        }),
+      }).catch(() => {});
+    }
   }
 }
 
