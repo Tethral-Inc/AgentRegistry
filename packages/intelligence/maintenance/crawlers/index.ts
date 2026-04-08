@@ -6,6 +6,7 @@ import { ClawHubCrawler } from './clawhub.js';
 import { GitHubCrawler } from './github.js';
 import { NpmCrawler } from './npm.js';
 import { CustomRegistryCrawler } from './custom.js';
+import { PyPICrawler } from './pypi.js';
 
 export function getCrawler(source: CrawlSourceRow): CrawlSourceAdapter {
   switch (source.source_type) {
@@ -17,6 +18,8 @@ export function getCrawler(source: CrawlSourceRow): CrawlSourceAdapter {
       return new GitHubCrawler(source);
     case 'npm_search':
       return new NpmCrawler(source);
+    case 'pypi_search':
+      return new PyPICrawler(source);
     case 'custom':
       return new CustomRegistryCrawler(source);
     default:

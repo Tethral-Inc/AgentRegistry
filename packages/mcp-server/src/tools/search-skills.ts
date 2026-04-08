@@ -11,14 +11,16 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
       category: z.string().optional().describe('Filter by category'),
       threat_level: z.enum(['none', 'low', 'medium', 'high', 'critical']).optional().describe('Filter by threat level'),
       limit: z.number().min(1).max(50).optional().default(10).describe('Max results to return'),
+      min_scan_score: z.number().min(0).max(100).optional().describe('Minimum security scan score (0-100)'),
     },
-    async ({ query: searchQuery, source, category, threat_level, limit }) => {
+    async ({ query: searchQuery, source, category, threat_level, limit, min_scan_score }) => {
       try {
         const params = new URLSearchParams({ q: searchQuery });
         if (source) params.set('source', source);
         if (category) params.set('category', category);
         if (threat_level) params.set('threat_level', threat_level);
         if (limit) params.set('limit', String(limit));
+        if (min_scan_score != null) params.set('min_scan_score', String(min_scan_score));
 
         const res = await fetch(`${apiUrl}/api/v1/skill-catalog/search?${params}`);
         const data = await res.json() as {
@@ -34,6 +36,7 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
             agent_count: number | null;
             current_hash: string | null;
             content_changed_at: string | null;
+            scan_score: number | null;
           }>;
           total: number;
         };
@@ -60,6 +63,7 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
           if (skill.description) text += `\n    ${skill.description}`;
           if (skill.category) text += `\n    Category: ${skill.category}`;
           if (skill.tags.length > 0) text += `\n    Tags: ${skill.tags.join(', ')}`;
+          if (skill.scan_score != null) text += `\n    Security Score: ${skill.scan_score}/100`;
           if (skill.current_hash) text += `\n    Hash: ${skill.current_hash.slice(0, 16)}...`;
           text += '\n';
         }

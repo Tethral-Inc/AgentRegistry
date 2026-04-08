@@ -65,6 +65,11 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
           if (data.interaction_count != null) text += `\nInteractions: ${data.interaction_count}`;
           if (data.anomaly_rate != null) text += `\nAnomaly rate: ${(data.anomaly_rate * 100).toFixed(1)}%`;
 
+          if (data.scan_score != null) text += `\nSecurity Score: ${data.scan_score}/100`;
+          if (data.threat_patterns && data.threat_patterns.length > 0) {
+            text += `\nSecurity Findings: ${data.threat_patterns.join(', ')}`;
+          }
+
           // Version freshness check
           if (data.is_current_version === false) {
             text += `\n\nOUTDATED: You are ${data.versions_behind ?? '?'} version(s) behind.`;

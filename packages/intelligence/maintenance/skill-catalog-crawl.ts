@@ -12,8 +12,9 @@ import {
   extractTags,
   extractRequires,
   createLogger,
+  scanSkillContent,
 } from '@acr/shared';
-import type { ParsedFrontmatter } from '@acr/shared';
+import type { ParsedFrontmatter, ScanResult } from '@acr/shared';
 import { getCrawler } from './crawlers/index.js';
 import type { CrawlSourceRow, CrawlResult, DiscoveredSkill } from './crawlers/types.js';
 
@@ -157,7 +158,20 @@ async function processSkill(
   const tags = extractTags(frontmatter);
   const requires = extractRequires(frontmatter);
   const category = frontmatter?.category ?? null;
-  const threatLevel = isKnownBad(name) ? 'critical' : 'none';
+  // Run content security scan
+  const scanResult = scanSkillContent(content, name);
+
+  let threatLevel: string;
+  if (isKnownBad(name) || scanResult.max_severity === 'critical') threatLevel = 'critical';
+  else if (scanResult.max_severity === 'high') threatLevel = 'high';
+  else if (scanResult.max_severity === 'medium') threatLevel = 'medium';
+  else if (scanResult.max_severity === 'low') threatLevel = 'low';
+  else threatLevel = 'none';
+
+  if (scanResult.findings.length > 0) {
+    log.warn({ name, source: skill.source, findings: scanResult.findings.length, maxSeverity: scanResult.max_severity, patterns: scanResult.threat_patterns }, 'Security findings detected');
+  }
+
   const qualityScore = computeQualityScore({ frontmatter, content, tags, requires, threatLevel });
 
   // Check existing catalog entry
@@ -177,15 +191,19 @@ async function processSkill(
       `INSERT INTO skill_catalog
        (skill_name, skill_source, source_url, current_hash, skill_content, content_snippet,
         description, version, author, tags, requires, category, frontmatter_raw,
-        status, quality_score, last_crawled_at, content_changed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now())
+        status, quality_score, scan_result, threat_patterns, scan_score,
+        last_crawled_at, content_changed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now(), now())
        RETURNING skill_id AS "skill_id"`,
       [
         name, skill.source, skill.sourceUrl, skillHash, content, contentSnippet,
         description, version, author, tags, requires, category,
         JSON.stringify(frontmatter ?? {}),
-        threatLevel === 'critical' ? 'flagged' : 'active',
+        (threatLevel === 'critical' || threatLevel === 'high') ? 'flagged' : 'active',
         qualityScore,
+        JSON.stringify(scanResult),
+        scanResult.threat_patterns,
+        scanResult.scan_score,
       ],
     );
 
@@ -246,13 +264,16 @@ async function processSkill(
         last_crawled_at = now(), last_crawl_error = NULL, content_changed_at = now(),
         status = CASE WHEN $12 = 'critical' THEN 'flagged' ELSE 'active' END,
         quality_score = $13,
+        scan_result = $14, threat_patterns = $15, scan_score = $16,
         updated_at = now()
-       WHERE skill_id = $14`,
+       WHERE skill_id = $17`,
       [
         skillHash, existing.current_hash, content, contentSnippet,
         description, version, author, tags, requires,
         category, JSON.stringify(frontmatter ?? {}),
-        threatLevel, qualityScore, existing.skill_id,
+        threatLevel, qualityScore,
+        JSON.stringify(scanResult), scanResult.threat_patterns, scanResult.scan_score,
+        existing.skill_id,
       ],
     );
 

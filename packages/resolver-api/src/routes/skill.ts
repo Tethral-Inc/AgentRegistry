@@ -35,6 +35,8 @@ interface SkillResponse {
   current_hash?: string;
   versions_behind?: number;
   skill_status?: string;
+  scan_score?: number;
+  threat_patterns?: string[];
 }
 
 export async function handleSkillLookup(
@@ -94,10 +96,13 @@ export async function handleSkillLookup(
           current_hash: string | null;
           status: string | null;
           total_versions: string;
+          scan_score: number | null;
+          threat_patterns: string[] | null;
         }>(
           env.COCKROACH_CONNECTION_STRING,
           `SELECT sc.description, sc.version, sc.author, sc.category, sc.tags,
                   sc.skill_source, sc.current_hash, sc.status,
+                  sc.scan_score, sc.threat_patterns,
                   (SELECT COUNT(*)::text FROM skill_version_history WHERE skill_id = sc.skill_id) as total_versions
            FROM skill_catalog sc
            JOIN skill_hashes sh ON sh.catalog_skill_id = sc.skill_id
@@ -114,6 +119,8 @@ export async function handleSkillLookup(
           response.category = cat.category ?? undefined;
           response.tags = cat.tags ?? undefined;
           response.skill_status = cat.status ?? undefined;
+          response.scan_score = cat.scan_score ?? undefined;
+          response.threat_patterns = cat.threat_patterns ?? undefined;
 
           const isCurrent = row.skill_hash === cat.current_hash;
           response.is_current_version = isCurrent;

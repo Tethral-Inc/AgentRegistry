@@ -17,6 +17,8 @@ export type {
 } from './types/skill.js';
 export { parseFrontmatter, extractTags, extractRequires } from './parsers/frontmatter.js';
 export type { ParsedFrontmatter, FrontmatterResult } from './parsers/frontmatter.js';
+export { scanSkillContent } from './security/index.js';
+export type { ScanResult, ScanFinding, ScanSeverity } from './security/index.js';
 export type {
   FrictionSummary, TargetFriction, FrictionReport, ComponentFriction,
 } from './types/friction.js';

@@ -135,6 +135,8 @@ export interface SkillCatalogEntry {
   last_crawled_at: string | null;
   content_changed_at: string | null;
   quality_score?: number;
+  threat_patterns?: string[];
+  scan_score?: number;
   versions?: SkillVersionEntry[];
 }
 

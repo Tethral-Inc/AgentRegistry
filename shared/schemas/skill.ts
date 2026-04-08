@@ -63,6 +63,8 @@ export const SkillCatalogSchema = z.object({
   last_crawled_at: z.string().nullable(),
   content_changed_at: z.string().nullable(),
   quality_score: z.number().optional(),
+  threat_patterns: z.array(z.string()).optional(),
+  scan_score: z.number().optional(),
 });
 
 export const SkillSearchRequestSchema = z.object({
