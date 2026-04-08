@@ -5,7 +5,9 @@ import { handleAgentLookup } from './routes/agent.js';
 import { handleSystemHealth } from './routes/system-health.js';
 import { handleActiveThreats } from './routes/threats.js';
 
-const VERCEL_ORIGIN = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
+// Configured via wrangler secret or wrangler.toml [vars]
+// Falls back to the known Vercel deployment URL
+const DEFAULT_VERCEL_ORIGIN = 'https://acr.nfkey.ai';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -40,7 +42,8 @@ export default {
 
     // Proxy non-/v1/ routes to Vercel (ingestion API, lookup page, etc.)
     if (!path.startsWith('/v1/') && path !== '/v1/health') {
-      const proxyUrl = new URL(path, VERCEL_ORIGIN);
+      const vercelOrigin = env.INGESTION_API_URL ?? DEFAULT_VERCEL_ORIGIN;
+      const proxyUrl = new URL(path, vercelOrigin);
       proxyUrl.search = url.search;
       const proxyReq = new Request(proxyUrl.toString(), {
         method: request.method,

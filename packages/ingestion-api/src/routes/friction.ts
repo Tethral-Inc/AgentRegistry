@@ -190,7 +190,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
             baseline_p95_ms AS "baseline_p95_ms",
             volatility_score AS "volatility_score"
      FROM friction_baselines`,
-  ).catch(() => [] as Array<{ target_class: string; baseline_median_ms: number; baseline_p95_ms: number; volatility_score: number }>);
+  ).catch((err) => { log.debug({ err }, 'Failed to fetch friction baselines'); return [] as Array<{ target_class: string; baseline_median_ms: number; baseline_p95_ms: number; volatility_score: number }>; });
 
   const baselineMap = new Map(baselines.map((b) => [b.target_class, b]));
 
@@ -277,7 +277,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
          FROM system_health
          WHERE system_id = ANY($1)`,
         [targetIds],
-      ).catch(() => [])
+      ).catch((err) => { log.debug({ err }, 'Failed to fetch system health'); return []; })
     : [];
 
   const healthMap = new Map(healthRows.map((h) => [h.system_id, h]));

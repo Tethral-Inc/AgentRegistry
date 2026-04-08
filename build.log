@@ -1,0 +1,92 @@
+
+> acr@ build C:\Users\jluns\Documents\GitHub\AgentRegistry
+> turbo build
+
+• turbo 2.9.3
+
+   • Packages in scope: @acr/dashboard, @acr/intelligence, @acr/shared, @acr/tests, @tethral/acr-mcp, @tethral/acr-sdk, ingestion-api, resolver-api
+   • Running build in 8 packages
+   • Remote caching disabled
+
+@tethral/acr-mcp:build: cache miss, executing a631e326c0fd04d3
+@tethral/acr-sdk:build: cache hit, replaying logs 11d9584570995fed
+@tethral/acr-sdk:build: 
+@tethral/acr-sdk:build: > @tethral/acr-sdk@0.2.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\packages\ts-sdk
+@tethral/acr-sdk:build: > tsc
+@tethral/acr-sdk:build: 
+@acr/shared:build: cache hit, replaying logs 51772176add00b8d
+@acr/shared:build: 
+@acr/shared:build: > @acr/shared@0.1.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\shared
+@acr/shared:build: > tsc
+@acr/shared:build: 
+resolver-api:build: cache miss, executing 04ea593996702f34
+ingestion-api:build: cache miss, executing f5c8ec2378a2d1c4
+@acr/intelligence:build: cache miss, executing c6b6bd01b850704d
+@acr/dashboard:build: cache miss, executing a7a852c2912210cf
+resolver-api:build: 
+resolver-api:build: > resolver-api@0.1.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\packages\resolver-api
+resolver-api:build: > tsc
+resolver-api:build: 
+@acr/intelligence:build: 
+@acr/intelligence:build: > @acr/intelligence@0.1.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\packages\intelligence
+@acr/intelligence:build: > tsc && node scripts/bundle.js
+@acr/intelligence:build: 
+ingestion-api:build: 
+ingestion-api:build: > ingestion-api@0.1.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\packages\ingestion-api
+ingestion-api:build: > tsc
+ingestion-api:build: 
+@acr/dashboard:build: 
+@acr/dashboard:build: > @acr/dashboard@0.1.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\packages\dashboard
+@acr/dashboard:build: > next build
+@acr/dashboard:build: 
+@tethral/acr-mcp:build: 
+@tethral/acr-mcp:build: > @tethral/acr-mcp@0.9.0 build C:\Users\jluns\Documents\GitHub\AgentRegistry\packages\mcp-server
+@tethral/acr-mcp:build: > tsc
+@tethral/acr-mcp:build: 
+@acr/dashboard:build:   ▲ Next.js 14.2.35
+@acr/dashboard:build: 
+@acr/dashboard:build:    Creating an optimized production build ...
+@acr/intelligence:build:   Bundled health-check
+@acr/intelligence:build:   Bundled partition-creator
+@acr/intelligence:build:   Bundled skill-threat-update
+@acr/dashboard:build:  ✓ Compiled successfully
+@acr/dashboard:build:    Linting and checking validity of types ...
+@acr/intelligence:build:   Bundled system-health-aggregate
+@acr/intelligence:build:   Bundled friction-baseline-compute
+@acr/dashboard:build:    Collecting page data ...
+@acr/dashboard:build:    Generating static pages (0/7) ...
+@acr/dashboard:build:    Generating static pages (1/7) 
+@acr/intelligence:build:   Bundled clawhub-crawl
+@acr/dashboard:build:    Generating static pages (3/7) 
+@acr/dashboard:build:    Generating static pages (5/7) 
+@acr/dashboard:build:  ✓ Generating static pages (7/7)
+@acr/dashboard:build:    Finalizing page optimization ...
+@acr/dashboard:build:    Collecting build traces ...
+@acr/intelligence:build:   Bundled agent-expiration
+@acr/intelligence:build:   Bundled data-archival
+@acr/intelligence:build:   Bundled skill-catalog-crawl
+@acr/intelligence:build: 
+@acr/intelligence:build: Bundled 9 Lambda functions
+@acr/dashboard:build: 
+@acr/dashboard:build: Route (app)                              Size     First Load JS
+@acr/dashboard:build: ┌ ○ /                                    142 B          87.4 kB
+@acr/dashboard:build: ├ ○ /_not-found                          872 B          88.1 kB
+@acr/dashboard:build: ├ ○ /internal                            2.16 kB        89.4 kB
+@acr/dashboard:build: ├ ○ /operator                            2.46 kB        89.7 kB
+@acr/dashboard:build: ├ ○ /skills                              3.19 kB        90.4 kB
+@acr/dashboard:build: └ ƒ /skills/[id]                         3.46 kB        90.7 kB
+@acr/dashboard:build: + First Load JS shared by all            87.3 kB
+@acr/dashboard:build:   ├ chunks/5b8f0dd8-49acbe4e034f68af.js  53.6 kB
+@acr/dashboard:build:   ├ chunks/749-4550778a7b3e301e.js       31.7 kB
+@acr/dashboard:build:   └ other shared chunks (total)          1.9 kB
+@acr/dashboard:build: 
+@acr/dashboard:build: 
+@acr/dashboard:build: ○  (Static)   prerendered as static content
+@acr/dashboard:build: ƒ  (Dynamic)  server-rendered on demand
+@acr/dashboard:build: 
+
+ Tasks:    7 successful, 7 total
+Cached:    2 cached, 7 total
+  Time:    7.775s 
+
+ WARNING  no output files found for task @acr/dashboard#build. Please check your `outputs` key in `turbo.json`

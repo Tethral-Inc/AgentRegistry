@@ -14,7 +14,7 @@
  */
 
 const DB_TIMEOUT_MS = 3000;
-const PROXY_URL = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
+const DEFAULT_PROXY_URL = 'https://acr.nfkey.ai';
 
 /**
  * Execute a read-only SQL query by proxying through the ingestion API.
@@ -27,6 +27,7 @@ export async function dbQuery<T>(
   connectionString: string,
   sql: string,
   params: unknown[] = [],
+  proxyUrl?: string,
 ): Promise<T[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DB_TIMEOUT_MS);
@@ -34,7 +35,7 @@ export async function dbQuery<T>(
   const authKey = connectionString.substring(0, 32);
 
   try {
-    const response = await fetch(`${PROXY_URL}/api/internal/query`, {
+    const response = await fetch(`${proxyUrl ?? DEFAULT_PROXY_URL}/api/internal/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
