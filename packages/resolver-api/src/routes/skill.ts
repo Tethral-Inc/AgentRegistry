@@ -124,16 +124,24 @@ export async function handleSkillLookup(
           response.scan_score = cat.scan_score ?? undefined;
           response.threat_patterns = cat.threat_patterns ?? undefined;
 
-          // CRITICAL: Override threat_level from scan results when skill is flagged.
-          // The skill_hashes.threat_level is reactive (anomaly-based), but the catalog
-          // status is proactive (content-scanned). Flagged = blocked.
+          // Override threat_level from scan results when skill is flagged.
+          // Only BLOCK (prevent install) for truly dangerous skills (score < 50).
+          // Warn for medium-risk (50-79). Don't block low-risk flags (80+).
           if (cat.status === 'flagged') {
             const scanScore = cat.scan_score ?? 100;
-            if (scanScore < 50) response.threat_level = 'critical';
-            else if (scanScore < 70) response.threat_level = 'high';
-            else response.threat_level = 'medium';
-            response.blocked = true;
-            response.blocked_reason = 'Content security scan detected threat patterns. This skill is blocked from installation.';
+            if (scanScore < 50) {
+              // BLOCKED: Critical/high threat patterns, dangerous content
+              response.threat_level = 'critical';
+              response.blocked = true;
+              response.blocked_reason = 'Content security scan detected critical threat patterns. This skill is blocked from installation.';
+            } else if (scanScore < 70) {
+              // WARNING: Elevated risk, not blocked but flagged
+              response.threat_level = 'high';
+              // Not blocked — agents can install but should warn users
+            } else {
+              // LOW RISK: Minor findings (missing metadata, possible false positives)
+              response.threat_level = 'medium';
+            }
           }
 
           const isCurrent = row.skill_hash === cat.current_hash;

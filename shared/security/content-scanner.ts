@@ -75,10 +75,10 @@ const PATTERNS: PatternDef[] = [
   },
   {
     name: 'prompt_injection_roleplay',
-    severity: 'critical',
+    severity: 'medium',  // Downgraded: high false-positive rate — many legitimate skills say "you are now connected to X"
     category: 'prompt_injection',
     regex: /\byou are now\b/gi,
-    confidence: 'likely',
+    confidence: 'possible',
   },
   {
     name: 'prompt_injection_template',
