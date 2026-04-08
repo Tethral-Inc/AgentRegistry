@@ -411,7 +411,20 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     [skill.skill_name, skillId],
   );
 
-  return c.json({ ...skill, versions, related_skills: related });
+  // CONTENT REDACTION: Flagged skills must not expose content for download/copy/viewing.
+  // This protects users and limits liability for distributing malicious content.
+  const isBlocked = skill.status === 'flagged';
+  const response: Record<string, unknown> = { ...skill, versions, related_skills: related };
+
+  if (isBlocked) {
+    response.skill_content = null; // Redact full content
+    response.content_snippet = '[REDACTED — This skill has been flagged by ACR content security scanning]';
+    response.blocked = true;
+    response.blocked_reason = 'Content security scan detected threat patterns. Skill content is not available for download, copy, or viewing.';
+    response.source_url = null; // Don't provide source URL for blocked skills
+  }
+
+  return c.json(response);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

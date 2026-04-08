@@ -37,6 +37,8 @@ interface SkillResponse {
   skill_status?: string;
   scan_score?: number;
   threat_patterns?: string[];
+  blocked?: boolean;
+  blocked_reason?: string;
 }
 
 export async function handleSkillLookup(
@@ -121,6 +123,18 @@ export async function handleSkillLookup(
           response.skill_status = cat.status ?? undefined;
           response.scan_score = cat.scan_score ?? undefined;
           response.threat_patterns = cat.threat_patterns ?? undefined;
+
+          // CRITICAL: Override threat_level from scan results when skill is flagged.
+          // The skill_hashes.threat_level is reactive (anomaly-based), but the catalog
+          // status is proactive (content-scanned). Flagged = blocked.
+          if (cat.status === 'flagged') {
+            const scanScore = cat.scan_score ?? 100;
+            if (scanScore < 50) response.threat_level = 'critical';
+            else if (scanScore < 70) response.threat_level = 'high';
+            else response.threat_level = 'medium';
+            response.blocked = true;
+            response.blocked_reason = 'Content security scan detected threat patterns. This skill is blocked from installation.';
+          }
 
           const isCurrent = row.skill_hash === cat.current_hash;
           response.is_current_version = isCurrent;

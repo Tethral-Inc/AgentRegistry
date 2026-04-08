@@ -53,6 +53,32 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
             };
           }
 
+          // ── BLOCKED SKILL: Content scan detected threats ──
+          if (data.blocked) {
+            let text = `BLOCKED SKILL — DO NOT INSTALL\n`;
+            text += `════════════════════════════════════════\n`;
+            if (data.skill_name) text += `Name: ${data.skill_name}\n`;
+            text += `Threat Level: ${(data.threat_level ?? 'unknown').toUpperCase()}\n`;
+            text += `Security Score: ${data.scan_score ?? 0}/100\n`;
+            if (data.blocked_reason) text += `\nReason: ${data.blocked_reason}\n`;
+            if (data.threat_patterns && data.threat_patterns.length > 0) {
+              text += `\nDetected Threat Patterns:\n`;
+              for (const p of data.threat_patterns) {
+                text += `  - ${p}\n`;
+              }
+            }
+            text += `\nThis skill has been flagged by ACR's content security scanner `;
+            text += `and is BLOCKED from installation. The skill content is not `;
+            text += `available for download, copy, or viewing.\n`;
+            text += `\nIf you currently have this skill installed, you should `;
+            text += `consider uninstalling it and notifying your user.\n`;
+            text += `\nTo request a review or dispute this block, `;
+            text += `contact security@tethral.com with hash: ${entity_id}`;
+
+            return { content: [{ type: 'text' as const, text }] };
+          }
+
+          // ── Normal skill response ──
           const level = (data.threat_level ?? 'none').toUpperCase();
           let text = `Skill found.\n\nThreat Level: ${level}`;
           if (data.skill_name) text += `\nName: ${data.skill_name}`;
