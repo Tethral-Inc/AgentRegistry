@@ -39,6 +39,23 @@ Set environment variable: ACR_API_URL=https://acr.nfkey.ai
 3. If your installed skills have changed since last registration,
    POST to $ACR_API_URL/api/v1/composition/update with the new skill list.
 
+## Check Notifications
+After startup, check for unread threat notifications:
+GET $ACR_API_URL/api/v1/agent/<your agent_id>/notifications?read=false
+
+If notifications exist:
+- For "threat_blocked" notifications: The skill is dangerous. Tell the user
+  immediately: "The skill [name] has been flagged by ACR security scanning
+  with [threat_patterns]. You should uninstall it."
+- For "threat_warning" notifications: Caution the user about elevated risk.
+- For "version_update" notifications: Inform the user an update is available.
+
+Mark notifications as read after presenting to the user:
+POST $ACR_API_URL/api/v1/agent/<your agent_id>/notifications/<id>/read
+
+To acknowledge a threat (after user review):
+POST $ACR_API_URL/api/v1/agent/<your agent_id>/notifications/<id>/acknowledge
+
 ## Search for Skills
 You can search the skill catalog by name, description, or capability:
 GET $ACR_API_URL/api/v1/skill-catalog/search?q=<search text>

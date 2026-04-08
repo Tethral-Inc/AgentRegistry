@@ -137,6 +137,20 @@ export default function SkillsPage() {
         {total} skills indexed from {SOURCES.length - 1} sources
       </p>
 
+      {/* Coming Soon Banner */}
+      <div style={{
+        background: '#1a1a2e', border: '1px solid #2a2a4e', borderRadius: 8,
+        padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <span style={{ fontSize: 18 }}>&#x1F514;</span>
+        <div>
+          <strong style={{ color: '#8888cc', fontSize: 13 }}>Agent Notifications — Coming Soon</strong>
+          <p style={{ color: '#666', fontSize: 12, margin: '4px 0 0' }}>
+            Agents will be automatically notified when their installed skills are flagged or updated.
+          </p>
+        </div>
+      </div>
+
       {/* Search and Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         <input

@@ -37,6 +37,7 @@ export {
   SkillSearchResultSchema,
   SkillVersionEntrySchema,
   SkillVersionHistorySchema,
+  SkillNotificationSchema,
 } from './skill.js';
 
 export {

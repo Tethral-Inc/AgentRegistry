@@ -90,6 +90,15 @@ app.post('/register', async (c) => {
     );
   }
 
+  // Auto-subscribe agent to threat notifications for their installed skills
+  for (const hash of componentHashes) {
+    await execute(
+      `INSERT INTO skill_subscriptions (agent_id, skill_hash)
+       VALUES ($1, $2) ON CONFLICT (agent_id, skill_hash) DO NOTHING`,
+      [agentId, hash],
+    );
+  }
+
   // Build environment briefing
   const systems = await query<{
     system_id: string;

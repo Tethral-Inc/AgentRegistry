@@ -20,6 +20,7 @@ import { receiptsReadRoute } from './routes/receipts-read.js';
 import { networkStatusRoute } from './routes/network-status.js';
 import { networkSkillsRoute } from './routes/network-skills.js';
 import { skillCatalogRoute } from './routes/skill-catalog.js';
+import { notificationsRoute } from './routes/notifications.js';
 
 export const app = new Hono().basePath('/');
 
@@ -47,6 +48,7 @@ app.route('/api/v1', receiptsReadRoute);
 app.route('/api/v1', networkStatusRoute);
 app.route('/api/v1', networkSkillsRoute);
 app.route('/api/v1', skillCatalogRoute);
+app.route('/api/v1', notificationsRoute);
 app.route('/api', internalQueryRoute);
 
 // Vercel serverless handler

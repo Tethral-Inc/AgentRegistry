@@ -172,6 +172,31 @@ export default function SkillDetailPage() {
           )}
         </div>
       )}
+
+      {/* Notifications & Subscriptions — Coming Soon */}
+      <div style={{
+        background: '#141414', borderRadius: 8, padding: '24px',
+        border: '1px dashed #333', marginBottom: 24, opacity: 0.7,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <h2 style={{ fontSize: 18, margin: 0 }}>Agent Notifications</h2>
+          <span style={{
+            background: '#333', color: '#888', padding: '2px 8px',
+            borderRadius: 4, fontSize: 11, fontWeight: 600,
+          }}>COMING SOON</span>
+        </div>
+        <p style={{ color: '#666', fontSize: 13, lineHeight: 1.6 }}>
+          Agents using this skill will receive automatic notifications when:
+        </p>
+        <ul style={{ color: '#666', fontSize: 13, lineHeight: 1.8, paddingLeft: 20 }}>
+          <li>Security threats are detected in the skill content</li>
+          <li>The skill is blocked by the content security scanner</li>
+          <li>A new version of the skill is available</li>
+        </ul>
+        <p style={{ color: '#555', fontSize: 12, fontStyle: 'italic' }}>
+          Subscription management and acknowledgement gates will be available in a future update.
+        </p>
+      </div>
     </div>
   );
 }

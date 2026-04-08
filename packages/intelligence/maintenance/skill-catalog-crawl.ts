@@ -230,6 +230,27 @@ async function processSkill(
            last_updated = now()`,
         [skillHash, name, skill.source, threatLevel, catalogRow.skill_id],
       );
+
+      // Notify subscribed agents if new skill is flagged
+      if (threatLevel === 'critical' || threatLevel === 'high') {
+        const subscribers = await query<{ agent_id: string }>(
+          `SELECT agent_id AS "agent_id" FROM skill_subscriptions
+           WHERE skill_hash = $1 AND active = true`,
+          [skillHash],
+        ).catch(() => []);
+
+        for (const sub of subscribers) {
+          await execute(
+            `INSERT INTO skill_notifications
+             (agent_id, skill_hash, notification_type, severity, title, message, metadata)
+             VALUES ($1, $2, 'threat_blocked', $3, $4, $5, $6)`,
+            [sub.agent_id, skillHash, threatLevel,
+             'BLOCKED: ' + name + ' flagged by security scanner',
+             'The skill "' + name + '" you have installed has been flagged with ' + scanResult.threat_patterns.length + ' security issue(s). Consider uninstalling. Patterns: ' + scanResult.threat_patterns.join(', '),
+             JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
+          ).catch(() => {});
+        }
+      }
     }
   } else if (existing.current_hash === skillHash) {
     // ---------- UNCHANGED ----------
@@ -308,6 +329,27 @@ async function processSkill(
           text: `ACR Skill Update: *${name}* (${skill.source}) changed [${changeType}]\nOld: ${existing.version ?? 'unknown'} → New: ${version ?? 'unknown'}\nHash: ${skillHash.slice(0, 16)}...`,
         }),
       }).catch(() => {});
+    }
+
+    // Notify subscribed agents about the threat
+    if (threatLevel === 'critical' || threatLevel === 'high') {
+      const subscribers = await query<{ agent_id: string }>(
+        `SELECT agent_id AS "agent_id" FROM skill_subscriptions
+         WHERE skill_hash = $1 AND active = true`,
+        [skillHash],
+      ).catch(() => []);
+
+      for (const sub of subscribers) {
+        await execute(
+          `INSERT INTO skill_notifications
+           (agent_id, skill_hash, notification_type, severity, title, message, metadata)
+           VALUES ($1, $2, 'threat_blocked', $3, $4, $5, $6)`,
+          [sub.agent_id, skillHash, threatLevel,
+           'BLOCKED: ' + name + ' flagged by security scanner',
+           'The skill "' + name + '" you have installed has been flagged with ' + scanResult.threat_patterns.length + ' security issue(s). Consider uninstalling. Patterns: ' + scanResult.threat_patterns.join(', '),
+           JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
+        ).catch(() => {});
+      }
     }
   }
 }

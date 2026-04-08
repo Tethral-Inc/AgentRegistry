@@ -157,6 +157,29 @@ export async function handler() {
       }
     }
 
+    // Notify subscribed agents
+    for (const u of updates) {
+      if (u.threatLevel === 'high' || u.threatLevel === 'critical') {
+        const subs = await query<{ agent_id: string }>(
+          `SELECT agent_id AS "agent_id" FROM skill_subscriptions
+           WHERE skill_hash = $1 AND active = true`,
+          [u.skillHash],
+        ).catch(() => []);
+
+        for (const sub of subs) {
+          await execute(
+            `INSERT INTO skill_notifications
+             (agent_id, skill_hash, notification_type, severity, title, message, metadata)
+             VALUES ($1, $2, 'threat_warning', $3, $4, $5, $6)`,
+            [sub.agent_id, u.skillHash, u.threatLevel,
+             'Threat escalation: skill flagged as ' + u.threatLevel,
+             u.reporterCount + ' agents reported anomalies. Anomaly rate: ' + (u.anomalyRate * 100).toFixed(1) + '%.',
+             JSON.stringify({ reporter_count: u.reporterCount, anomaly_rate: u.anomalyRate })],
+          ).catch(() => {});
+        }
+      }
+    }
+
     log.info({ updatedCount: updates.length, criticalCount: critical.length }, 'Threat update completed');
 
     return {

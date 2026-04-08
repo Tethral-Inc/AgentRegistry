@@ -60,6 +60,23 @@ app.post('/composition/update', async (c) => {
     [compositionHash, agent_id],
   );
 
+  // Sync skill subscriptions: deactivate removed, activate new
+  if (componentHashes.length > 0) {
+    await execute(
+      `UPDATE skill_subscriptions SET active = false
+       WHERE agent_id = $1 AND skill_hash != ALL($2)`,
+      [agent_id, componentHashes],
+    );
+    for (const hash of componentHashes) {
+      await execute(
+        `INSERT INTO skill_subscriptions (agent_id, skill_hash, active)
+         VALUES ($1, $2, true)
+         ON CONFLICT (agent_id, skill_hash) DO UPDATE SET active = true`,
+        [agent_id, hash],
+      );
+    }
+  }
+
   log.info({ agentId: agent_id, compositionHash }, 'Composition updated');
 
   return c.json({

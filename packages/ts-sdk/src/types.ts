@@ -165,6 +165,21 @@ export interface SkillSearchResult {
   offset: number;
 }
 
+// --- Skill Notifications ---
+
+export interface SkillNotification {
+  id: string;
+  agent_id: string;
+  skill_hash: string;
+  notification_type: 'threat_blocked' | 'threat_warning' | 'version_update';
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  title: string;
+  message: string;
+  read: boolean;
+  acknowledged: boolean;
+  created_at: string;
+}
+
 // --- Friction ---
 
 export interface FrictionSummary {

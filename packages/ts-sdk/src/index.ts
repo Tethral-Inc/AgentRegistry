@@ -7,6 +7,7 @@ import type {
   SkillCatalogEntry,
   SkillVersionHistory,
   SkillSearchResult,
+  SkillNotification,
 } from './types.js';
 
 export type {
@@ -15,6 +16,7 @@ export type {
   InteractionCategory, InteractionStatus, AnomalyCategory, ThreatLevel,
   FrictionSummary, TargetFriction,
   SkillCatalogEntry, SkillVersionEntry, SkillVersionHistory, SkillSearchResult,
+  SkillNotification,
 } from './types.js';
 
 export interface ACRClientConfig {
@@ -126,6 +128,20 @@ export class ACRClient {
 
   async getCrawlSources(): Promise<{ sources: Array<{ source_id: string; source_type: string; enabled: boolean; last_crawl_status: string }> }> {
     return this.get('/api/v1/skill-catalog/sources');
+  }
+
+  // Notification methods
+
+  async getNotifications(agentId: string, unreadOnly: boolean = true): Promise<{ notifications: SkillNotification[]; unread_count: number }> {
+    return this.get(`/api/v1/agent/${agentId}/notifications?read=${!unreadOnly}`);
+  }
+
+  async acknowledgeNotification(agentId: string, notificationId: string, reason?: string): Promise<{ success: boolean }> {
+    return this.post(`/api/v1/agent/${agentId}/notifications/${notificationId}/acknowledge`, { reason });
+  }
+
+  async getSubscriptions(agentId: string): Promise<{ subscriptions: Array<{ skill_hash: string; notify_on: string; active: boolean }> }> {
+    return this.get(`/api/v1/agent/${agentId}/subscriptions`);
   }
 }
 

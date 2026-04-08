@@ -102,3 +102,16 @@ export const SkillVersionHistorySchema = z.object({
   current_version: z.string().nullable(),
   versions: z.array(SkillVersionEntrySchema),
 });
+
+export const SkillNotificationSchema = z.object({
+  id: z.string().uuid(),
+  agent_id: z.string(),
+  skill_hash: z.string(),
+  notification_type: z.enum(['threat_blocked', 'threat_warning', 'version_update']),
+  severity: z.enum(['critical', 'high', 'medium', 'low', 'info']),
+  title: z.string(),
+  message: z.string(),
+  read: z.boolean(),
+  acknowledged: z.boolean(),
+  created_at: z.string(),
+});
