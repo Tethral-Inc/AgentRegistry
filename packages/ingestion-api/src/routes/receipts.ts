@@ -5,6 +5,7 @@ import {
   generateReceiptId,
   normalizeSystemId,
   execute,
+  query,
   makeError,
   createLogger,
 } from '@acr/shared';
@@ -102,9 +103,35 @@ app.post('/receipts', async (c) => {
 
   log.info({ count: receipts.length, agentId: receipts[0]?.emitter.agent_id }, 'Receipts accepted');
 
+  // Inline threat check: warn if any targets are known-bad skills
+  let threat_warnings: Array<{ target: string; threat_level: string; skill_name?: string }> = [];
+  const skillTargets = receipts
+    .map((r) => normalizeSystemId(r.target.system_id))
+    .filter((id) => id.startsWith('skill:'))
+    .map((id) => id.replace('skill:', ''));
+
+  if (skillTargets.length > 0) {
+    try {
+      const threats = await query<{ skill_hash: string; threat_level: string; skill_name: string | null }>(
+        `SELECT skill_hash AS "skill_hash", threat_level AS "threat_level", skill_name AS "skill_name"
+         FROM skill_hashes
+         WHERE skill_hash = ANY($1) AND threat_level IN ('medium', 'high', 'critical')`,
+        [skillTargets],
+      );
+      threat_warnings = threats.map((t) => ({
+        target: `skill:${t.skill_hash}`,
+        threat_level: t.threat_level,
+        skill_name: t.skill_name ?? undefined,
+      }));
+    } catch {
+      // Non-blocking: threat check failure should not block receipt acceptance
+    }
+  }
+
   return c.json({
     accepted: receiptIds.length,
     receipt_ids: receiptIds,
+    threat_warnings,
   }, 201);
 });
 

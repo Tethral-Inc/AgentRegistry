@@ -13,6 +13,9 @@ import { getMyAgentTool } from './tools/get-my-agent.js';
 import { getInteractionLogTool } from './tools/get-interaction-log.js';
 import { getNetworkStatusTool } from './tools/get-network-status.js';
 import { getSkillTrackerTool } from './tools/get-skill-tracker.js';
+import { searchSkillsTool } from './tools/search-skills.js';
+import { getSkillVersionsTool } from './tools/get-skill-versions.js';
+import { updateCompositionTool } from './tools/update-composition.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { defaultSession, SessionState } from './session-state.js';
 
@@ -65,7 +68,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
 
   const server = new McpServer({
     name: 'acr-agent-registry',
-    version: '0.3.0',
+    version: '0.4.0',
     description:
       'Agent Composition Records — observability for AI agents. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction you make. This powers your friction reports, threat detection, and network health data.',
   });
@@ -82,6 +85,9 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getInteractionLogTool(server, apiUrl);
   getNetworkStatusTool(server, apiUrl);
   getSkillTrackerTool(server, apiUrl);
+  searchSkillsTool(server, apiUrl);
+  getSkillVersionsTool(server, apiUrl, resolverUrl);
+  updateCompositionTool(server, apiUrl, () => session);
 
   return server;
 }

@@ -24,3 +24,7 @@ id = "4cb3eacec0cb47168c7b5459001e9c92"
 [[kv_namespaces]]
 binding = "SKILL_VERSION"
 id = "5f447ab4f922497888d50ed8d9b7d238"
+
+[[kv_namespaces]]
+binding = "SKILL_CATALOG"
+id = "2ac06e5f9bef450ab1aeb22d1320c58e"

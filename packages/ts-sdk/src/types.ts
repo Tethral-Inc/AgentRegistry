@@ -101,6 +101,65 @@ export interface SkillCheckResponse {
   threat_level?: ThreatLevel;
   first_seen?: string;
   last_seen?: string;
+  // Catalog-enriched fields
+  description?: string;
+  version?: string;
+  author?: string;
+  category?: string;
+  tags?: string[];
+  is_current_version?: boolean;
+  current_hash?: string;
+  versions_behind?: number;
+  skill_status?: string;
+}
+
+// --- Skill Catalog ---
+
+export interface SkillCatalogEntry {
+  skill_id: string;
+  skill_name: string;
+  skill_source: string;
+  source_url: string;
+  current_hash: string | null;
+  skill_content?: string | null;
+  description: string | null;
+  version: string | null;
+  author: string | null;
+  tags: string[];
+  requires: string[];
+  category: string | null;
+  content_snippet: string | null;
+  status: string;
+  threat_level?: ThreatLevel;
+  agent_count?: number;
+  last_crawled_at: string | null;
+  content_changed_at: string | null;
+  versions?: SkillVersionEntry[];
+}
+
+export interface SkillVersionEntry {
+  skill_hash: string;
+  version: string | null;
+  previous_version: string | null;
+  change_type: string;
+  detected_at: string;
+  threat_level?: ThreatLevel;
+  agent_count?: number;
+}
+
+export interface SkillVersionHistory {
+  skill_id: string;
+  skill_name: string;
+  skill_source: string;
+  current_version: string | null;
+  versions: SkillVersionEntry[];
+}
+
+export interface SkillSearchResult {
+  skills: SkillCatalogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // --- Friction ---

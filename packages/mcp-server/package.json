@@ -1,7 +1,7 @@
 {
   "name": "@tethral/acr-mcp",
-  "version": "0.3.0",
-  "description": "MCP server for the ACR (Agent Composition Records) network. Check skills, log interactions, get friction reports.",
+  "version": "0.4.0",
+  "description": "MCP server for the ACR (Agent Composition Records) network. Search skills, check threats, log interactions, track versions, get friction reports.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -34,6 +34,6 @@
   "files": ["dist", "README.md", "LICENSE"],
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": false
   }
 }

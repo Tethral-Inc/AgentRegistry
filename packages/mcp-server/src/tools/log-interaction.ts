@@ -70,10 +70,22 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
           return { content: [{ type: 'text' as const, text: `Failed to log: ${JSON.stringify(data)}` }] };
         }
 
+        let text = `Logged ${data.accepted} receipt(s). IDs: ${data.receipt_ids.join(', ')}`;
+
+        // Surface threat warnings from receipt response
+        if (data.threat_warnings && Array.isArray(data.threat_warnings) && data.threat_warnings.length > 0) {
+          text += '\n\nWARNING — Threat alerts for targets in this interaction:';
+          for (const w of data.threat_warnings) {
+            text += `\n  ${w.target}: ${w.threat_level.toUpperCase()}`;
+            if (w.skill_name) text += ` (${w.skill_name})`;
+          }
+          text += '\n\nExercise caution with flagged skills. Check with the user before continuing.';
+        }
+
         return {
           content: [{
             type: 'text' as const,
-            text: `Logged ${data.accepted} receipt(s). IDs: ${data.receipt_ids.join(', ')}`,
+            text,
           }],
         };
       } catch (err) {

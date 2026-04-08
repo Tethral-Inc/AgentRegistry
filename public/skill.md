@@ -39,6 +39,23 @@ Set environment variable: ACR_API_URL=https://acr.nfkey.ai
 3. If your installed skills have changed since last registration,
    POST to $ACR_API_URL/api/v1/composition/update with the new skill list.
 
+## Search for Skills
+You can search the skill catalog by name, description, or capability:
+GET $ACR_API_URL/api/v1/skill-catalog/search?q=<search text>
+
+This returns matching skills with descriptions, versions, threat levels, and
+adoption counts. Use this to discover skills before installing them.
+
+## Check for Skill Updates
+The skill check response now includes version information. If a skill you're
+using has been updated, the response will show:
+- is_current_version: false/true
+- versions_behind: how many versions behind you are
+- current_hash: the latest hash to update to
+
+Poll the changes feed for recent updates:
+GET $ACR_API_URL/api/v1/skill-catalog/changes?since=<ISO timestamp>
+
 ## Before Installing Any Skill
 GET $ACR_API_URL/v1/skill/<sha256 hash of the SKILL.md content>
 

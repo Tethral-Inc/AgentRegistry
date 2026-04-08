@@ -1,5 +1,6 @@
 export interface Env {
   SKILL_CACHE: KVNamespace;
+  SKILL_CATALOG: KVNamespace;
   THREAT_STATE: KVNamespace;
   SYSTEM_HEALTH: KVNamespace;
   RATE_LIMITS: KVNamespace;

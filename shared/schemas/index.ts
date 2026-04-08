@@ -31,6 +31,12 @@ export {
   ThreatLevel,
   SkillHashSchema,
   SkillCheckResponseSchema,
+  SkillStatusEnum,
+  SkillCatalogSchema,
+  SkillSearchRequestSchema,
+  SkillSearchResultSchema,
+  SkillVersionEntrySchema,
+  SkillVersionHistorySchema,
 } from './skill.js';
 
 export {

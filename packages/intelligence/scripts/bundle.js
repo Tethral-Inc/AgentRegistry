@@ -22,6 +22,7 @@ const functions = [
   { name: 'clawhub-crawl', entry: 'maintenance/clawhub-crawl.ts' },
   { name: 'agent-expiration', entry: 'maintenance/agent-expiration.ts' },
   { name: 'data-archival', entry: 'maintenance/data-archival.ts' },
+  { name: 'skill-catalog-crawl', entry: 'maintenance/skill-catalog-crawl.ts' },
 ];
 
 async function bundleAll() {

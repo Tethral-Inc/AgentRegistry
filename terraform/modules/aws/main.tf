@@ -343,3 +343,39 @@ resource "aws_lambda_permission" "friction_baseline_compute" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.friction_baseline_compute.arn
 }
+
+# Skill Catalog Crawler
+
+resource "aws_lambda_function" "skill_catalog_crawl" {
+  function_name = "acr-skill-catalog-crawl"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 600
+  memory_size   = 512
+  filename      = "${path.module}/placeholder.zip"
+  dead_letter_config { target_arn = aws_sqs_queue.dlq.arn }
+  environment {
+    variables = {
+      COCKROACH_CONNECTION_STRING = var.cockroach_connection_string
+      SLACK_WEBHOOK_URL           = var.slack_webhook_url
+    }
+  }
+  lifecycle { ignore_changes = [filename] }
+  tags = { managed_by = "terraform", project = "acr" }
+}
+
+resource "aws_cloudwatch_event_rule" "skill_catalog_crawl" {
+  name                = "acr-skill-catalog-crawl"
+  schedule_expression = "rate(6 hours)"
+}
+resource "aws_cloudwatch_event_target" "skill_catalog_crawl" {
+  rule = aws_cloudwatch_event_rule.skill_catalog_crawl.name
+  arn  = aws_lambda_function.skill_catalog_crawl.arn
+}
+resource "aws_lambda_permission" "skill_catalog_crawl" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.skill_catalog_crawl.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.skill_catalog_crawl.arn
+}

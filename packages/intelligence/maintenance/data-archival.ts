@@ -84,15 +84,41 @@ export async function handler() {
       [ARCHIVE_AFTER_DAYS],
     );
 
+    // Skill catalog cleanup
+    // 1. Remove crawl_errors older than 30 days
+    const crawlErrorsDeleted = await execute(
+      `DELETE FROM crawl_errors WHERE created_at < now() - INTERVAL '30 days'`,
+    ).catch(() => 0);
+
+    // 2. Null out old version content (keep metadata, free storage) after 180 days
+    const versionContentNulled = await execute(
+      `UPDATE skill_version_history SET skill_content = NULL
+       WHERE skill_content IS NOT NULL AND detected_at < now() - INTERVAL '180 days'`,
+    ).catch(() => 0);
+
+    // 3. Archive removed skills after 90 days
+    const skillsArchived = await execute(
+      `UPDATE skill_catalog SET status = 'archived', updated_at = now()
+       WHERE status = 'removed' AND updated_at < now() - INTERVAL '90 days'`,
+    ).catch(() => 0);
+
     log.info({
       eligible: totalEligible,
       summarized: summaryCount,
       deleted,
+      crawlErrorsDeleted,
+      versionContentNulled,
+      skillsArchived,
     }, 'Data archival completed');
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ archived: deleted, summarized: summaryCount }),
+      body: JSON.stringify({
+        archived: deleted, summarized: summaryCount,
+        crawl_errors_deleted: crawlErrorsDeleted,
+        version_content_nulled: versionContentNulled,
+        skills_archived: skillsArchived,
+      }),
     };
   } catch (err) {
     log.error({ err }, 'Data archival failed');

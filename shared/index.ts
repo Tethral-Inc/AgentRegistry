@@ -10,7 +10,13 @@ export type {
   CompositionUpdate, EnvironmentBriefing, EnvironmentContext,
   SystemStatus, ThreatNotice,
 } from './types/agent.js';
-export type { SkillHash, SkillCheckResponse } from './types/skill.js';
+export type {
+  SkillHash, SkillCheckResponse,
+  SkillCatalog, SkillSearchRequest, SkillSearchResult,
+  SkillVersionEntry, SkillVersionHistory,
+} from './types/skill.js';
+export { parseFrontmatter, extractTags, extractRequires } from './parsers/frontmatter.js';
+export type { ParsedFrontmatter, FrontmatterResult } from './parsers/frontmatter.js';
 export type {
   FrictionSummary, TargetFriction, FrictionReport, ComponentFriction,
 } from './types/friction.js';

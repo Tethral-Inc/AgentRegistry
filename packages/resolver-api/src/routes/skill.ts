@@ -25,6 +25,16 @@ interface SkillResponse {
   threat_level?: string;
   first_seen?: string;
   last_seen?: string;
+  // Catalog-enriched fields
+  description?: string;
+  version?: string;
+  author?: string;
+  category?: string;
+  tags?: string[];
+  is_current_version?: boolean;
+  current_hash?: string;
+  versions_behind?: number;
+  skill_status?: string;
 }
 
 export async function handleSkillLookup(
@@ -70,6 +80,54 @@ export async function handleSkillLookup(
       first_seen: row.first_seen_at,
       last_seen: row.last_updated,
     };
+
+    // Enrich with catalog data if available
+    if (row.skill_hash) {
+      try {
+        const catalogRows = await dbQuery<{
+          description: string | null;
+          version: string | null;
+          author: string | null;
+          category: string | null;
+          tags: string[] | null;
+          skill_source: string | null;
+          current_hash: string | null;
+          status: string | null;
+          total_versions: string;
+        }>(
+          env.COCKROACH_CONNECTION_STRING,
+          `SELECT sc.description, sc.version, sc.author, sc.category, sc.tags,
+                  sc.skill_source, sc.current_hash, sc.status,
+                  (SELECT COUNT(*)::text FROM skill_version_history WHERE skill_id = sc.skill_id) as total_versions
+           FROM skill_catalog sc
+           JOIN skill_hashes sh ON sh.catalog_skill_id = sc.skill_id
+           WHERE sh.skill_hash = $1
+           LIMIT 1`,
+          [row.skill_hash],
+        );
+
+        if (catalogRows.length > 0) {
+          const cat = catalogRows[0]!;
+          response.description = cat.description ?? undefined;
+          response.version = cat.version ?? undefined;
+          response.author = cat.author ?? undefined;
+          response.category = cat.category ?? undefined;
+          response.tags = cat.tags ?? undefined;
+          response.skill_status = cat.status ?? undefined;
+
+          const isCurrent = row.skill_hash === cat.current_hash;
+          response.is_current_version = isCurrent;
+          if (!isCurrent && cat.current_hash) {
+            response.current_hash = cat.current_hash;
+            // Count versions behind
+            const totalVersions = parseInt(cat.total_versions, 10);
+            response.versions_behind = Math.max(0, totalVersions - 1);
+          }
+        }
+      } catch {
+        // Catalog enrichment is non-blocking
+      }
+    }
 
     await setCache(env.SKILL_CACHE, cacheKey, response);
     return response;
