@@ -102,10 +102,12 @@ export class GitHubCrawler implements CrawlSourceAdapter {
             ? pathParts[pathParts.length - 2]!  // Directory name containing SKILL.md
             : repoName.split('/')[1]!;            // Repo name
 
+          // Use GitHub Contents API instead of raw.githubusercontent.com
+          // This handles branch resolution correctly (main vs master vs custom)
           skills.push({
             name: skillName,
             source: this.sourceId,
-            sourceUrl: `https://raw.githubusercontent.com/${repoName}/${branch}/${item.path}`,
+            sourceUrl: `${this.baseUrl}/repos/${repoName}/contents/${item.path}`,
             metadata: { repo: repoName, branch, path: item.path },
           });
         }
@@ -125,9 +127,14 @@ export class GitHubCrawler implements CrawlSourceAdapter {
   async fetchContent(url: string): Promise<string | null> {
     await sleep(RATE_LIMIT_MS);
     try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
-      });
+      const headers: Record<string, string> = {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/vnd.github.v3.raw',  // Get raw content directly
+      };
+      if (this.pat) {
+        headers['Authorization'] = `Bearer ${this.pat}`;
+      }
+      const res = await fetch(url, { headers });
       if (res.ok) return res.text();
       if (res.status === 404) return null;
       log.warn({ status: res.status, url }, 'Unexpected status fetching GitHub skill');

@@ -79,6 +79,10 @@ async function fetchWithRetry(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const content = await adapter.fetchContent(url);
+      // null means 404 or no content — don't retry, just return
+      if (content === null) {
+        return { content: null, error: 'No content', httpStatus: 404 };
+      }
       return { content };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
