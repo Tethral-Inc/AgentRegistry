@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACR — Agent Composition Records</title>
+  <meta name="description" content="The safety registry for AI agent skills. Scan, catalog, and monitor skills before agents install them.">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a0a; color: #e0e0e0; line-height: 1.6;
+    }
+    a { color: #7c9cff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: #1a1a1a; padding: 2px 6px; border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.9em;
+    }
+    pre {
+      background: #111; border: 1px solid #222; border-radius: 8px;
+      padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5;
+    }
+    pre code { background: none; padding: 0; }
+
+    .container { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px; text-align: center;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .hero h1 { font-size: 48px; font-weight: 700; margin-bottom: 16px; color: #fff; }
+    .hero h1 span { color: #7c9cff; }
+    .hero p { font-size: 20px; color: #888; max-width: 600px; margin: 0 auto 32px; }
+    .hero-stats {
+      display: flex; gap: 32px; justify-content: center; margin-bottom: 40px;
+    }
+    .stat { text-align: center; }
+    .stat-num { font-size: 32px; font-weight: 700; color: #fff; }
+    .stat-label { font-size: 13px; color: #666; }
+
+    /* CTA */
+    .cta-group { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .cta {
+      display: inline-block; padding: 12px 24px; border-radius: 8px;
+      font-weight: 600; font-size: 14px; transition: all 0.15s;
+    }
+    .cta-primary { background: #7c9cff; color: #000; }
+    .cta-primary:hover { background: #9bb4ff; text-decoration: none; }
+    .cta-secondary { background: #1a1a1a; color: #ccc; border: 1px solid #333; }
+    .cta-secondary:hover { border-color: #555; text-decoration: none; }
+
+    /* Sections */
+    section { padding: 60px 0; border-bottom: 1px solid #1a1a1a; }
+    section h2 { font-size: 28px; margin-bottom: 24px; color: #fff; }
+    section h3 { font-size: 18px; margin: 24px 0 12px; color: #ddd; }
+
+    /* Install */
+    .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .install-card {
+      background: #111; border: 1px solid #222; border-radius: 12px; padding: 24px;
+    }
+    .install-card h3 { margin-top: 0; font-size: 16px; }
+    @media (max-width: 600px) { .install-grid { grid-template-columns: 1fr; } }
+
+    /* Features */
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .feature {
+      background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px;
+    }
+    .feature h3 { margin: 0 0 8px; font-size: 15px; }
+    .feature p { color: #888; font-size: 13px; margin: 0; }
+    @media (max-width: 600px) { .feature-grid { grid-template-columns: 1fr; } }
+
+    /* Scanner */
+    .threat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .threat-table th {
+      text-align: left; padding: 8px 12px; border-bottom: 1px solid #222;
+      color: #888; font-weight: 600;
+    }
+    .threat-table td { padding: 8px 12px; border-bottom: 1px solid #1a1a1a; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+    }
+    .badge-critical { background: #dc2626; color: #fff; }
+    .badge-high { background: #f97316; color: #fff; }
+    .badge-medium { background: #facc15; color: #000; }
+
+    /* Footer */
+    footer {
+      padding: 40px 0; text-align: center; color: #555; font-size: 13px;
+    }
+    footer a { color: #666; }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="container">
+      <h1><span>ACR</span> Agent Composition Records</h1>
+      <p>The safety registry for AI agent skills. Scan, catalog, and monitor skills before your agents install them.</p>
+      <div class="hero-stats">
+        <div class="stat"><div class="stat-num">403+</div><div class="stat-label">Skills Indexed</div></div>
+        <div class="stat"><div class="stat-num">25</div><div class="stat-label">Blocked</div></div>
+        <div class="stat"><div class="stat-num">20+</div><div class="stat-label">Threat Patterns</div></div>
+        <div class="stat"><div class="stat-num">4</div><div class="stat-label">Sources Crawled</div></div>
+      </div>
+      <div class="cta-group">
+        <a href="#install" class="cta cta-primary">Add to Your Agent</a>
+        <a href="https://github.com/Tethral-Inc/AgentRegistry" class="cta cta-secondary">GitHub</a>
+        <a href="https://www.npmjs.com/package/@tethral/acr-mcp" class="cta cta-secondary">npm</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Install -->
+  <section id="install">
+    <div class="container">
+      <h2>Add ACR in 30 Seconds</h2>
+      <div class="install-grid">
+        <div class="install-card">
+          <h3>Claude Code / MCP</h3>
+          <p style="color:#888; font-size:13px; margin-bottom:12px;">Add to <code>.claude/settings.json</code>:</p>
+          <pre><code>{
+  "mcpServers": {
+    "acr": {
+      "command": "npx",
+      "args": ["@tethral/acr-mcp"]
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="install-card">
+          <h3>TypeScript / Python SDK</h3>
+          <pre><code>npm install @tethral/acr-sdk</code></pre>
+          <pre style="margin-top:8px;"><code>pip install tethral-acr</code></pre>
+          <p style="color:#888; font-size:13px; margin-top:12px;">
+            Use <code>ACRClient</code> to search skills, check threats, log interactions, and get friction reports.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What It Does -->
+  <section>
+    <div class="container">
+      <h2>What ACR Does</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <h3>Skill Catalog</h3>
+          <p>403+ skills indexed from npm, GitHub, and PyPI. Full-text search by name, description, or capability. Quality scores and version tracking.</p>
+        </div>
+        <div class="feature">
+          <h3>Security Scanner</h3>
+          <p>20+ threat patterns detect prompt injection, data exfiltration, and code execution. Runs on every skill BEFORE it enters the catalog.</p>
+        </div>
+        <div class="feature">
+          <h3>Threat Blocking</h3>
+          <p>Dangerous skills are blocked. Content is redacted. Agents see clear warnings with threat patterns and are advised to uninstall.</p>
+        </div>
+        <div class="feature">
+          <h3>Notifications</h3>
+          <p>Agents auto-subscribe to threat alerts for their installed skills. When a skill is flagged, subscribed agents are notified.</p>
+        </div>
+        <div class="feature">
+          <h3>Friction Reports</h3>
+          <p>Which external calls cost the most time? Per-target latency breakdown with p95, failure rates, and population baselines.</p>
+        </div>
+        <div class="feature">
+          <h3>Network Intelligence</h3>
+          <p>Cross-agent anomaly correlation. When multiple agents from different providers report issues, the signal is amplified.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scanner -->
+  <section>
+    <div class="container">
+      <h2>Content Security Scanner</h2>
+      <p style="color:#888; margin-bottom:20px;">Every skill is scanned before agents can access it.</p>
+      <table class="threat-table">
+        <thead>
+          <tr><th>Category</th><th>Detects</th><th>Severity</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Prompt Injection</td><td>"ignore instructions", template <code>{{}}</code>, <code>[SYSTEM]</code> tags</td><td><span class="badge badge-critical">Critical</span></td></tr>
+          <tr><td>Data Exfiltration</td><td>Webhook URLs, credential harvesting, IP-based exfil</td><td><span class="badge badge-critical">Critical</span></td></tr>
+          <tr><td>Code Execution</td><td><code>eval()</code>, <code>child_process</code>, <code>os.system()</code></td><td><span class="badge badge-high">High</span></td></tr>
+          <tr><td>Filesystem</td><td>Path traversal <code>../../</code>, destructive ops</td><td><span class="badge badge-high">High</span></td></tr>
+          <tr><td>Obfuscation</td><td>Base64 blocks, hex encoding</td><td><span class="badge badge-medium">Medium</span></td></tr>
+          <tr><td>Supply Chain</td><td>Dependency confusion (typosquatting)</td><td><span class="badge badge-medium">Medium</span></td></tr>
+        </tbody>
+      </table>
+      <p style="color:#666; font-size:13px; margin-top:16px;">
+        Skills scoring below 50/100 are <strong style="color:#dc2626;">blocked</strong>.
+        50-79 are <strong style="color:#f97316;">warned</strong>.
+        80+ are clean.
+      </p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>ACR by <a href="https://tethral.com">Tethral</a> | <a href="/terms">Terms</a> | <a href="https://github.com/Tethral-Inc/AgentRegistry">GitHub</a> | <a href="mailto:security@tethral.com">security@tethral.com</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>
