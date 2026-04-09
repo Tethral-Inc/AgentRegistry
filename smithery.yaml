@@ -1,0 +1,23 @@
+startCommand:
+  type: stdio
+
+configSchema:
+  type: object
+  properties:
+    ACR_API_URL:
+      type: string
+      title: "ACR API URL"
+      description: "ACR API endpoint (default: https://acr.nfkey.ai)"
+      default: "https://acr.nfkey.ai"
+
+commandFunction: |-
+  (config) => ({
+    command: 'npx',
+    args: ['-y', '@tethral/acr-mcp'],
+    env: {
+      ACR_API_URL: config.ACR_API_URL || 'https://acr.nfkey.ai'
+    }
+  })
+
+exampleConfig:
+  ACR_API_URL: "https://acr.nfkey.ai"

@@ -7,7 +7,7 @@ import { handleActiveThreats } from './routes/threats.js';
 
 // Configured via wrangler secret or wrangler.toml [vars]
 // Falls back to the known Vercel deployment URL
-const DEFAULT_VERCEL_ORIGIN = 'https://acr.nfkey.ai';
+const DEFAULT_VERCEL_ORIGIN = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',

@@ -14,7 +14,7 @@
  */
 
 const DB_TIMEOUT_MS = 3000;
-const DEFAULT_PROXY_URL = 'https://acr.nfkey.ai';
+const DEFAULT_PROXY_URL = 'https://ingestion-api-john-lunsfords-projects.vercel.app';
 
 /**
  * Execute a read-only SQL query by proxying through the ingestion API.

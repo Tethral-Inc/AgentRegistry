@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.tethral-inc/acr",
+  "title": "ACR — Agent Composition Records",
+  "description": "Safety registry for AI agent skills. Search 403+ skills, detect threats, block dangerous content, get friction reports, track interaction chains.",
+  "version": "1.0.0",
+  "websiteUrl": "https://acr.nfkey.ai",
+  "repository": {
+    "url": "https://github.com/Tethral-Inc/AgentRegistry",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@tethral/acr-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ACR_API_URL",
+          "description": "ACR API endpoint. Defaults to https://acr.nfkey.ai",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

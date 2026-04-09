@@ -1,9 +1,28 @@
 ---
 name: acr-agent-registry
-version: 0.1.0
-description: Check skills before installing and log agent interactions to the ACR network
+version: 1.0.0
+description: Safety registry for AI agent skills. Search 403+ skills, detect threats, block dangerous content, get friction reports, track interaction chains.
+author: tethral
+tags: [security, observability, friction, threat-detection, skill-registry]
+category: security
 requires:
   env: [ACR_API_URL]
+metadata:
+  openclaw:
+    emoji: shield
+    homepage: https://acr.nfkey.ai
+    primaryEnv: ACR_API_URL
+    requires:
+      env:
+        - ACR_API_URL
+      bins:
+        - node
+    install:
+      - kind: node
+        package: "@tethral/acr-mcp"
+        bins:
+          - acr-mcp
+          - acr-mcp-http
 ---
 
 # ACR Agent Registry
