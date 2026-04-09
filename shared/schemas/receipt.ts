@@ -50,6 +50,10 @@ export const InteractionSchema = z.object({
     'request_timestamp_ms must be within the last 24 hours'
   ),
   response_timestamp_ms: z.number().optional(),
+  queue_wait_ms: z.number().nonnegative().optional(),
+  retry_count: z.number().nonnegative().optional().default(0),
+  error_code: z.string().max(50).optional(),
+  response_size_bytes: z.number().nonnegative().optional(),
 });
 
 export const AnomalySchema = z.object({
@@ -69,6 +73,9 @@ export const InteractionReceiptSchema = z.object({
   anomaly: AnomalySchema.default({ flagged: false }),
   transport_type: TransportType.optional(),
   source: ReceiptSource.default('agent'),
+  chain_id: z.string().max(64).optional(),
+  chain_position: z.number().nonnegative().optional(),
+  preceded_by: z.string().optional(),
 });
 
 export const ReceiptBatchSchema = z.object({

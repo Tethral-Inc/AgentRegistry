@@ -157,6 +157,52 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
+        // Chain Analysis
+        if (data.chain_analysis) {
+          const ca = data.chain_analysis;
+          text += '\n── Chain Analysis ──\n';
+          text += `  Distinct chains: ${ca.chain_count}\n`;
+          text += `  Avg chain length: ${ca.avg_chain_length} calls\n`;
+          text += `  Total chain overhead: ${(ca.total_chain_overhead_ms / 1000).toFixed(1)}s\n`;
+          if (ca.top_patterns && ca.top_patterns.length > 0) {
+            text += '  Top patterns:\n';
+            for (const p of ca.top_patterns) {
+              text += `    ${p.pattern.join(' -> ')} (${p.frequency}x, ${p.avg_overhead_ms}ms avg overhead)\n`;
+            }
+          }
+        }
+
+        // Directional Analysis (pro)
+        if (data.directional_pairs && data.directional_pairs.length > 0) {
+          text += '\n── Directional Analysis ──\n';
+          for (const dp of data.directional_pairs) {
+            const arrow = dp.amplification_factor > 1.1 ? 'SLOWS' : dp.amplification_factor < 0.9 ? 'SPEEDS' : '~';
+            text += `  ${dp.source_target} -> ${dp.destination_target}: ${dp.amplification_factor.toFixed(2)}x`;
+            text += ` (${dp.avg_duration_when_preceded}ms after vs ${dp.avg_duration_standalone}ms standalone)`;
+            text += ` [${dp.sample_count} samples]\n`;
+          }
+        }
+
+        // Retry Overhead (pro)
+        if (data.retry_overhead) {
+          const ro = data.retry_overhead;
+          text += '\n── Retry Overhead ──\n';
+          text += `  Total retries: ${ro.total_retries}\n`;
+          text += `  Wasted time: ${(ro.total_wasted_ms / 1000).toFixed(1)}s\n`;
+          for (const t of ro.top_retry_targets) {
+            text += `    ${t.target_system_id}: ${t.retry_count} retries, ${t.wasted_ms}ms wasted\n`;
+          }
+        }
+
+        // Population Drift (pro)
+        if (data.population_drift && data.population_drift.targets.length > 0) {
+          text += '\n── Population Drift ──\n';
+          for (const t of data.population_drift.targets) {
+            const emoji = t.direction === 'degrading' ? 'DEGRADING' : t.direction === 'improving' ? 'IMPROVING' : 'stable';
+            text += `  ${t.target_system_id}: ${emoji} (${t.drift_percentage > 0 ? '+' : ''}${t.drift_percentage}% vs baseline)\n`;
+          }
+        }
+
         // Population comparison (paid tier)
         if (data.population_comparison) {
           text += `\n── Population ──\n`;

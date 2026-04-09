@@ -80,12 +80,19 @@ export interface InteractionReceipt {
     status: InteractionStatus;
     request_timestamp_ms: number;
     response_timestamp_ms?: number;
+    queue_wait_ms?: number;
+    retry_count?: number;
+    error_code?: string;
+    response_size_bytes?: number;
   };
   anomaly: {
     flagged: boolean;
     category?: AnomalyCategory;
     detail?: string;
   };
+  chain_id?: string;
+  chain_position?: number;
+  preceded_by?: string;
 }
 
 // --- Skill Check ---
@@ -203,6 +210,47 @@ export interface TargetFriction {
   p95_duration_ms?: number;
 }
 
+export interface ChainAnalysis {
+  chain_count: number;
+  avg_chain_length: number;
+  total_chain_overhead_ms: number;
+  top_patterns?: Array<{
+    pattern: string[];
+    frequency: number;
+    avg_overhead_ms: number;
+  }>;
+}
+
+export interface DirectionalPair {
+  source_target: string;
+  destination_target: string;
+  avg_duration_when_preceded: number;
+  avg_duration_standalone: number;
+  amplification_factor: number;
+  sample_count: number;
+}
+
+export interface RetryOverhead {
+  total_retries: number;
+  total_wasted_ms: number;
+  top_retry_targets: Array<{
+    target_system_id: string;
+    retry_count: number;
+    avg_duration_ms: number;
+    wasted_ms: number;
+  }>;
+}
+
+export interface PopulationDrift {
+  targets: Array<{
+    target_system_id: string;
+    current_median_ms: number;
+    baseline_median_ms: number;
+    drift_percentage: number;
+    direction: 'improving' | 'stable' | 'degrading';
+  }>;
+}
+
 export interface FrictionReport {
   agent_id: string;
   scope: 'session' | 'day' | 'week';
@@ -215,4 +263,8 @@ export interface FrictionReport {
     baselines_available: number;
   };
   tier: string;
+  chain_analysis?: ChainAnalysis;
+  directional_pairs?: DirectionalPair[];
+  retry_overhead?: RetryOverhead;
+  population_drift?: PopulationDrift;
 }

@@ -94,6 +94,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
     transport_type: string | null;
     source: string | null;
     created_at: string;
+    queue_wait_ms: number;
+    retry_count: number;
+    error_code: string | null;
+    chain_id: string | null;
+    chain_position: number | null;
+    preceded_by: string | null;
   }>(
     `SELECT target_system_id AS "target_system_id",
             target_system_type AS "target_system_type",
@@ -105,7 +111,13 @@ app.get('/agent/:agent_id/friction', async (c) => {
             anomaly_detail AS "anomaly_detail",
             transport_type AS "transport_type",
             source AS "source",
-            created_at::text AS "created_at"
+            created_at::text AS "created_at",
+            COALESCE(queue_wait_ms, 0)::int AS "queue_wait_ms",
+            COALESCE(retry_count, 0)::int AS "retry_count",
+            error_code AS "error_code",
+            chain_id AS "chain_id",
+            chain_position AS "chain_position",
+            preceded_by AS "preceded_by"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
@@ -176,6 +188,32 @@ app.get('/agent/:agent_id/friction', async (c) => {
     cat.total_ms += dur;
     if (isFailed) cat.failures++;
     categoryMap.set(row.interaction_category, cat);
+  }
+
+  // ── Chain Analysis (free tier) ──
+  const chainMap = new Map<string, { targets: string[]; durations: number[] }>();
+  for (const row of rows) {
+    if (!row.chain_id) continue;
+    let chain = chainMap.get(row.chain_id);
+    if (!chain) { chain = { targets: [], durations: [] }; chainMap.set(row.chain_id, chain); }
+    chain.targets.push(row.target_system_id);
+    chain.durations.push(row.duration_ms ?? 0);
+  }
+
+  let chainAnalysis: { chain_count: number; avg_chain_length: number; total_chain_overhead_ms: number; top_patterns?: unknown[] } | undefined;
+  if (chainMap.size > 0) {
+    const lengths = Array.from(chainMap.values()).map(c => c.targets.length);
+    const avgLen = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    // Overhead approximation: sum of queue_wait_ms for chained calls
+    let totalOverhead = 0;
+    for (const row of rows) {
+      if (row.chain_id && row.queue_wait_ms) totalOverhead += row.queue_wait_ms;
+    }
+    chainAnalysis = {
+      chain_count: chainMap.size,
+      avg_chain_length: Math.round(avgLen * 10) / 10,
+      total_chain_overhead_ms: totalOverhead,
+    };
   }
 
   // Sprint 4: Fetch population baselines for vs_baseline comparison
@@ -295,6 +333,102 @@ app.get('/agent/:agent_id/friction', async (c) => {
   const apiKey = c.req.header('x-api-key');
   const isPaidTier = apiKey ? await checkPaidTier(apiKey) : false;
 
+  // ── Retry Overhead (pro tier) ──
+  let retryOverhead: { total_retries: number; total_wasted_ms: number; top_retry_targets: Array<{ target_system_id: string; retry_count: number; avg_duration_ms: number; wasted_ms: number }> } | undefined;
+  if (isPaidTier) {
+    const retryMap = new Map<string, { count: number; totalMs: number }>();
+    let totalRetries = 0;
+    let totalWastedMs = 0;
+    for (const row of rows) {
+      const rc = row.retry_count ?? 0;
+      if (rc > 0) {
+        totalRetries += rc;
+        const dur = row.duration_ms ?? 0;
+        totalWastedMs += rc * dur;
+        const entry = retryMap.get(row.target_system_id) ?? { count: 0, totalMs: 0 };
+        entry.count += rc;
+        entry.totalMs += rc * dur;
+        retryMap.set(row.target_system_id, entry);
+      }
+    }
+    if (totalRetries > 0) {
+      const topRetryTargets = Array.from(retryMap.entries())
+        .map(([tid, data]) => ({
+          target_system_id: tid,
+          retry_count: data.count,
+          avg_duration_ms: Math.round(data.totalMs / data.count),
+          wasted_ms: data.totalMs,
+        }))
+        .sort((a, b) => b.wasted_ms - a.wasted_ms)
+        .slice(0, 5);
+      retryOverhead = { total_retries: totalRetries, total_wasted_ms: totalWastedMs, top_retry_targets: topRetryTargets };
+    }
+  }
+
+  // ── Population Drift (pro tier) ──
+  let populationDrift: { targets: Array<{ target_system_id: string; current_median_ms: number; baseline_median_ms: number; drift_percentage: number; direction: string }> } | undefined;
+  if (isPaidTier && baselines.length > 0) {
+    const driftTargets = [];
+    for (const t of targets) {
+      const bl = baselines.find(b => b.target_class === t.target_system_id);
+      if (bl && bl.baseline_median_ms > 0) {
+        const currentMedian = t.median_duration_ms as number;
+        const driftPct = ((currentMedian - bl.baseline_median_ms) / bl.baseline_median_ms) * 100;
+        driftTargets.push({
+          target_system_id: t.target_system_id as string,
+          current_median_ms: currentMedian as number,
+          baseline_median_ms: bl.baseline_median_ms,
+          drift_percentage: Math.round(driftPct * 10) / 10,
+          direction: driftPct > 10 ? 'degrading' : driftPct < -10 ? 'improving' : 'stable',
+        });
+      }
+    }
+    if (driftTargets.length > 0) populationDrift = { targets: driftTargets };
+  }
+
+  // ── Directional Pairs (pro tier) ──
+  let directionalPairs: Array<{ source_target: string; destination_target: string; avg_duration_when_preceded: number; avg_duration_standalone: number; amplification_factor: number; sample_count: number }> | undefined;
+  if (isPaidTier) {
+    const targetIds = targets.map(t => t.target_system_id);
+    if (targetIds.length > 0) {
+      const pairs = await query<{
+        source_target: string; destination_target: string;
+        avg_duration_when_preceded: number; avg_duration_standalone: number;
+        amplification_factor: number; sample_count: number;
+      }>(
+        `SELECT source_target AS "source_target", destination_target AS "destination_target",
+                avg_duration_when_preceded AS "avg_duration_when_preceded",
+                avg_duration_standalone AS "avg_duration_standalone",
+                amplification_factor AS "amplification_factor",
+                sample_count AS "sample_count"
+         FROM directional_pairs
+         WHERE (source_target = ANY($1) OR destination_target = ANY($1))
+           AND analysis_window = 'week'
+         ORDER BY amplification_factor DESC
+         LIMIT 10`,
+        [targetIds],
+      ).catch((err) => { log.debug({ err }, 'Failed to fetch directional pairs'); return []; });
+      if (pairs.length > 0) directionalPairs = pairs;
+    }
+  }
+
+  // ── Chain Patterns (pro tier) ──
+  if (isPaidTier && chainAnalysis) {
+    const patterns = await query<{
+      chain_pattern: string[]; frequency: number; avg_overhead_ms: number;
+    }>(
+      `SELECT chain_pattern AS "chain_pattern", frequency::int AS "frequency",
+              avg_overhead_ms AS "avg_overhead_ms"
+       FROM chain_analysis
+       WHERE agent_id = $1 AND analysis_window = 'day'
+       ORDER BY frequency DESC LIMIT 5`,
+      [agentId],
+    ).catch((err) => { log.debug({ err }, 'Failed to fetch chain patterns'); return []; });
+    if (patterns.length > 0) {
+      chainAnalysis.top_patterns = patterns;
+    }
+  }
+
   // Free tier: summary + top 3 targets, no baselines
   // Paid tier: top 10 targets with baselines + population comparison
   const visibleTargets = isPaidTier ? targets : targets.slice(0, 3).map((t) => {
@@ -362,6 +496,10 @@ app.get('/agent/:agent_id/friction', async (c) => {
     by_transport: byTransport,
     by_source: bySource,
     population_comparison: populationComparison,
+    chain_analysis: chainAnalysis,
+    directional_pairs: directionalPairs,
+    retry_overhead: retryOverhead,
+    population_drift: populationDrift,
     tier: isPaidTier ? 'paid' : 'free',
   });
 });

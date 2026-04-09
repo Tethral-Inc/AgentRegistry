@@ -17,6 +17,7 @@ export type {
   FrictionSummary, TargetFriction,
   SkillCatalogEntry, SkillVersionEntry, SkillVersionHistory, SkillSearchResult,
   SkillNotification,
+  ChainAnalysis, DirectionalPair, RetryOverhead, PopulationDrift,
 } from './types.js';
 
 export interface ACRClientConfig {

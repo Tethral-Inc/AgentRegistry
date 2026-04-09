@@ -68,8 +68,11 @@ app.post('/receipts', async (c) => {
         target_system_id, target_system_type, interaction_category,
         request_timestamp_ms, response_timestamp_ms, duration_ms, status,
         anomaly_flagged, anomaly_category, anomaly_detail,
-        transport_type, source
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        transport_type, source,
+        queue_wait_ms, retry_count, error_code, response_size_bytes,
+        chain_id, chain_position, preceded_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, $21, $22, $23)
       ON CONFLICT (receipt_id, created_at) DO NOTHING`,
       [
         receiptId,
@@ -88,6 +91,13 @@ app.post('/receipts', async (c) => {
         receipt.anomaly.detail ?? null,
         receipt.transport_type ?? null,
         receipt.source ?? 'agent',
+        receipt.interaction.queue_wait_ms ?? null,
+        receipt.interaction.retry_count ?? 0,
+        receipt.interaction.error_code ?? null,
+        receipt.interaction.response_size_bytes ?? null,
+        receipt.chain_id ?? null,
+        receipt.chain_position ?? null,
+        receipt.preceded_by ?? null,
       ],
     );
 

@@ -94,6 +94,17 @@ class ACRClient:
         """Submit a batch of interaction receipts (max 50)."""
         return self._post("/api/v1/receipts", {"receipts": receipts})
 
+    def submit_receipt_with_chain(self, receipt: dict, chain_id: str = None,
+                                  chain_position: int = None, preceded_by: str = None) -> dict:
+        """Submit an interaction receipt with optional chain tracking."""
+        if chain_id is not None:
+            receipt["chain_id"] = chain_id
+        if chain_position is not None:
+            receipt["chain_position"] = chain_position
+        if preceded_by is not None:
+            receipt["preceded_by"] = preceded_by
+        return self._post("/api/v1/receipts", receipt)
+
     def update_composition(
         self,
         agent_id: str,

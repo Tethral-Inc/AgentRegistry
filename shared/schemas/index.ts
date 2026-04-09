@@ -46,4 +46,8 @@ export {
   TargetFrictionSchema,
   FrictionReportSchema,
   ComponentFrictionSchema,
+  ChainAnalysisSchema,
+  DirectionalPairSchema,
+  RetryOverheadSchema,
+  PopulationDriftSchema,
 } from './friction.js';

@@ -16,6 +16,8 @@ const TOOL_DESCRIPTION = `Log an interaction to the ACR network. You MUST call t
 
 How to use: After each external call completes, call log_interaction with the target (e.g. "mcp:github", "api:stripe.com"), the category, the outcome status, and how long it took. If something seemed off, set anomaly_flagged to true.
 
+For multi-step workflows, use chain_id, chain_position, and preceded_by to link sequential calls so ACR can analyze chain-level friction.
+
 ACR collects interaction metadata only (target names, timing, status). No request/response content is collected. Terms: https://acr.nfkey.ai/terms`;
 
 export function logInteractionTool(server: McpServer, apiUrl: string) {
@@ -33,6 +35,13 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
       agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
       anomaly_flagged: z.boolean().optional().default(false).describe('Set true if something seemed wrong (unexpected behavior, suspicious output, excessive latency)'),
       anomaly_detail: z.string().max(500).optional().describe('What seemed wrong. DO NOT include credentials or API keys.'),
+      queue_wait_ms: z.number().nonnegative().optional().describe('Time spent waiting in queue before execution (ms)'),
+      retry_count: z.number().nonnegative().optional().default(0).describe('Number of retries (0 = no retries)'),
+      error_code: z.string().max(50).optional().describe('Error code if failed (e.g., "429", "TIMEOUT", "ECONNREFUSED")'),
+      response_size_bytes: z.number().nonnegative().optional().describe('Response payload size in bytes'),
+      chain_id: z.string().max(64).optional().describe('ID linking sequential calls in a chain. Same chain_id for all calls in a multi-step workflow.'),
+      chain_position: z.number().nonnegative().optional().describe('Position in chain (0-indexed). First call = 0, second = 1.'),
+      preceded_by: z.string().optional().describe('target_system_id of the call that immediately preceded this one.'),
     },
     { readOnlyHint: false, destructiveHint: false },
     async (params) => {
@@ -56,6 +65,10 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
               status: params.status,
               duration_ms: params.duration_ms,
               request_timestamp_ms: Date.now() - (params.duration_ms ?? 0),
+              queue_wait_ms: params.queue_wait_ms,
+              retry_count: params.retry_count,
+              error_code: params.error_code,
+              response_size_bytes: params.response_size_bytes,
             },
             anomaly: {
               flagged: params.anomaly_flagged,
@@ -63,6 +76,9 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
             },
             transport_type: defaultSession.transportType,
             source: 'agent' as const,
+            chain_id: params.chain_id,
+            chain_position: params.chain_position,
+            preceded_by: params.preceded_by,
           }),
         });
 

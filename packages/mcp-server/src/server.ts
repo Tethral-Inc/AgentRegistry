@@ -70,7 +70,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
 
   const server = new McpServer({
     name: 'acr-agent-registry',
-    version: '0.9.0',
+    version: '1.0.0',
     description:
       'Agent Composition Records — observability for AI agents. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction you make. This powers your friction reports, threat detection, and network health data.',
   });

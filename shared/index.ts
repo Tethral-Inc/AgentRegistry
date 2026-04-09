@@ -21,7 +21,14 @@ export { scanSkillContent } from './security/index.js';
 export type { ScanResult, ScanFinding, ScanSeverity } from './security/index.js';
 export type {
   FrictionSummary, TargetFriction, FrictionReport, ComponentFriction,
+  ChainAnalysis, DirectionalPair, RetryOverhead, PopulationDrift,
 } from './types/friction.js';
+export type {
+  TriSTRequest, TriSTResponse, TriSTReceiptPayload,
+  TriSTDeformationProfile, TriSTInteractionShape,
+  TriSTResponseGeometry, TriSTFrictionSurface, TriSTSignalQualification,
+  TriSTStoredResult,
+} from './types/trist-pipeline.js';
 export { type APIError, type ErrorCode, makeError } from './types/errors.js';
 
 export * from './crypto/index.js';

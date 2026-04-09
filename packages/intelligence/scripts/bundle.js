@@ -23,6 +23,7 @@ const functions = [
   { name: 'agent-expiration', entry: 'maintenance/agent-expiration.ts' },
   { name: 'data-archival', entry: 'maintenance/data-archival.ts' },
   { name: 'skill-catalog-crawl', entry: 'maintenance/skill-catalog-crawl.ts' },
+  { name: 'chain-analysis', entry: 'anomaly/chain-analysis.ts' },
 ];
 
 async function bundleAll() {

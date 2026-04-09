@@ -37,3 +37,44 @@ export const ComponentFrictionSchema = TargetFrictionSchema.extend({
   volatility: z.number(),
   p95_duration_ms: z.number(),
 });
+
+export const ChainAnalysisSchema = z.object({
+  chain_count: z.number(),
+  avg_chain_length: z.number(),
+  total_chain_overhead_ms: z.number(),
+  top_patterns: z.array(z.object({
+    pattern: z.array(z.string()),
+    frequency: z.number(),
+    avg_overhead_ms: z.number(),
+  })).optional(),
+});
+
+export const DirectionalPairSchema = z.object({
+  source_target: z.string(),
+  destination_target: z.string(),
+  avg_duration_when_preceded: z.number(),
+  avg_duration_standalone: z.number(),
+  amplification_factor: z.number(),
+  sample_count: z.number(),
+});
+
+export const RetryOverheadSchema = z.object({
+  total_retries: z.number(),
+  total_wasted_ms: z.number(),
+  top_retry_targets: z.array(z.object({
+    target_system_id: z.string(),
+    retry_count: z.number(),
+    avg_duration_ms: z.number(),
+    wasted_ms: z.number(),
+  })).max(5),
+});
+
+export const PopulationDriftSchema = z.object({
+  targets: z.array(z.object({
+    target_system_id: z.string(),
+    current_median_ms: z.number(),
+    baseline_median_ms: z.number(),
+    drift_percentage: z.number(),
+    direction: z.enum(['improving', 'stable', 'degrading']),
+  })),
+});

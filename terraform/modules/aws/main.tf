@@ -344,6 +344,39 @@ resource "aws_lambda_permission" "friction_baseline_compute" {
   source_arn    = aws_cloudwatch_event_rule.friction_baseline_compute.arn
 }
 
+# Chain Analysis Lambda
+
+resource "aws_lambda_function" "chain_analysis" {
+  function_name = "acr-chain-analysis"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 300
+  memory_size   = 512
+  filename      = "${path.module}/placeholder.zip"
+  dead_letter_config { target_arn = aws_sqs_queue.dlq.arn }
+  environment {
+    variables = { COCKROACH_CONNECTION_STRING = var.cockroach_connection_string }
+  }
+  lifecycle { ignore_changes = [filename] }
+  tags = { managed_by = "terraform", project = "acr" }
+}
+
+resource "aws_cloudwatch_event_rule" "chain_analysis" {
+  name                = "acr-chain-analysis"
+  schedule_expression = "rate(15 minutes)"
+}
+resource "aws_cloudwatch_event_target" "chain_analysis" {
+  rule = aws_cloudwatch_event_rule.chain_analysis.name
+  arn  = aws_lambda_function.chain_analysis.arn
+}
+resource "aws_lambda_permission" "chain_analysis" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.chain_analysis.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.chain_analysis.arn
+}
+
 # Skill Catalog Crawler
 
 resource "aws_lambda_function" "skill_catalog_crawl" {
