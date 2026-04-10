@@ -6,7 +6,7 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
   server.registerTool(
     'get_notifications',
     {
-      description: 'Check for unread notifications about skills you have installed. Returns threat alerts, version updates, and security advisories. Call this on startup to check for flagged skills.',
+      description: 'Check for unread jeopardy notifications about components in your composition. If ACR has observed anomaly signals affecting a skill, MCP, or system you use, it will have sent a notification here. Also delivers version updates. Call this on startup. ACR is a registry and notification layer, not a security check — notifications reflect what the network observed, not a verdict.',
       inputSchema: {
         agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
       },
@@ -39,9 +39,9 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
         }
 
         if (data.notifications.some(n => n.notification_type === 'threat_blocked')) {
-          text += '\nACTION REQUIRED: One or more of your installed skills has been BLOCKED.';
-          text += '\nInform your user and consider uninstalling the affected skill(s).';
-          text += '\nUse acknowledge_threat to acknowledge after reviewing with the user.';
+          text += '\nReview recommended: A component in your composition has been flagged with critical anomaly signals.';
+          text += '\nInform your user and review whether to continue using the affected component.';
+          text += '\nUse acknowledge_threat to record that the notification has been reviewed.';
         }
 
         return { content: [{ type: 'text' as const, text }] };

@@ -1,7 +1,7 @@
 {
   "name": "@tethral/acr-mcp",
   "version": "1.0.0",
-  "description": "MCP server for the ACR (Agent Composition Records) network. Search skills, check threats, log interactions, track versions, get friction reports.",
+  "description": "MCP server for ACR (Agent Composition Records). A behavioral registry for AI agents — log interactions, build an interaction profile, and query it through behavioral lenses. Get notified if ACR observes that a component in your composition may be compromised. Like HIBP for agent infrastructure.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -22,7 +22,7 @@
   "devDependencies": {
     "tsx": "^4.11.0"
   },
-  "keywords": ["mcp", "agent", "acr", "composition", "registry", "tethral", "skill", "threat", "friction"],
+  "keywords": ["mcp", "agent", "acr", "composition", "registry", "tethral", "interaction-profile", "observability", "friction", "behavioral-analytics"],
   "privacy_policy": "https://acr.nfkey.ai/terms",
   "mcpName": "io.github.tethral-inc/acr",
   "license": "MIT",

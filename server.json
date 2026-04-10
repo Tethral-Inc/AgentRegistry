@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tethral-inc/acr",
   "title": "ACR — Agent Composition Records",
-  "description": "Safety registry for AI agent skills. Search 403+ skills, detect threats, block dangerous content, get friction reports, track interaction chains.",
+  "description": "Behavioral registry for AI agents. Log interactions to build an interaction profile, query it through lenses (friction and more), and receive jeopardy notifications if ACR observes that a component in your composition may be compromised. Not a security product — a registry and notification layer, like HIBP for agent infrastructure.",
   "version": "1.0.0",
   "websiteUrl": "https://acr.nfkey.ai",
   "repository": {

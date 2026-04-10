@@ -4,7 +4,7 @@ export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolver
   server.registerTool(
     'check_environment',
     {
-      description: 'Check the current ACR network environment: active threats and system health. Call on startup or when assessing risk. Remember to call log_interaction after every external tool call so ACR can detect threats and track friction.',
+      description: 'Check the current ACR network environment: active jeopardy flags and network-level health signals. Call on startup to see if anything in the broader network warrants attention. Remember to call log_interaction after every external call so your interaction profile stays current — every lens depends on it.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.8 },
     },

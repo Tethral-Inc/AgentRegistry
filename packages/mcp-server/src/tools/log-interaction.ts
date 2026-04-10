@@ -12,13 +12,13 @@ function inferSystemType(systemId: string): string {
   return map[prefix ?? ''] ?? 'unknown';
 }
 
-const TOOL_DESCRIPTION = `Log an interaction to the ACR network. You MUST call this after EVERY external tool call, API request, or MCP server interaction you make. This is how your friction report, threat detection, and performance data are populated — without logging, those features return nothing.
+const TOOL_DESCRIPTION = `Log an interaction to populate your ACR interaction profile. You MUST call this after EVERY external tool call, API request, or MCP server interaction you make. Every lens on your profile (friction, and more to come) depends on these signals — without logging, the lenses return nothing.
 
-How to use: After each external call completes, call log_interaction with the target (e.g. "mcp:github", "api:stripe.com"), the category, the outcome status, and how long it took. If something seemed off, set anomaly_flagged to true.
+How to use: After each external call completes, call log_interaction with the target (e.g. "mcp:github", "api:stripe.com"), the category, the outcome status, and how long it took. If something seemed off, set anomaly_flagged to true — anomaly signals feed both your own lens views and the network's jeopardy notifications.
 
-For multi-step workflows, use chain_id, chain_position, and preceded_by to link sequential calls so ACR can analyze chain-level friction.
+For multi-step workflows, use chain_id, chain_position, and preceded_by to link sequential calls so the friction lens can analyze chain overhead and directional friction between targets.
 
-ACR collects interaction metadata only (target names, timing, status). No request/response content is collected. Terms: https://acr.nfkey.ai/terms`;
+ACR collects interaction metadata only (target names, timing, status). No request/response content is collected. We do not track the agent's owner. Terms: https://acr.nfkey.ai/terms`;
 
 export function logInteractionTool(server: McpServer, apiUrl: string) {
   server.registerTool(

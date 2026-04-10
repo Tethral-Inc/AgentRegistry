@@ -1,15 +1,15 @@
 ---
 name: acr-agent-registry
 version: 1.0.0
-description: Safety registry for AI agent skills. Search 403+ skills, detect threats, block dangerous content, get friction reports, track interaction chains.
+description: Behavioral registry for AI agents. Log interactions, build an interaction profile, query it through lenses (friction and more), and receive jeopardy notifications if ACR observes that a component in your composition may be compromised.
 author: tethral
-tags: [security, observability, friction, threat-detection, skill-registry]
-category: security
+tags: [registry, observability, interaction-profile, friction, notifications]
+category: observability
 requires:
   env: [ACR_API_URL]
 metadata:
   openclaw:
-    emoji: shield
+    emoji: chart
     homepage: https://acr.nfkey.ai
     primaryEnv: ACR_API_URL
     requires:
@@ -28,8 +28,10 @@ metadata:
 # ACR Agent Registry
 
 ## Purpose
-Before installing any skill, check if it's known to be safe. After interactions
-with external systems, log them. Your data helps the network detect threats faster.
+Register your composition with ACR, log every external interaction, and build
+an interaction profile you can query through behavioral lenses. If ACR observes
+that a component in your composition may be jeopardized, you will receive a
+notification. ACR is a registry and notification layer — not a security check.
 
 ## Setup
 Set environment variable: ACR_API_URL=https://acr.nfkey.ai
@@ -59,52 +61,53 @@ Set environment variable: ACR_API_URL=https://acr.nfkey.ai
    POST to $ACR_API_URL/api/v1/composition/update with the new skill list.
 
 ## Check Notifications
-After startup, check for unread threat notifications:
+After startup, check for unread jeopardy notifications:
 GET $ACR_API_URL/api/v1/agent/<your agent_id>/notifications?read=false
 
 If notifications exist:
-- For "threat_blocked" notifications: The skill is dangerous. Tell the user
-  immediately: "The skill [name] has been flagged by ACR security scanning
-  with [threat_patterns]. You should uninstall it."
-- For "threat_warning" notifications: Caution the user about elevated risk.
+- For "threat_blocked" notifications: A component in your composition has been
+  reported with critical anomaly signals. Tell the user: "ACR has observed that
+  a skill in your composition ([name]) may be compromised based on signals
+  from other agents using it. Review with your operator before continuing use."
+- For "threat_warning" notifications: A component has elevated anomaly signals.
+  Caution the user about the increased risk.
 - For "version_update" notifications: Inform the user an update is available.
 
 Mark notifications as read after presenting to the user:
 POST $ACR_API_URL/api/v1/agent/<your agent_id>/notifications/<id>/read
 
-To acknowledge a threat (after user review):
+To acknowledge a notification after operator review:
 POST $ACR_API_URL/api/v1/agent/<your agent_id>/notifications/<id>/acknowledge
 
-## Search for Skills
-You can search the skill catalog by name, description, or capability:
+## Querying the Skill Registry
+You can ask the network what it knows about a particular skill:
 GET $ACR_API_URL/api/v1/skill-catalog/search?q=<search text>
 
-This returns matching skills with descriptions, versions, threat levels, and
-adoption counts. Use this to discover skills before installing them.
+This returns what ACR has observed about matching skills: versions,
+anomaly rates, adoption counts. ACR does not distribute or install skills —
+it only records what has been observed about skills that exist in public
+registries (npm, GitHub, etc.).
 
 ## Check for Skill Updates
-The skill check response now includes version information. If a skill you're
+The skill lookup response includes version information. If a skill you're
 using has been updated, the response will show:
 - is_current_version: false/true
 - versions_behind: how many versions behind you are
 - current_hash: the latest hash to update to
 
-Poll the changes feed for recent updates:
-GET $ACR_API_URL/api/v1/skill-catalog/changes?since=<ISO timestamp>
-
-## Before Installing Any Skill
+## Looking Up a Specific Skill
 GET $ACR_API_URL/v1/skill/<sha256 hash of the SKILL.md content>
 
 Interpret the response:
-- "found": false -> This skill is unknown. Tell the user it has not been
-  seen in the network before. Suggest caution with unfamiliar skills.
-- "threat_level": "none" or "low" -> Proceed normally.
-- "threat_level": "medium" -> Warn the user. Show the anomaly_rate.
-  Proceed only if the user confirms.
-- "threat_level": "high" or "critical" -> Strongly warn the user.
-  Show: "This skill has been flagged by [anomaly_signal_count] agents.
-  [agent_count] agents have used it. Anomaly rate: [anomaly_rate]%."
-  Do not install without explicit user confirmation.
+- "found": false -> ACR has not observed this skill before. This is not a
+  verdict on the skill — only a note that the network has no prior signals.
+- "threat_level": "none" or "low" -> No elevated anomaly signals observed.
+- "threat_level": "medium" -> Elevated anomaly signals from the population.
+  Show the anomaly_rate and let the user decide.
+- "threat_level": "high" or "critical" -> Strongly elevated anomaly signals.
+  Show: "ACR has observed anomaly signals from [anomaly_signal_count] agents.
+  [agent_count] agents have used this skill. Anomaly rate: [anomaly_rate]%."
+  Recommend the user review before continuing.
 
 ## After External Interactions
 After calling any external tool, API, or service, log the interaction:
@@ -132,7 +135,7 @@ POST $ACR_API_URL/api/v1/receipts
 For system_id format: use "mcp:server-name" for MCP tools,
 "api:domain.com" for HTTP APIs, "skill:sha256:hash" for skill interactions.
 
-## Check Your Friction
+## Query the Friction Lens
 Once per day, or when the user asks about costs, performance, or
 "what's slowing me down" or "what's costing me the most":
 GET $ACR_API_URL/api/v1/agent/<your agent_id>/friction?scope=day
@@ -149,10 +152,13 @@ Your biggest cost: [top target system_id] accounted for
 [sum of failed call durations] ms in retries."
 
 If the user asks for more detail, show the full top_targets list
-with per-target breakdown.
+with per-target breakdown. The friction lens also reports chain overhead,
+retry waste, directional friction between targets, and how you compare to
+population baselines.
 
-This helps you understand where your API spend and time are going.
-No one else can tell you this.
+Friction is a continuum, not a verdict. High friction could be infrastructure
+slowness, a hard task, or a compromised component. Use the friction lens
+together with jeopardy notifications to interpret the signals correctly.
 
 ## If Something Seems Wrong
 After installing a new skill or interacting with an unfamiliar system,
@@ -169,6 +175,7 @@ information in the anomaly detail field.
 ACR collects interaction metadata only: target system names, timing,
 status, and provider class. No request/response content, no API keys,
 no prompts, and no personally identifiable information is collected.
+ACR does not track the agent's owner — we can only notify the agent itself.
 
 Your individual receipts are visible only to you via the friction report.
 Population baselines use aggregate statistics — no individual data is shared.

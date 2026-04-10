@@ -5,7 +5,7 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
   server.registerTool(
     'check_entity',
     {
-      description: 'Check if a skill hash, agent, or system is known to the ACR network. Use before installing skills to verify safety. This is a read-only lookup — no data is sent to ACR.',
+      description: 'Ask the ACR network what it knows about a specific skill hash, agent, or system. Returns any behavioral signals ACR has observed and any jeopardy flags. This is NOT a security check — ACR does not evaluate or test skills. It only records what has been observed. Read-only lookup; no data is sent to ACR.',
       inputSchema: {
         entity_type: z.enum(['skill', 'agent', 'system']).describe('Type of entity to look up'),
         entity_id: z.string().describe('The entity identifier: skill SHA-256 hash, agent_id, or system_id'),
@@ -57,27 +57,26 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
             };
           }
 
-          // ── BLOCKED SKILL: Content scan detected threats ──
+          // ── FLAGGED SKILL: Critical anomaly signals ──
           if (data.blocked) {
-            let text = `BLOCKED SKILL — DO NOT INSTALL\n`;
+            let text = `SKILL FLAGGED BY ACR — REVIEW BEFORE USE\n`;
             text += `════════════════════════════════════════\n`;
             if (data.skill_name) text += `Name: ${data.skill_name}\n`;
-            text += `Threat Level: ${(data.threat_level ?? 'unknown').toUpperCase()}\n`;
-            text += `Security Score: ${data.scan_score ?? 0}/100\n`;
-            if (data.blocked_reason) text += `\nReason: ${data.blocked_reason}\n`;
+            text += `Level: ${(data.threat_level ?? 'unknown').toUpperCase()}\n`;
+            if (data.blocked_reason) text += `\nWhy it was flagged: ${data.blocked_reason}\n`;
             if (data.threat_patterns && data.threat_patterns.length > 0) {
-              text += `\nDetected Threat Patterns:\n`;
+              text += `\nSignal categories observed:\n`;
               for (const p of data.threat_patterns) {
                 text += `  - ${p}\n`;
               }
             }
-            text += `\nThis skill has been flagged by ACR's content security scanner `;
-            text += `and is BLOCKED from installation. The skill content is not `;
-            text += `available for download, copy, or viewing.\n`;
-            text += `\nIf you currently have this skill installed, you should `;
-            text += `consider uninstalling it and notifying your user.\n`;
-            text += `\nTo request a review or dispute this block, `;
-            text += `contact security@tethral.com with hash: ${entity_id}`;
+            text += `\nACR has observed signals suggesting this skill may be compromised. `;
+            text += `ACR is not a security scanner — this is a notification based on observed `;
+            text += `behavior in the network, not a verdict. Review with your operator before `;
+            text += `continuing to use it.\n`;
+            text += `\nIf you currently have this skill installed, consider pausing its use `;
+            text += `and notifying your user.\n`;
+            text += `\nTo dispute the flag, contact security@tethral.com with hash: ${entity_id}`;
 
             return { content: [{ type: 'text' as const, text }] };
           }
@@ -95,9 +94,8 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
           if (data.interaction_count != null) text += `\nInteractions: ${data.interaction_count}`;
           if (data.anomaly_rate != null) text += `\nAnomaly rate: ${(data.anomaly_rate * 100).toFixed(1)}%`;
 
-          if (data.scan_score != null) text += `\nSecurity Score: ${data.scan_score}/100`;
           if (data.threat_patterns && data.threat_patterns.length > 0) {
-            text += `\nSecurity Findings: ${data.threat_patterns.join(', ')}`;
+            text += `\nSignal categories observed: ${data.threat_patterns.join(', ')}`;
           }
 
           // Version freshness check
@@ -110,9 +108,9 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
           }
 
           if (data.threat_level === 'high' || data.threat_level === 'critical') {
-            text += `\n\nWARNING: This skill has been flagged. Do not install without explicit user confirmation.`;
+            text += `\n\nACR has observed elevated anomaly signals for this skill. This is not a verdict — review with your operator before continuing to use it.`;
           } else if (data.threat_level === 'medium') {
-            text += `\n\nCaution: Elevated anomaly signals. Proceed only if the user confirms.`;
+            text += `\n\nACR has observed some elevated anomaly signals for this skill. Consider reviewing with your operator.`;
           }
 
           return { content: [{ type: 'text' as const, text }] };

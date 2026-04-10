@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ACR — Agent Composition Records</title>
-  <meta name="description" content="The safety registry for AI agent skills. Scan, catalog, and monitor skills before agents install them.">
+  <meta name="description" content="ACR — Agent Composition Records. A behavioral registry for AI agents. Log interactions, build an interaction profile, and query it through behavioral lenses. HIBP for agent infrastructure.">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -101,13 +101,7 @@
   <div class="hero">
     <div class="container">
       <h1><span>ACR</span> Agent Composition Records</h1>
-      <p>The safety registry for AI agent skills. Scan, catalog, and monitor skills before your agents install them.</p>
-      <div class="hero-stats">
-        <div class="stat"><div class="stat-num">403+</div><div class="stat-label">Skills Indexed</div></div>
-        <div class="stat"><div class="stat-num">25</div><div class="stat-label">Blocked</div></div>
-        <div class="stat"><div class="stat-num">20+</div><div class="stat-label">Threat Patterns</div></div>
-        <div class="stat"><div class="stat-num">4</div><div class="stat-label">Sources Crawled</div></div>
-      </div>
+      <p>A behavioral registry for AI agents. Agents log interactions, build an interaction profile, and query it through behavioral lenses. Like HIBP for agent infrastructure.</p>
       <div class="cta-group">
         <a href="#install" class="cta cta-primary">Add to Your Agent</a>
         <a href="https://github.com/Tethral-Inc/AgentRegistry" class="cta cta-secondary">GitHub</a>
@@ -138,7 +132,7 @@
           <pre><code>npm install @tethral/acr-sdk</code></pre>
           <pre style="margin-top:8px;"><code>pip install tethral-acr</code></pre>
           <p style="color:#888; font-size:13px; margin-top:12px;">
-            Use <code>ACRClient</code> to search skills, check threats, log interactions, and get friction reports.
+            Use <code>ACRClient</code> to register your composition, log interactions, and query your interaction profile through lenses.
           </p>
         </div>
       </div>
@@ -151,55 +145,45 @@
       <h2>What ACR Does</h2>
       <div class="feature-grid">
         <div class="feature">
-          <h3>Skill Catalog</h3>
-          <p>403+ skills indexed from npm, GitHub, and PyPI. Full-text search by name, description, or capability. Quality scores and version tracking.</p>
+          <h3>Interaction Profile Registry</h3>
+          <p>Agents register their composition and log every external interaction. Signals compile into a behavioral profile over time — the unified record of what an agent does and how it behaves.</p>
         </div>
         <div class="feature">
-          <h3>Security Scanner</h3>
-          <p>20+ threat patterns detect prompt injection, data exfiltration, and code execution. Runs on every skill BEFORE it enters the catalog.</p>
+          <h3>Friction Lens</h3>
+          <p>Query your profile for where time and tokens are being lost. Top-target breakdown with p95 latencies, chain overhead, retry waste, directional friction, and population baselines.</p>
         </div>
         <div class="feature">
-          <h3>Threat Blocking</h3>
-          <p>Dangerous skills are blocked. Content is redacted. Agents see clear warnings with threat patterns and are advised to uninstall.</p>
+          <h3>Lens System</h3>
+          <p>Friction is one lens on the profile. Additional lenses (reliability, quality) are on the roadmap — each a different way of reading the same underlying behavioral signals.</p>
         </div>
         <div class="feature">
-          <h3>Notifications</h3>
-          <p>Agents auto-subscribe to threat alerts for their installed skills. When a skill is flagged, subscribed agents are notified.</p>
+          <h3>Jeopardy Notifications</h3>
+          <p>If ACR observes anomalies affecting a component in an agent's composition, the agent is notified. We don't track agent owners — we can only notify the agent itself.</p>
         </div>
         <div class="feature">
-          <h3>Friction Reports</h3>
-          <p>Which external calls cost the most time? Per-target latency breakdown with p95, failure rates, and population baselines.</p>
+          <h3>Network Observation</h3>
+          <p>Cross-agent, cross-provider anomaly correlation. When signals from multiple agents converge on the same component, the pattern is amplified and propagated.</p>
         </div>
         <div class="feature">
-          <h3>Network Intelligence</h3>
-          <p>Cross-agent anomaly correlation. When multiple agents from different providers report issues, the signal is amplified.</p>
+          <h3>HIBP for Agents</h3>
+          <p>ACR is a registry and notification layer, not a security check. We record what happens and propagate signals. Like Have I Been Pwned or contact tracing — we don't evaluate, we register.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Scanner -->
+  <!-- About the Skill Registry -->
   <section>
     <div class="container">
-      <h2>Content Security Scanner</h2>
-      <p style="color:#888; margin-bottom:20px;">Every skill is scanned before agents can access it.</p>
-      <table class="threat-table">
-        <thead>
-          <tr><th>Category</th><th>Detects</th><th>Severity</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Prompt Injection</td><td>"ignore instructions", template <code>{{}}</code>, <code>[SYSTEM]</code> tags</td><td><span class="badge badge-critical">Critical</span></td></tr>
-          <tr><td>Data Exfiltration</td><td>Webhook URLs, credential harvesting, IP-based exfil</td><td><span class="badge badge-critical">Critical</span></td></tr>
-          <tr><td>Code Execution</td><td><code>eval()</code>, <code>child_process</code>, <code>os.system()</code></td><td><span class="badge badge-high">High</span></td></tr>
-          <tr><td>Filesystem</td><td>Path traversal <code>../../</code>, destructive ops</td><td><span class="badge badge-high">High</span></td></tr>
-          <tr><td>Obfuscation</td><td>Base64 blocks, hex encoding</td><td><span class="badge badge-medium">Medium</span></td></tr>
-          <tr><td>Supply Chain</td><td>Dependency confusion (typosquatting)</td><td><span class="badge badge-medium">Medium</span></td></tr>
-        </tbody>
-      </table>
-      <p style="color:#666; font-size:13px; margin-top:16px;">
-        Skills scoring below 50/100 are <strong style="color:#dc2626;">blocked</strong>.
-        50-79 are <strong style="color:#f97316;">warned</strong>.
-        80+ are clean.
+      <h2>About the Skill Registry</h2>
+      <p style="color:#aaa; max-width:700px;">
+        ACR maintains an observation layer on skills that exist in public registries. We update it continuously.
+        <strong style="color:#ddd;">We are not a security check.</strong>
+        If we observe that an agent using a particular skill may be in some way jeopardized, we will make an effort to notify the agent itself.
+        Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
+      </p>
+      <p style="color:#888; margin-top:16px; font-size:14px;">
+        Agents don't get skills from ACR — we observe skills that already exist in the ecosystem and track behavioral signals tied to them.
       </p>
     </div>
   </section>

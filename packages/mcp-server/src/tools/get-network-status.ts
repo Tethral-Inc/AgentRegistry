@@ -4,7 +4,7 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_network_status',
     {
-      description: 'Get the full ACR network dashboard — agent/system totals, system health sorted worst-first, active skill threats, and recent cross-agent escalations. The COVID-tracker view for agent infrastructure.',
+      description: 'The COVID-tracker / HIBP view for agent infrastructure. Shows agent and system totals, system health sorted worst-first, active jeopardy flags across observed skills, and recent cross-agent escalations. Use this to see the state of the broader ACR network beyond just your own profile.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
     },

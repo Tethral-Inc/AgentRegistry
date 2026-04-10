@@ -1,6 +1,6 @@
 # @tethral/acr-mcp
 
-MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) network. Safety registry for AI agent skills — search 403+ skills, detect threats, block dangerous content, get notifications.
+MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) network. Log agent interactions, build an interaction profile, and query it through behavioral lenses. Get notified if ACR observes that your composition may be jeopardized.
 
 ## Quick Start
 
@@ -26,55 +26,61 @@ npx @tethral/acr-mcp-http     # HTTP transport
 
 Your agent auto-registers on first use and gets a human-readable name (e.g. `anthropic-amber-fox`).
 
-## What Happens Automatically
+## What It Does
 
-1. Agent registers and gets an ID
-2. `log_interaction` is called after every external tool call (the tool description instructs the agent)
-3. Friction reports, threat detection, and network health data populate from logged interactions
-4. When the agent checks a skill before installing, ACR returns safety data, blocks dangerous skills, and warns about risks
+ACR is an **interaction profile registry** — not a security product, not a skill store.
+
+1. **Agent registers** — composition is recorded (what skills, MCPs, tools it has)
+2. **Agent logs interactions** — every external tool call, API request, or MCP interaction
+3. **Signals compile into an interaction profile** — timing, chain position, retries, anomaly flags, and more
+4. **Lenses interpret the profile** — friction is the first and most developed lens (bottlenecks, chain overhead, retry waste, population baselines)
+5. **Jeopardy notifications** — if ACR observes anomalies affecting a component in your composition, you get a notification. We're not a security check — we register and propagate signals, like HIBP or contact tracing.
 
 ## Tools (14)
 
-### Skill Safety
+### Interaction logging (the foundation)
 | Tool | Purpose |
 |------|---------|
-| `search_skills` | Search 403+ skills by name, description, or capability. Filter by source, category, threat level, security score. |
-| `check_entity` | Check if a skill/agent/system is safe. Returns security score, threat patterns, blocked status, version freshness. |
-| `get_skill_versions` | Version history for a skill — is your version current? How many versions behind? |
+| `log_interaction` | Record an interaction — every lens depends on this. Call after every external tool call, API request, or MCP interaction. |
+| `get_interaction_log` | Raw interaction history with network context (target health, baselines, anomaly signals). |
 
-### Notifications
+### Friction lens
 | Tool | Purpose |
 |------|---------|
-| `get_notifications` | Check for unread threat alerts on your installed skills. Call on startup. |
-| `acknowledge_threat` | Acknowledge a threat notification after reviewing with the user. Expires in 30 days. |
+| `get_friction_report` | Query the friction lens of your interaction profile. Top-target breakdown with p95 latencies, chain analysis, retry overhead, population drift. |
 
-### Composition
+### Identity & composition
 | Tool | Purpose |
 |------|---------|
-| `update_composition` | Update your skill list without re-registering. Preserves agent identity. |
-| `register_agent` | Custom registration with skill hashes, provider class, environment context. |
-
-### Observability
-| Tool | Purpose |
-|------|---------|
-| `log_interaction` | Log every external call. Powers friction reports and threat detection. |
-| `get_friction_report` | What's costing you the most time — per-target breakdown with p95 latencies. |
-| `get_interaction_log` | Raw interaction history with filters (target, category, status, anomaly). |
-| `get_network_status` | Network dashboard — active agents, system health, threats, escalations. |
-| `get_skill_tracker` | Skill adoption tracking with cross-provider anomaly correlation. |
 | `get_my_agent` | Your agent identity, provider, status, environment context. |
-| `check_environment` | Quick health check — active threats and network status. |
+| `register_agent` | Explicit registration (auto-registration is the default on first call). |
+| `update_composition` | Update your composition without re-registering. Preserves agent identity. |
 
-## Security Scanner
+### Jeopardy notifications
+| Tool | Purpose |
+|------|---------|
+| `check_environment` | Active compromise flags and network health. Call on startup. |
+| `get_notifications` | Unread jeopardy notifications about components in your composition. |
+| `acknowledge_threat` | Acknowledge a notification after reviewing with your operator. Expires in 30 days. |
 
-Every skill in the catalog is scanned with 20+ regex patterns before agents can access it:
+### Network observation
+| Tool | Purpose |
+|------|---------|
+| `get_network_status` | The COVID-tracker / HIBP view for agent infrastructure — agent/system totals, health, active flags, escalations. |
+| `get_skill_tracker` | Adoption and anomaly signals for skills observed by the network. |
 
-- **Critical**: Prompt injection, data exfiltration, credential harvesting, known C2 IPs
-- **High**: Code execution (`eval`, `child_process`), filesystem traversal, destructive ops
-- **Medium**: Obfuscation (base64, hex), excessive permissions, dependency confusion
-- **Low**: Missing metadata (author, version, description), oversized content
+### Lookups
+| Tool | Purpose |
+|------|---------|
+| `check_entity` | Ask the network what it knows about a specific skill, agent, or system. |
+| `search_skills` | Query the network's knowledge of a skill by name. |
+| `get_skill_versions` | Version history for a skill hash — which version you're on, how it has changed. |
 
-Skills scoring **below 50/100** are **BLOCKED** — content redacted, agents see a clear warning with threat patterns. Skills 50-79 are warned. 80+ are clean.
+## About the Skill Registry
+
+ACR maintains an observation layer on skills that exist in public registries (npm, GitHub, etc.). We update it continuously. **We are not a security check.** If we observe that an agent using a particular skill may be in some way jeopardized, we will make an effort to notify the agent itself. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
+
+Agents don't get skills from ACR — we observe skills that already exist in the ecosystem and keep track of behavioral signals tied to them.
 
 ## Configuration
 
@@ -85,7 +91,7 @@ Skills scoring **below 50/100** are **BLOCKED** — content redacted, agents see
 
 ## Data Collection
 
-ACR collects interaction **metadata only**: target system names, timing, status, and provider class. No request/response content, API keys, prompts, or PII is collected. [Full terms](https://acr.nfkey.ai/terms).
+ACR collects interaction **metadata only**: target system names, timing, status, and provider class. No request/response content, API keys, prompts, or PII is collected. We intentionally don't track the agent's owner. [Full terms](https://acr.nfkey.ai/terms).
 
 ## License
 

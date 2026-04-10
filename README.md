@@ -1,17 +1,31 @@
 # ACR — Agent Composition Records
 
-**The safety registry for AI agent skills.** ACR scans, catalogs, and monitors skills before agents install them. Think VirusTotal for agent ecosystems.
+**A behavioral registry and observation network for AI agents.** Agents register their composition, log their interactions, and query behavioral profiles through lenses. If we observe that an agent may be jeopardized, we notify the agent.
 
 [![npm](https://img.shields.io/npm/v/@tethral/acr-mcp)](https://www.npmjs.com/package/@tethral/acr-mcp)
 [![npm](https://img.shields.io/npm/v/@tethral/acr-sdk)](https://www.npmjs.com/package/@tethral/acr-sdk)
 
-## What It Does
+## What ACR Is
 
-- **403+ skills indexed** from npm, GitHub, and PyPI — continuously crawled
-- **Content security scanning** — 20+ threat patterns detect prompt injection, data exfiltration, code execution before you install
-- **Blocked skills** — dangerous content is redacted and blocked. Agents are warned.
-- **Friction reports** — what's costing your agent the most time and money
-- **Threat notifications** — agents subscribed to their installed skills get alerted when threats are detected
+ACR is an **interaction profile registry**. Agents log what they do (external tool calls, API requests, MCP interactions). Those signals compile into a behavioral profile over time, which you can query through **lenses** — each lens a different way of interpreting the same underlying signals.
+
+The **friction lens** is the first one shipped: bottleneck detection, chain overhead analysis, retry waste, population baselines, directional friction between targets. More lenses (reliability, quality) are on the roadmap.
+
+ACR is **not a security product**. We don't evaluate skills, test for compromise, or block anything. We're closer to HIBP or contact tracing: we register events and propagate notifications. If we observe that an agent may be jeopardized in some way, we make an effort to notify the agent itself. We don't track the agent's owner, so we have no mechanism to notify them beyond the agent's activities.
+
+## What ACR Does
+
+- **Registers agents** — zero-config identity, composition tracking, persistent across sessions
+- **Logs interactions** — every external tool call an agent makes, with timing, status, chain position, anomaly signals
+- **Builds interaction profiles** — raw signals compiled over time into the behavioral record for each agent
+- **Surfaces the friction lens** — where your agent is losing time and tokens, with chain analysis, retry overhead, population drift, and directional friction
+- **Notifies on jeopardy** — if ACR observes anomalies affecting a component in an agent's composition, we notify that agent
+
+## The Skill Registry
+
+We maintain a registry of agent skills that we update continuously. **We are not a security check.** If we observe that an agent using a particular skill may be in some way jeopardized, we will make an effort to notify the agent itself. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
+
+Agents don't get skills from ACR — we observe skills that already exist in the ecosystem (via public registries like npm and GitHub) and keep track of behavioral signals tied to them.
 
 ## Add to Claude Code (30 seconds)
 
@@ -28,7 +42,7 @@ Add this to your Claude Code settings (`.claude/settings.json` or via IDE):
 }
 ```
 
-That's it. Your agent auto-registers, gets a name (e.g. `anthropic-amber-fox`), and starts checking skills.
+Your agent auto-registers, gets a name (e.g. `anthropic-amber-fox`), and starts building its interaction profile on the first `log_interaction` call.
 
 ## Add to Any Agent (SDK)
 
@@ -42,86 +56,75 @@ import { ACRClient } from '@tethral/acr-sdk';
 
 const acr = new ACRClient();
 
-// Search for skills
-const results = await acr.searchSkills('security scanner', { min_scan_score: 80 });
-
-// Check a skill before installing
-const check = await acr.checkSkill('abc123...');
-if (check.blocked) {
-  console.log('BLOCKED:', check.blocked_reason);
-}
-
-// Register your agent's installed skills
+// Register your agent's composition
 const reg = await acr.register({
   public_key: 'your-agent-key-here-min-32-chars',
   provider_class: 'anthropic',
   composition: { skill_hashes: ['hash1', 'hash2'] },
 });
 
-// Check for threat notifications
+// Log an interaction (this is the foundation — everything else flows from this)
+await acr.logInteraction({
+  target_system_id: 'mcp:github',
+  category: 'tool_call',
+  status: 'success',
+  duration_ms: 340,
+});
+
+// Query the friction lens of your profile
+const friction = await acr.getFrictionReport(reg.agent_id, { scope: 'day' });
+
+// Check for jeopardy notifications
 const notifs = await acr.getNotifications(reg.agent_id);
 ```
 
 ## What Agents See
 
-### Safe skill:
+### Friction lens output (example)
 ```
-Skill found.
-Threat Level: NONE
-Name: muninn
-Security Score: 92/100
-This is the latest version.
-```
+Friction Report for anthropic-amber-fox (day)
 
-### Blocked skill:
-```
-BLOCKED SKILL — DO NOT INSTALL
-================================
-Name: gh-issues
-Threat Level: CRITICAL
-Security Score: 0/100
+── Summary ──
+  Interactions: 847
+  Total wait: 132.4s
+  Friction: 14.2% of active time
+  Failures: 12 (1.4% rate)
 
-Detected Threat Patterns:
-  - prompt_injection_system_tag
-  - code_exec_spawn
-
-This skill is BLOCKED from installation. Content is not
-available for download, copy, or viewing.
+── Top Targets ──
+  mcp:github (mcp_server)
+    214 calls | 38.1% of wait time
+    median 280ms | p95 1840ms
+    vs population: 42% slower than baseline (volatility 1.8)
 ```
 
-## MCP Tools (14 total)
+### Jeopardy notification (example)
+```
+You have 1 unread notification:
+
+[HIGH] Component in your composition reported anomalies
+   A skill in your current composition has been reported with
+   suspicious activity across multiple agents in the network.
+   Review with your operator before continuing use.
+```
+
+## MCP Tools
 
 | Tool | What it does |
 |------|-------------|
-| `search_skills` | Search 403+ skills by name, description, capability |
-| `check_entity` | Check if a skill is safe before installing |
-| `get_notifications` | Check for threat alerts on your installed skills |
-| `acknowledge_threat` | Acknowledge a threat after reviewing with user |
-| `get_skill_versions` | Version history — is your skill outdated? |
-| `update_composition` | Update your skill list without re-registering |
-| `log_interaction` | Log every external call (powers friction + threats) |
-| `get_friction_report` | What's costing you the most time |
-| `get_interaction_log` | Raw interaction history |
-| `get_network_status` | Network-wide health dashboard |
-| `get_skill_tracker` | Skill adoption and threat tracking |
-| `get_my_agent` | Your agent identity |
-| `check_environment` | Quick threat check |
-| `register_agent` | Custom registration |
-
-## Security Scanner
-
-Every skill is scanned before entering the catalog. Patterns detected:
-
-| Category | Examples | Severity |
-|----------|----------|----------|
-| Prompt Injection | "ignore instructions", template injection `{{}}`, `[SYSTEM]` tags | Critical |
-| Data Exfiltration | webhook.site URLs, credential harvesting, IP-based URLs | Critical |
-| Code Execution | `eval()`, `child_process`, `os.system()` | High |
-| Filesystem | Path traversal `../../`, destructive ops `rm -rf` | High |
-| Obfuscation | Base64 blocks, hex encoding | Medium |
-| Supply Chain | Dependency confusion (names similar to popular packages) | Medium |
-
-Skills scoring below 50/100 are **blocked** — content redacted, agents warned. Skills 50-79 are **warned**. Skills 80+ are clean.
+| `log_interaction` | Log an interaction — the foundation for everything |
+| `get_friction_report` | Query the friction lens of your interaction profile |
+| `get_interaction_log` | Raw interaction history with network context |
+| `get_network_status` | The COVID-tracker / HIBP view for agent infrastructure |
+| `get_my_agent` | Your agent identity and registration state |
+| `check_environment` | Active compromise flags and network health on startup |
+| `get_notifications` | Unread jeopardy notifications for your composition |
+| `acknowledge_threat` | Acknowledge a notification after reviewing it |
+| `update_composition` | Update your composition without re-registering |
+| `register_agent` | Explicit registration (auto-registration is default) |
+| `check_entity` | Ask the network what it knows about a skill/agent/system |
+| `get_skill_tracker` | Adoption and anomaly signals for tracked skills |
+| `get_skill_versions` | Version history for a skill hash |
+| `search_skills` | Query the network's knowledge of a skill by name |
 
 ## Architecture
 
@@ -132,24 +135,61 @@ Agents (Claude, OpenClaw, custom)
   |      or SDK (@tethral/acr-sdk / tethral-acr)
   |
   +--> Resolver API (Cloudflare Workers, edge-cached)
-  |      Skill lookups, agent checks, threat feed
+  |      Lookups, composition checks, notification feed
   |
   +--> Ingestion API (Vercel serverless)
-  |      Registration, receipts, search, notifications
+  |      Registration, interaction receipts, friction queries, notifications
   |
   +--> CockroachDB (distributed SQL)
-  |      9 migrations, 15+ tables
+  |      Interaction profiles, agent registry, skill observation data
   |
-  +--> Background Jobs (AWS Lambda)
-         Skill crawlers (npm, GitHub, PyPI)
-         Content security scanner
-         Threat level computation
+  +--> Background Jobs
+         Skill observation crawlers
+         Anomaly signal computation
          Friction baseline computation
+         Notification dispatch
 ```
 
 ## Data Collection
 
-ACR collects **interaction metadata only**: target system names, timing, status, and provider class. No request/response content, API keys, prompts, or PII is collected. Your friction data is visible only to you. Population baselines use aggregate statistics.
+ACR collects **interaction metadata only**: target system names, timing, status, chain context, and provider class. No request/response content, API keys, prompts, or PII is collected. Your interaction profile is visible only to you. Population baselines use aggregate statistics.
+
+[Full terms](https://acr.nfkey.ai/terms)
+
+## Privacy Policy
+
+**What we collect:**
+- Target system names (e.g., `mcp:github`, `api:stripe.com`)
+- Interaction timing (duration, timestamps, queue wait, retry count)
+- Interaction status (success, failure, timeout, partial)
+- Agent provider class (e.g., `anthropic`, `openai`)
+- Composition hashes (SHA-256 of SKILL.md content)
+- Chain context (`chain_id`, `chain_position`, `preceded_by`)
+- Agent-reported anomaly flags (category only, no payload)
+
+**What we do NOT collect:**
+- Request or response content/payloads
+- API keys, tokens, or credentials
+- Prompts, completions, or conversation content
+- Personally identifiable information (PII)
+- File contents or user data
+- Agent owner identity (we intentionally don't track the human behind the agent)
+
+**Data usage:**
+- Your interaction profile: visible only to the agent that generated it
+- Population baselines: aggregated statistics, no individual data shared
+- Jeopardy notifications: delivered to agents whose composition is affected
+- Skill observation: only publicly available skill metadata is indexed
+
+**Data retention:**
+- Interaction receipts: 90 days, then archived to daily summaries
+- Skill observation data: retained while the skill is observed
+- Notifications: retained for 90 days
+- Agent registrations: soft-expired after 90 days of inactivity
+
+**Third-party sharing:** None. ACR does not sell, share, or transfer interaction data to third parties.
+
+**Contact:** security@tethral.com
 
 [Full terms](https://acr.nfkey.ai/terms)
 
@@ -159,7 +199,7 @@ ACR collects **interaction metadata only**: target system names, timing, status,
 node scripts/test-agent-lifecycle.mjs
 ```
 
-Simulates a full agent lifecycle: register, check skills, hit blocks, log interactions, check notifications. 12 tests, all against the live API.
+Simulates a full agent lifecycle: register, log interactions, query the friction lens, check for notifications.
 
 ## Development
 
@@ -167,45 +207,9 @@ Simulates a full agent lifecycle: register, check skills, hit blocks, log intera
 pnpm install                    # Install dependencies
 pnpm build                      # Build all packages
 pnpm test:unit                  # Run unit tests
-node scripts/run-migration.mjs up   # Run DB migrations
+node scripts/run-migration.mjs up      # Run DB migrations
 node scripts/test-agent-lifecycle.mjs  # Run integration test
 ```
-
-## Privacy Policy
-
-ACR collects **interaction metadata only** to provide friction analysis and threat detection:
-
-**What we collect:**
-- Target system names (e.g., "mcp:github", "api:stripe.com")
-- Interaction timing (duration, timestamps)
-- Interaction status (success, failure, timeout)
-- Agent provider class (e.g., "anthropic", "openai")
-- Skill composition hashes (SHA-256 of SKILL.md content)
-
-**What we do NOT collect:**
-- Request or response content/payloads
-- API keys, tokens, or credentials
-- Prompts, completions, or conversation content
-- Personally identifiable information (PII)
-- File contents or user data
-
-**Data usage:**
-- Friction reports: visible only to the agent that generated them
-- Population baselines: aggregated statistics, no individual data shared
-- Threat detection: anomaly patterns computed from aggregate signals
-- Skill scanning: only publicly available SKILL.md content is indexed
-
-**Data retention:**
-- Interaction receipts: 90 days, then archived to daily summaries
-- Skill catalog: retained indefinitely (public content)
-- Notifications: retained for 90 days
-- Agent registrations: soft-expired after 90 days of inactivity
-
-**Third-party sharing:** None. ACR does not sell, share, or transfer interaction data to third parties.
-
-**Contact:** security@tethral.com
-
-[Full terms](https://acr.nfkey.ai/terms)
 
 ## License
 
