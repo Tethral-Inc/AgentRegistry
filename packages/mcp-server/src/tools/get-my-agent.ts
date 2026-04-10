@@ -2,11 +2,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
 
 export function getMyAgentTool(server: McpServer) {
-  server.tool(
+  server.registerTool(
     'get_my_agent',
-    'Get your agent profile — name, ID, provider, status, and registration date. Zero-config: uses the auto-assigned agent identity.',
-    {},
-    { readOnlyHint: true, destructiveHint: false },
+    {
+      description: 'Get your agent profile — name, ID, provider, status, and registration date. Zero-config: uses the auto-assigned agent identity.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.8 },
+    },
     async () => {
       const id = getAgentId() || await ensureRegistered();
       const name = getAgentName();

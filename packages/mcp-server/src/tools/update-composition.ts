@@ -3,19 +3,22 @@ import { z } from 'zod';
 import type { SessionState } from '../session-state.js';
 
 export function updateCompositionTool(server: McpServer, apiUrl: string, getSession: () => SessionState) {
-  server.tool(
+  server.registerTool(
     'update_composition',
-    'Update your agent skill composition without re-registering. Use this after installing or removing skills to keep your composition current. Preserves your agent identity.',
     {
-      agent_id: z.string().optional().describe('Your agent ID (uses current session agent if omitted)'),
-      composition: z.object({
-        skills: z.array(z.string()).optional().describe('Skill names'),
-        skill_hashes: z.array(z.string()).optional().describe('SHA-256 hashes of each SKILL.md content'),
-        mcps: z.array(z.string()).optional().describe('MCP server names'),
-        tools: z.array(z.string()).optional().describe('Tool names'),
-      }).describe('Your current skill/tool composition'),
+      description: 'Update your agent skill composition without re-registering. Use this after installing or removing skills to keep your composition current. Preserves your agent identity.',
+      inputSchema: {
+        agent_id: z.string().optional().describe('Your agent ID (uses current session agent if omitted)'),
+        composition: z.object({
+          skills: z.array(z.string()).optional().describe('Skill names'),
+          skill_hashes: z.array(z.string()).optional().describe('SHA-256 hashes of each SKILL.md content'),
+          mcps: z.array(z.string()).optional().describe('MCP server names'),
+          tools: z.array(z.string()).optional().describe('Tool names'),
+        }).describe('Your current skill/tool composition'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      _meta: { priorityHint: 0.4 },
     },
-    { readOnlyHint: false, destructiveHint: false },
     async ({ agent_id, composition }) => {
       try {
         const resolvedAgentId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);

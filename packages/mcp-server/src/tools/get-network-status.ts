@@ -1,11 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
-  server.tool(
+  server.registerTool(
     'get_network_status',
-    'Get the full ACR network dashboard — agent/system totals, system health sorted worst-first, active skill threats, and recent cross-agent escalations. The COVID-tracker view for agent infrastructure.',
-    {},
-    { readOnlyHint: true, destructiveHint: false },
+    {
+      description: 'Get the full ACR network dashboard — agent/system totals, system health sorted worst-first, active skill threats, and recent cross-agent escalations. The COVID-tracker view for agent infrastructure.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.7 },
+    },
     async () => {
       try {
         const res = await fetch(`${apiUrl}/api/v1/network/status`);

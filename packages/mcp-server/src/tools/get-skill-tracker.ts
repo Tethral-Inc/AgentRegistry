@@ -2,16 +2,19 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
-  server.tool(
+  server.registerTool(
     'get_skill_tracker',
-    'Track skill adoption, anomaly rates, and threat levels across the agent population. Use without skill_hash for an overview, or with skill_hash for a deep-dive with provider breakdown and cross-provider correlation data.',
     {
-      skill_hash: z.string().optional().describe('Specific skill hash for deep-dive view'),
-      threat_level: z.string().optional().describe('Filter by threat level (none, low, medium, high, critical)'),
-      sort: z.enum(['agent_count', 'interaction_count', 'anomaly_signal_rate', 'threat_level']).optional().default('agent_count').describe('Sort field'),
-      limit: z.number().min(1).max(100).optional().default(20).describe('Max skills to show'),
+      description: 'Track skill adoption, anomaly rates, and threat levels across the agent population. Use without skill_hash for an overview, or with skill_hash for a deep-dive with provider breakdown and cross-provider correlation data.',
+      inputSchema: {
+        skill_hash: z.string().optional().describe('Specific skill hash for deep-dive view'),
+        threat_level: z.string().optional().describe('Filter by threat level (none, low, medium, high, critical)'),
+        sort: z.enum(['agent_count', 'interaction_count', 'anomaly_signal_rate', 'threat_level']).optional().default('agent_count').describe('Sort field'),
+        limit: z.number().min(1).max(100).optional().default(20).describe('Max skills to show'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.5 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ skill_hash, threat_level, sort, limit }) => {
       try {
         // Deep-dive mode

@@ -2,18 +2,21 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 export function searchSkillsTool(server: McpServer, apiUrl: string) {
-  server.tool(
+  server.registerTool(
     'search_skills',
-    'Search the ACR skill catalog by name, description, or capability. Returns matching skills with threat status, version info, and descriptions. Use this to discover skills before installing them.',
     {
-      query: z.string().min(1).max(200).describe('Search text (skill name, keyword, or capability)'),
-      source: z.string().optional().describe('Filter by source (clawhub, github, npm)'),
-      category: z.string().optional().describe('Filter by category'),
-      threat_level: z.enum(['none', 'low', 'medium', 'high', 'critical']).optional().describe('Filter by threat level'),
-      limit: z.number().min(1).max(50).optional().default(10).describe('Max results to return'),
-      min_scan_score: z.number().min(0).max(100).optional().describe('Minimum security scan score (0-100)'),
+      description: 'Search the ACR skill catalog by name, description, or capability. Returns matching skills with threat status, version info, and descriptions. Use this to discover skills before installing them.',
+      inputSchema: {
+        query: z.string().min(1).max(200).describe('Search text (skill name, keyword, or capability)'),
+        source: z.string().optional().describe('Filter by source (clawhub, github, npm)'),
+        category: z.string().optional().describe('Filter by category'),
+        threat_level: z.enum(['none', 'low', 'medium', 'high', 'critical']).optional().describe('Filter by threat level'),
+        limit: z.number().min(1).max(50).optional().default(10).describe('Max results to return'),
+        min_scan_score: z.number().min(0).max(100).optional().describe('Minimum security scan score (0-100)'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.6 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ query: searchQuery, source, category, threat_level, limit, min_scan_score }) => {
       try {
         const params = new URLSearchParams({ q: searchQuery });

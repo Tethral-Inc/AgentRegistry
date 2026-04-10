@@ -31,22 +31,25 @@ async function resolveId(agentName: string | undefined, agentId: string | undefi
 }
 
 export function getInteractionLogTool(server: McpServer, apiUrl: string) {
-  server.tool(
+  server.registerTool(
     'get_interaction_log',
-    'View your interaction history. Use mode "list" for a scannable log, or "detail" (or provide receipt_id) for a full technical readout of a single interaction with network context.',
     {
-      agent_id: z.string().optional().describe('Your ACR agent ID'),
-      agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
-      receipt_id: z.string().optional().describe('Specific receipt ID for detail view'),
-      mode: z.enum(['list', 'detail']).optional().default('list').describe('Display mode: "list" for scannable log, "detail" for full readout'),
-      limit: z.number().min(1).max(200).optional().default(20).describe('Max interactions to show'),
-      target: z.string().optional().describe('Filter by target system (e.g. "mcp:github")'),
-      category: z.string().optional().describe('Filter by category (tool_call, delegation, etc.)'),
-      status: z.string().optional().describe('Filter by status (success, failure, timeout, partial)'),
-      anomaly_only: z.boolean().optional().default(false).describe('Show only anomaly-flagged interactions'),
-      since: z.string().optional().describe('Show interactions after this ISO timestamp'),
+      description: 'View your interaction history. Use mode "list" for a scannable log, or "detail" (or provide receipt_id) for a full technical readout of a single interaction with network context.',
+      inputSchema: {
+        agent_id: z.string().optional().describe('Your ACR agent ID'),
+        agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
+        receipt_id: z.string().optional().describe('Specific receipt ID for detail view'),
+        mode: z.enum(['list', 'detail']).optional().default('list').describe('Display mode: "list" for scannable log, "detail" for full readout'),
+        limit: z.number().min(1).max(200).optional().default(20).describe('Max interactions to show'),
+        target: z.string().optional().describe('Filter by target system (e.g. "mcp:github")'),
+        category: z.string().optional().describe('Filter by category (tool_call, delegation, etc.)'),
+        status: z.string().optional().describe('Filter by status (success, failure, timeout, partial)'),
+        anomaly_only: z.boolean().optional().default(false).describe('Show only anomaly-flagged interactions'),
+        since: z.string().optional().describe('Show interactions after this ISO timestamp'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.7 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ agent_id, agent_name, receipt_id, mode, limit, target, category, status, anomaly_only, since }) => {
       let id: string;
       try {

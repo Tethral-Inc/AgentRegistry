@@ -19,15 +19,18 @@ async function resolveAgentId(nameOrId: string): Promise<string> {
 }
 
 export function getFrictionReportTool(server: McpServer, apiUrl: string) {
-  server.tool(
+  server.registerTool(
     'get_friction_report',
-    "Get a friction analysis report showing what's costing this agent the most time and money. Shows which external systems are the biggest bottlenecks. Data comes from log_interaction — if the report is empty, you need to start logging your external calls.",
     {
-      agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
-      agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
-      scope: z.enum(['session', 'day', 'week']).optional().default('day').describe('Time window for the report'),
+      description: "Get a friction analysis report showing what's costing this agent the most time and money. Shows which external systems are the biggest bottlenecks. Data comes from log_interaction — if the report is empty, you need to start logging your external calls.",
+      inputSchema: {
+        agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
+        agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
+        scope: z.enum(['session', 'day', 'week']).optional().default('day').describe('Time window for the report'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.7 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ agent_id, agent_name, scope }) => {
       let id: string;
       try {

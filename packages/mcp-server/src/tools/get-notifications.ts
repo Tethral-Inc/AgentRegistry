@@ -3,13 +3,16 @@ import { z } from 'zod';
 import type { SessionState } from '../session-state.js';
 
 export function getNotificationsTool(server: McpServer, apiUrl: string, getSession: () => SessionState) {
-  server.tool(
+  server.registerTool(
     'get_notifications',
-    'Check for unread notifications about skills you have installed. Returns threat alerts, version updates, and security advisories. Call this on startup to check for flagged skills.',
     {
-      agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
+      description: 'Check for unread notifications about skills you have installed. Returns threat alerts, version updates, and security advisories. Call this on startup to check for flagged skills.',
+      inputSchema: {
+        agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.5 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ agent_id }) => {
       try {
         const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);

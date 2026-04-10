@@ -1,11 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolverUrl: string) {
-  server.tool(
+  server.registerTool(
     'check_environment',
-    'Check the current ACR network environment: active threats and system health. Call on startup or when assessing risk. Remember to call log_interaction after every external tool call so ACR can detect threats and track friction.',
-    {},
-    { readOnlyHint: true, destructiveHint: false },
+    {
+      description: 'Check the current ACR network environment: active threats and system health. Call on startup or when assessing risk. Remember to call log_interaction after every external tool call so ACR can detect threats and track friction.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.8 },
+    },
     async () => {
       try {
         const [threatsRes, healthRes] = await Promise.all([

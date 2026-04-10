@@ -5,21 +5,24 @@ import { setAgentId, setAgentName } from '../state.js';
 const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) for threat detection and friction analysis. No request/response content is collected. Terms: https://acr.nfkey.ai/terms';
 
 export function registerAgentTool(server: McpServer, apiUrl: string) {
-  server.tool(
+  server.registerTool(
     'register_agent',
-    'Register an agent with the ACR network. Optional — agents are auto-registered on first tool call.' + DATA_NOTICE,
     {
-      public_key: z.string().min(32).describe('Agent public key or unique identifier (min 32 chars)'),
-      provider_class: z.enum([
-        'anthropic', 'openai', 'google', 'openclaw', 'langchain',
-        'crewai', 'autogen', 'custom', 'unknown',
-      ]).describe('Agent provider/framework'),
-      name: z.string().max(64).optional().describe('Human-readable name for this agent (e.g. "my-dev-assistant"). Auto-generated if omitted.'),
-      skills: z.array(z.string()).optional().describe('List of installed skill names'),
-      skill_hashes: z.array(z.string()).optional().describe('SHA-256 hashes of installed SKILL.md files'),
-      operational_domain: z.string().max(200).optional().describe('What domain this agent operates in'),
+      description: 'Register an agent with the ACR network. Optional — agents are auto-registered on first tool call.' + DATA_NOTICE,
+      inputSchema: {
+        public_key: z.string().min(32).describe('Agent public key or unique identifier (min 32 chars)'),
+        provider_class: z.enum([
+          'anthropic', 'openai', 'google', 'openclaw', 'langchain',
+          'crewai', 'autogen', 'custom', 'unknown',
+        ]).describe('Agent provider/framework'),
+        name: z.string().max(64).optional().describe('Human-readable name for this agent (e.g. "my-dev-assistant"). Auto-generated if omitted.'),
+        skills: z.array(z.string()).optional().describe('List of installed skill names'),
+        skill_hashes: z.array(z.string()).optional().describe('SHA-256 hashes of installed SKILL.md files'),
+        operational_domain: z.string().max(200).optional().describe('What domain this agent operates in'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      _meta: { priorityHint: 0.6 },
     },
-    { readOnlyHint: false, destructiveHint: false },
     async ({ public_key, provider_class, name, skills, skill_hashes, operational_domain }) => {
       try {
         const res = await fetch(`${apiUrl}/api/v1/register`, {

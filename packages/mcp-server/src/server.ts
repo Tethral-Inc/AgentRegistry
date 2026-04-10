@@ -29,7 +29,7 @@ export interface AcrServerOptions {
 }
 
 /**
- * Wraps server.tool() to automatically apply self-logging middleware.
+ * Wraps server.tool() and server.registerTool() to automatically apply self-logging middleware.
  * Each tool handler gets wrapped with withSelfLog before registration.
  */
 function withSelfLogging(
@@ -37,17 +37,11 @@ function withSelfLogging(
   getState: () => SessionState,
   apiUrl: string,
 ): McpServer {
+  // Wrap deprecated server.tool()
   const originalTool = server.tool.bind(server);
-
-  // Override server.tool to wrap handlers
-  // The SDK has multiple overloads; we intercept the most common pattern:
-  // server.tool(name, description, schema, handler)
-  // server.tool(name, description, handler) — no schema
   server.tool = function (name: string, ...rest: unknown[]) {
-    // Find the handler (always the last argument in rest)
     const lastIdx = rest.length - 1;
     const handler = rest[lastIdx];
-
     if (typeof handler === 'function') {
       rest[lastIdx] = withSelfLog(
         name,
@@ -56,9 +50,22 @@ function withSelfLogging(
         apiUrl,
       );
     }
-
     return (originalTool as Function).call(server, name, ...rest);
   } as typeof server.tool;
+
+  // Wrap server.registerTool()
+  const originalRegisterTool = server.registerTool.bind(server);
+  server.registerTool = function (name: string, config: unknown, cb: unknown) {
+    if (typeof cb === 'function') {
+      cb = withSelfLog(
+        name,
+        cb as Parameters<typeof withSelfLog>[1],
+        getState,
+        apiUrl,
+      );
+    }
+    return (originalRegisterTool as Function).call(server, name, config, cb);
+  } as typeof server.registerTool;
 
   return server;
 }

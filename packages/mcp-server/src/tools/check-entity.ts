@@ -2,14 +2,17 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: string) {
-  server.tool(
+  server.registerTool(
     'check_entity',
-    'Check if a skill hash, agent, or system is known to the ACR network. Use before installing skills to verify safety. This is a read-only lookup — no data is sent to ACR.',
     {
-      entity_type: z.enum(['skill', 'agent', 'system']).describe('Type of entity to look up'),
-      entity_id: z.string().describe('The entity identifier: skill SHA-256 hash, agent_id, or system_id'),
+      description: 'Check if a skill hash, agent, or system is known to the ACR network. Use before installing skills to verify safety. This is a read-only lookup — no data is sent to ACR.',
+      inputSchema: {
+        entity_type: z.enum(['skill', 'agent', 'system']).describe('Type of entity to look up'),
+        entity_id: z.string().describe('The entity identifier: skill SHA-256 hash, agent_id, or system_id'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.6 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ entity_type, entity_id }) => {
       try {
         let url: string;

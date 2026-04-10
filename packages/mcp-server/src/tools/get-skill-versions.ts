@@ -2,13 +2,16 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolverUrl: string) {
-  server.tool(
+  server.registerTool(
     'get_skill_versions',
-    'Get version history for a skill. Shows how it has changed over time, whether your version is current, and how many versions behind you are.',
     {
-      skill_hash: z.string().describe('The skill hash to look up version history for'),
+      description: 'Get version history for a skill. Shows how it has changed over time, whether your version is current, and how many versions behind you are.',
+      inputSchema: {
+        skill_hash: z.string().describe('The skill hash to look up version history for'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      _meta: { priorityHint: 0.5 },
     },
-    { readOnlyHint: true, destructiveHint: false },
     async ({ skill_hash }) => {
       try {
         // First look up the skill via resolver to get catalog data
