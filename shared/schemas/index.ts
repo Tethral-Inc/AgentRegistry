@@ -56,4 +56,8 @@ export {
   DirectionalPairSchema,
   RetryOverheadSchema,
   PopulationDriftSchema,
+  AttributionCostSide,
+  AttributionMagnitude,
+  AttributionCostPhase,
+  AttributionLabelSchema,
 } from './friction.js';

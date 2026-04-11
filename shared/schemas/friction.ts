@@ -78,3 +78,43 @@ export const PopulationDriftSchema = z.object({
     direction: z.enum(['improving', 'stable', 'degrading']),
   })),
 });
+
+// ── Attribution labels ──
+// Server-computed labels that describe where cost landed on a call. The
+// MCP maps these labels to plain-English sentences via a deterministic
+// template library. The rhetorical invariant: subject of attribution
+// sentences is "your interaction profile" or "your composition" — never
+// "you". The profile is an entity with behaviors; the user isn't at
+// fault for its output.
+
+export const AttributionCostSide = z.enum([
+  'profile_dominant',    // most cost on the agent's profile side
+  'target_dominant',     // most cost on the target's side
+  'balanced',            // roughly 50/50
+  'transmission_gap',    // cost is in the handoff between sides
+  'insufficient_data',   // not enough receipts to label confidently
+]);
+
+export const AttributionMagnitude = z.enum([
+  'low', 'moderate', 'high', 'severe',
+]);
+
+export const AttributionCostPhase = z.enum([
+  'preparation',
+  'processing',
+  'queueing',
+  'handoff',
+  'unknown',
+]);
+
+export const AttributionLabelSchema = z.object({
+  target_system_id: z.string(),
+  cost_side: AttributionCostSide,
+  cost_phase: AttributionCostPhase.optional(),
+  magnitude_category: AttributionMagnitude,
+  /** Server-supplied recommendation text to render verbatim. Never MCP-invented. */
+  recommended_action: z.string().max(240).nullable().optional(),
+  /** Raw proportions for drilldown display. */
+  profile_side_proportion: z.number().min(0).max(1).nullable().optional(),
+  target_side_proportion: z.number().min(0).max(1).nullable().optional(),
+});

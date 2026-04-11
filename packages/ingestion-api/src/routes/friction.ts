@@ -561,6 +561,103 @@ app.get('/agent/:agent_id/friction', async (c) => {
     log.warn({ err }, 'Category breakdown query failed');
   }
 
+  // ── Attribution labels (free tier) ──
+  // First-pass label derivation from existing friction signals. The label
+  // schema is closed (see shared/schemas/friction.ts AttributionLabelSchema)
+  // so the MCP's template library can render every possible label safely.
+  //
+  // Simple rule for v1 (improve later with real decomposition):
+  //   - If retry_count on this target is significant relative to its
+  //     interaction count, attribute to profile (orchestration).
+  //   - If median duration is well above the baseline (when available),
+  //     attribute to target.
+  //   - If neither, attribute as balanced.
+  //   - If fewer than 5 receipts on the target in the period, label as
+  //     insufficient_data so the presenter can display a calibration
+  //     message instead of a shaky attribution.
+  //
+  // Magnitude is derived from the proportion of period wait time this
+  // target consumed.
+  type AttributionLabel = {
+    target_system_id: string;
+    cost_side: 'profile_dominant' | 'target_dominant' | 'balanced' | 'transmission_gap' | 'insufficient_data';
+    cost_phase?: 'preparation' | 'processing' | 'queueing' | 'handoff' | 'unknown';
+    magnitude_category: 'low' | 'moderate' | 'high' | 'severe';
+    recommended_action: string | null;
+    profile_side_proportion: number | null;
+    target_side_proportion: number | null;
+  };
+
+  const attribution: AttributionLabel[] = [];
+  for (const t of visibleTargets) {
+    const targetId = t.target_system_id as string;
+    const interactionCount = t.interaction_count as number;
+    const proportion = (t.proportion_of_total as number) ?? 0;
+
+    // Magnitude: fraction of period wait time consumed by this target
+    let magnitude: AttributionLabel['magnitude_category'];
+    if (proportion >= 0.5) magnitude = 'severe';
+    else if (proportion >= 0.25) magnitude = 'high';
+    else if (proportion >= 0.1) magnitude = 'moderate';
+    else magnitude = 'low';
+
+    // Insufficient data guard
+    if (interactionCount < 5) {
+      attribution.push({
+        target_system_id: targetId,
+        cost_side: 'insufficient_data',
+        magnitude_category: magnitude,
+        recommended_action: null,
+        profile_side_proportion: null,
+        target_side_proportion: null,
+      });
+      continue;
+    }
+
+    // Pull retry overhead for this target if available
+    const retryEntry = retryOverhead?.top_retry_targets?.find(
+      (r) => r.target_system_id === targetId,
+    );
+    const retriesPerCall = retryEntry ? retryEntry.retry_count / interactionCount : 0;
+
+    // vs_baseline: ratio of our median to population baseline
+    const vsBaseline = (t.vs_baseline as number | null | undefined);
+
+    let costSide: AttributionLabel['cost_side'];
+    let profileSideProportion: number | null = null;
+    let targetSideProportion: number | null = null;
+
+    if (retriesPerCall >= 0.3) {
+      // Significant retries: orchestration / profile cost dominates
+      costSide = 'profile_dominant';
+      profileSideProportion = 0.7;
+      targetSideProportion = 0.3;
+    } else if (vsBaseline != null && vsBaseline >= 1.3) {
+      // Target is much slower than population baseline: target dominates
+      costSide = 'target_dominant';
+      profileSideProportion = 0.3;
+      targetSideProportion = 0.7;
+    } else if (vsBaseline != null && vsBaseline <= 0.8 && retriesPerCall >= 0.1) {
+      // Target is faster than baseline but we still see retries: handoff
+      costSide = 'transmission_gap';
+      profileSideProportion = 0.5;
+      targetSideProportion = 0.5;
+    } else {
+      costSide = 'balanced';
+      profileSideProportion = 0.5;
+      targetSideProportion = 0.5;
+    }
+
+    attribution.push({
+      target_system_id: targetId,
+      cost_side: costSide,
+      magnitude_category: magnitude,
+      recommended_action: null, // reserved for Pro tier / Enterprise observer runs
+      profile_side_proportion: profileSideProportion,
+      target_side_proportion: targetSideProportion,
+    });
+  }
+
   return c.json({
     agent_id: agentId,
     name: agentName,
@@ -581,6 +678,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
     by_activity_class: byActivityClass,
     by_target_type: byTargetType,
     by_interaction_purpose: byInteractionPurpose,
+    attribution,
     population_comparison: populationComparison,
     chain_analysis: chainAnalysis,
     directional_pairs: directionalPairs,
