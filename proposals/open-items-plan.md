@@ -1,16 +1,35 @@
-# Open Items Plan
+# Phase 1 Execution Plan: Five Open Items
 
 **Status:** Draft — working document, not approved, not immutable.
-**Scope:** Decisions on the five items left open by `proposals/mcp-compute-boundary.md`.
-**Purpose:** Record what was decided for each open item, with the rationale tied to ACR's stated goals, so the plan can be executed against and revisited.
+**Scope:** Engineering execution of the five open items from `proposals/mcp-compute-boundary.md`.
+**Purpose:** An engineering-excellence execution document: concrete files, acceptance criteria, sequencing, migration strategy, test plans, rollback, risks, and drift-prevention checks. This is the document an engineer picks up and executes against.
 
-This plan maps to Phase 1 of the work. Phase 2 (Claude Code plugin, other host integrations) is noted at the end and scoped separately.
+---
+
+## How to read this document
+
+Each item follows the same structure:
+
+1. **Goal** — what success looks like in one sentence
+2. **Acceptance criteria** — the testable definition of done
+3. **Files affected** — exact paths that will change or be created
+4. **Sequence of changes** — ordered steps, with checkpoints
+5. **Data model / interface contracts** — where applicable
+6. **Migration strategy** — for DB or schema changes, including backwards compatibility
+7. **Test plan** — unit, integration, E2E, linting
+8. **Observability** — how we verify correctness in production
+9. **Rollback** — how to undo safely if something breaks
+10. **Risks** — what could go wrong and how we mitigate
+
+A dedicated **drift prevention** section at the end lists the architectural boundaries this plan must not cross and how we check at review time.
+
+A **next steps** section covers the Claude Code plugin, which is explicitly out of scope for Phase 1 but is listed so the work is tracked and picked up cleanly later.
 
 ---
 
 ## Reference goals
 
-The decisions in this plan were weighed against these goals, pulled from earlier conversation:
+These are pulled from `proposals/mcp-compute-boundary.md` and from conversation. Every decision in this plan is weighed against them. If the plan appears to violate one, that is drift and must be flagged.
 
 - ACR is an **interaction profile registry** — behavioral observation, not analysis or security
 - **Corpus over days/months/years** — stability and long-term comparability matter
@@ -21,316 +40,949 @@ The decisions in this plan were weighed against these goals, pulled from earlier
 - **Progression, not a gate** — free users feel value on day one
 - **Longitudinal patterns gate to paid** — server compute costs money
 - **Privacy: no content, no owner tracking, no surveillance state on the user's machine**
+- **MCP local state limited to session identity + 60s correlation window** — nothing else
 - **Activity classification matters** — kind of work changes friction profile
-- **60s rolling window is passive** — no forward/reverse pattern matching
+
+---
+
+## Execution overview
+
+### Dependencies and parallelization
+
+| Item | Depends on | Blocks |
+|---|---|---|
+| 1. Categories | nothing | Item 4 category surfacing (optional) |
+| 2. Composition capture | nothing | Items 3, 4 |
+| 3. Update cadence | Item 2 (composition_source field) | nothing |
+| 4. Attribution phrasing | Item 2 (two-source storage) indirectly for maturity context | nothing |
+| 5. 60s window | nothing | nothing |
+
+**Genuinely parallel:** Items 1, 2, and 5 can start on day one. Items 3 and 4 should start once Item 2's schema changes are committed.
+
+**Recommended sequence for minimum integration risk:**
+
+```
+Day 1 parallel:   Item 5 (small) ─┬─> Item 1 (medium)
+                  Item 2 (medium) ─┴─> Item 3 (small) ─> Item 4 (medium)
+```
+
+This lets Item 5 and Item 1 land quickly while Item 2 is the critical path for Items 3 and 4.
+
+### Checkpoints
+
+After each item, run the **drift checklist** at the bottom of this document before merging. If any check fails, the PR is held until the drift is resolved.
 
 ---
 
 ## Item 1 — Category schema migration
 
-**Decision: Option 1D. JSONB `categories` column now, with explicit flatten-later path for hot fields.**
+### Goal
 
-### What it looks like
+Receipts can carry rich classification metadata (`activity_class`, `target_type`, `interaction_purpose`, `workflow_role`, `workflow_phase`, `data_shape`, `criticality`) without breaking any existing client, with the taxonomy stored as JSONB so it can evolve without DB migrations.
 
-A single new JSONB column on `interaction_receipts`:
+### Acceptance criteria
 
-```sql
-ALTER TABLE interaction_receipts
-  ADD COLUMN categories JSONB DEFAULT '{}'::jsonb;
-```
+- [ ] Existing clients posting receipts without `categories` continue to succeed with no change in behavior
+- [ ] New receipts can include any subset of the taxonomy fields in a `categories` JSONB object
+- [ ] `/friction` response includes category breakdowns when `categories` is populated on receipts
+- [ ] `/coverage` response includes a category-coverage recommendation ("you haven't set activity_class on any receipts yet — doing so unlocks kind-of-work breakdowns")
+- [ ] Zod schema on receipt ingest accepts `categories` as an optional object with known taxonomy fields. Unknown string values within a field are accepted (evolving taxonomy). Non-string values within a field are rejected.
+- [ ] `log_interaction` MCP tool accepts new optional parameters for each taxonomy field
+- [ ] Both TypeScript and Python SDKs accept category parameters and pass them through
+- [ ] Unit tests pass for Zod schema acceptance + rejection cases
+- [ ] Integration test posts a receipt with categories, queries `/friction`, verifies breakdown
+- [ ] Integration test posts a receipt without categories, queries `/friction`, verifies normal behavior
 
-The column holds the taxonomy from `mcp-compute-boundary.md` constraint #1:
+### Files affected
 
-```json
-{
-  "target_type": "api.llm_provider",
-  "activity_class": "math",
-  "interaction_purpose": "generate",
-  "workflow_role": "intermediate",
-  "workflow_phase": "act",
-  "data_shape": "structured_json",
-  "criticality": "core"
-}
-```
+| Path | Change type |
+|---|---|
+| `migrations/000011_receipt_categories.up.sql` | new |
+| `migrations/000011_receipt_categories.down.sql` | new |
+| `shared/schemas/receipt.ts` | edit — add `categories` field to `InteractionReceiptSchema` |
+| `shared/schemas/index.ts` | edit — export new category types if needed |
+| `packages/ingestion-api/src/routes/receipts.ts` | edit — destructure and store `categories` |
+| `packages/ingestion-api/src/routes/friction.ts` | edit — add category breakdowns in response |
+| `packages/ingestion-api/src/routes/profile.ts` | edit — include category distribution in `profile_state` |
+| `packages/ingestion-api/src/routes/coverage.ts` | edit — add category coverage recommendation rule |
+| `packages/mcp-server/src/tools/log-interaction.ts` | edit — accept category params |
+| `packages/ts-sdk/src/client.ts` | edit — add category params to `logInteraction` |
+| `packages/python-sdk/src/tethral_acr/client.py` | edit — add category params to `log_interaction` |
 
-All fields optional. Receipt validation (Zod) enforces allowed values at ingest time — Postgres doesn't enforce them at the DB level because the taxonomy is expected to evolve.
+### Data model
 
-`interaction_category` stays as a flat column (unchanged from today) for backwards compatibility.
-
-### Why JSONB and not flat columns
-
-- The taxonomy is explicitly expected to evolve ("expandable as patterns emerge")
-- Adding a new category dimension should be a client-side change, not a DB migration
-- Stable ingest schema = "additions fine, renames/removes are migrations" — JSONB makes additions trivial
-
-### Flatten-later path
-
-When a specific category field proves to be a hot query (queried on most dashboard requests), promote it to a flat column as a pure additive migration:
+**Migration file: `000011_receipt_categories.up.sql`**
 
 ```sql
+-- Add categories JSONB column to interaction_receipts
+-- Additive: existing clients unaffected, existing rows default to empty object
+
 ALTER TABLE interaction_receipts
-  ADD COLUMN activity_class VARCHAR(32);
--- backfill from categories JSON
-UPDATE interaction_receipts
-  SET activity_class = categories->>'activity_class'
+  ADD COLUMN categories JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- Expression index on activity_class since it's likely the first hot field.
+-- Other dimensions can get indexes as they prove hot.
+CREATE INDEX CONCURRENTLY idx_receipts_activity_class
+  ON interaction_receipts ((categories->>'activity_class'))
   WHERE categories ? 'activity_class';
-CREATE INDEX idx_receipts_activity_class ON interaction_receipts(activity_class);
+
+-- Index on target_type for target-type rollups
+CREATE INDEX CONCURRENTLY idx_receipts_target_type
+  ON interaction_receipts ((categories->>'target_type'))
+  WHERE categories ? 'target_type';
 ```
 
-Likely first-flatten candidates: `activity_class`, `target_type`. Everything else probably stays in JSONB long-term.
+**Migration file: `000011_receipt_categories.down.sql`**
 
-### Known tradeoffs of JSONB
+```sql
+DROP INDEX IF EXISTS idx_receipts_target_type;
+DROP INDEX IF EXISTS idx_receipts_activity_class;
+ALTER TABLE interaction_receipts DROP COLUMN IF EXISTS categories;
+```
 
-- Queries are slightly more verbose (`categories->>'activity_class'` vs `activity_class`) — hidden in the SQL layer
-- ~10-30% slower queries on individual JSON fields vs indexed flat columns — only matters if a field becomes hot
-- No DB-level value enforcement — handled in Zod validation instead
-- Slightly larger storage per row — small compared to receipt payloads
+**Zod schema addition (`shared/schemas/receipt.ts`):**
 
-None of these block adoption. The one that could matter at scale (query speed on hot fields) has a clear mitigation via the flatten-later path.
+```typescript
+// Known values per dimension — lenient, not strict enum.
+// Unknown string values are accepted (evolving taxonomy support).
+const CategoriesSchema = z.object({
+  target_type: z.string().max(64).optional(),
+  activity_class: z.string().max(32).optional(),
+  interaction_purpose: z.string().max(32).optional(),
+  workflow_role: z.string().max(32).optional(),
+  workflow_phase: z.string().max(32).optional(),
+  data_shape: z.string().max(32).optional(),
+  criticality: z.string().max(32).optional(),
+}).strict().optional();
+```
 
-### Work to do
+`.strict()` rejects unknown keys at the top level (forces schema discipline). Values within each dimension are loose strings with length caps (privacy + sanity).
 
-- Create migration file adding `categories` JSONB column to `interaction_receipts`
-- Update receipt validation schema (`shared/schemas/receipt.ts`) to accept and validate `categories` field with enum options for each dimension
-- Update `log_interaction` MCP tool to accept category parameters and pass them through
-- Update `friction.ts`, `profile.ts`, `coverage.ts`, and other read endpoints to surface category breakdowns where useful
-- Document the taxonomy in a schema reference
+### Migration strategy
+
+- Column is added with `NOT NULL DEFAULT '{}'::jsonb`, so existing rows become `{}` instantly and new rows without the field also become `{}`
+- Indexes use `CREATE INDEX CONCURRENTLY` to avoid table locks
+- Zero downtime
+- If the migration fails partway, the state is harmless — rows either have the column or don't, and absence is handled as `{}` by read queries
+
+### Test plan
+
+- **Unit (shared/schemas/receipt.test.ts):**
+  - Accept receipt with `categories` = `{}`
+  - Accept receipt with `categories` = `{ activity_class: 'math' }`
+  - Accept receipt with `categories` = `{ activity_class: 'legal' }` (unknown value, allowed)
+  - Reject receipt with `categories` = `{ activity_class: 42 }` (non-string)
+  - Reject receipt with `categories` = `{ unknown_key: 'foo' }` (strict rejects unknown top-level keys)
+  - Accept receipt without `categories` field at all
+- **Integration (packages/ingestion-api tests):**
+  - POST `/receipts` with categories → 200 → category visible in row
+  - POST `/receipts` without categories → 200 → row has `{}` in categories
+  - GET `/friction` after posting categorized receipts → response includes category breakdown
+  - GET `/friction` after posting uncategorized receipts → response omits category breakdown gracefully (no error)
+- **E2E:** MCP `log_interaction` with `{ activity_class: 'math' }` → receipt stored → `get_friction_report` shows "math" activity class
+
+### Observability
+
+- Log the percentage of receipts per day that have non-empty `categories` (adoption metric)
+- Log unique values observed per category dimension per day (taxonomy discovery — identifies new values the schema should formally recognize)
+- Alert on Zod validation failures for `categories` above baseline rate (indicates client bug or schema mismatch)
+
+### Rollback
+
+- The column is nullable via default, so reverting the Zod and handler changes is safe at any time
+- The DB column can stay in place indefinitely with no cost — it's empty JSONB on rows that weren't populated
+- If a read endpoint breaks on the category surfacing, revert the read endpoint commit only; the migration stays
+- Full rollback uses the `.down.sql` migration
+
+### Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Zod enforcement too loose → garbage values in DB | Medium | Log unexpected values via observability; tighten enum per-dimension as taxonomy solidifies |
+| Zod enforcement too strict → client rejects valid payloads | Low | Lenient string acceptance + `.strict()` only on top-level keys, values are permissive |
+| Expression indexes slow writes | Low | `WHERE categories ? 'activity_class'` partial index keeps cost bounded to populated rows |
+| JSONB query performance on hot dimension | Medium | Flatten-later path: promote `activity_class` and `target_type` to flat columns when justified |
 
 ---
 
 ## Item 2 — Components-of-attachments capture
 
-**Decision: Option 2D. Ship 2A and 2B bundled. Ship 2C with operator opt-out.**
+### Goal
 
-### 2A — MCP parses at handshake (always on)
+Capture agent composition from two sources — the MCP's direct observation and the agent's self-report — store both with explicit source attribution, compute the delta as a signal, and support operator opt-out of deep (recursive) capture.
 
-The MCP reads what it can statically observe at startup:
+### Acceptance criteria
 
-- `SKILL.md` frontmatter for loaded skills (reusing the scanner's parser)
-- `tools/list` responses from connected MCP servers (standard MCP protocol)
-- Tool annotations from registered tools
+- [ ] On first `register_agent` call of a session, the MCP runs an observation pass: parses `SKILL.md` frontmatter for visible skills and reads `tools/list` from connected MCP servers, and includes this data in the `composition` payload under a clearly-marked source tag
+- [ ] Agents can call `update_composition` with a nested sub-composition structure (e.g., a skill has its own sub-tools)
+- [ ] Server stores both sources for each agent with distinct `composition_source` attribution
+- [ ] Server computes a `composition_delta` — fields where MCP observation and agent self-report disagree — and returns it in `/agent/{id}/profile` response
+- [ ] Operator opt-out via `ACR_DEEP_COMPOSITION=false` environment variable disables recursive capture
+- [ ] Operator opt-out via `disable_deep_composition` MCP tool flips the setting at runtime
+- [ ] When deep capture is off, the MCP sends only top-level composition (no sub-components)
+- [ ] Unit tests cover the parser, the observation payload shape, and the opt-out behavior
+- [ ] Integration test registers an agent with both sources, verifies delta is stored, verifies opt-out honors the flag
 
-This data flows into the `composition` payload on `register_agent` as structured sub-composition per attachment.
+### Files affected
 
-Parsing happens once at MCP startup. No ongoing work.
+| Path | Change type |
+|---|---|
+| `migrations/000012_composition_sources.up.sql` | new |
+| `migrations/000012_composition_sources.down.sql` | new |
+| `shared/schemas/composition.ts` | new (or extend existing in register.ts) |
+| `shared/schemas/register.ts` | edit — accept nested composition |
+| `packages/ingestion-api/src/routes/register.ts` | edit — store composition with source tag |
+| `packages/ingestion-api/src/routes/composition.ts` | edit — same for updates |
+| `packages/ingestion-api/src/routes/profile.ts` | edit — compute and return `composition_delta` |
+| `packages/mcp-server/src/tools/register-agent.ts` | edit — populate observation from parser |
+| `packages/mcp-server/src/tools/update-composition.ts` | edit — accept nested structure |
+| `packages/mcp-server/src/tools/disable-deep-composition.ts` | new |
+| `packages/mcp-server/src/env-detect.ts` | edit — extend to enumerate visible skills and MCPs |
+| `packages/mcp-server/src/session-state.ts` | edit — add `deep_composition: boolean` (session-scoped only) |
+| `packages/mcp-server/src/server.ts` | edit — register new tool, read env var at startup |
 
-### 2B — Agent self-reports via update_composition (always on)
+### Data model
 
-The `update_composition` payload accepts a richer nested structure that includes sub-composition per attachment. When the agent knows about sub-components the MCP couldn't see (dynamically-loaded modules, runtime tool bindings, etc.), it can report them.
+**Migration `000012_composition_sources.up.sql`:**
 
-The server stores both the MCP's observation (2A) and the agent's self-report (2B) and treats any disagreement as a signal, not an error to resolve.
+```sql
+-- Store composition as pairs of (agent_id, source, composition_jsonb)
+-- so we can keep both the MCP's observation and the agent's self-report.
 
-### 2C — Recursive canonical registration (opt-out by default for operators)
+CREATE TABLE agent_composition_sources (
+  agent_id          TEXT NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+  source            TEXT NOT NULL CHECK (source IN ('mcp_observed', 'agent_reported')),
+  composition       JSONB NOT NULL,
+  composition_hash  TEXT NOT NULL,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (agent_id, source)
+);
 
-Each MCP server, skill, and composable tool can be registered as its own entity in ACR with its own `composition_hash` and canonical identifier. Agents reference them by ID when declaring composition.
+CREATE INDEX idx_composition_sources_updated_at
+  ON agent_composition_sources(updated_at);
+```
 
-**Operator opt-out mechanism:**
+**Existing `agents.composition` column** remains as the "canonical" composition the server uses for classification; it's populated by merging both sources, with agent self-report taking precedence when both sources agree on a field and the MCP observation used as fallback.
 
-The operator (the person running the agent) controls how deeply ACR captures their agent's composition. Default is "deep capture on." Opt-out mechanisms:
+**Nested composition payload shape (shared/schemas/composition.ts):**
 
-- Environment variable: `ACR_DEEP_COMPOSITION=false` — disables 2C-level recursive capture for the entire session
-- MCP tool: `disable_deep_composition` — flips the setting at runtime, persists until re-enabled
-- Per-composition flag in `register_agent` / `update_composition` payload: `"deep_capture": false`
+```typescript
+interface ComponentBase {
+  id: string;           // stable identifier (skill hash, MCP name, tool name)
+  name?: string;
+  version?: string;
+}
 
-When opted out, the MCP still performs 2A and 2B (observation and self-report at the top level) but does not traverse into sub-components. Composition is captured at one level deep, not recursive.
+interface SkillComponent extends ComponentBase {
+  type: 'skill';
+  sub_components?: ComponentBase[];  // sub-scripts, sub-tools
+}
 
-This is a privacy control for operators who don't want ACR to dig into the internals of their agent's attachments. It is not a vendor control — vendors cannot opt out of having their packages referenced in composition records.
+interface McpComponent extends ComponentBase {
+  type: 'mcp';
+  tools?: ComponentBase[];  // tools exposed by this MCP
+}
 
-### Work to do
+interface ApiComponent extends ComponentBase {
+  type: 'api';
+}
 
-- Extend the `composition` payload schema to accept nested sub-composition per attachment
-- Add MCP-side parser that populates sub-composition from `SKILL.md` frontmatter and `tools/list` responses at startup
-- Add operator opt-out: env var, MCP tool, payload flag
-- Add server-side handling that stores both MCP observation and agent self-report and computes the delta as a derived finding
-- Document the composition schema
+interface ToolComponent extends ComponentBase {
+  type: 'tool';
+}
 
-### Deferred
+interface CompositionPayload {
+  skills?: SkillComponent[];
+  mcps?: McpComponent[];
+  apis?: ApiComponent[];
+  tools?: ToolComponent[];
+  // Flat legacy fields preserved for backwards compat
+  skill_hashes?: string[];
+}
+```
 
-Formal vendor-side canonical registration (a skill author saying "register my package in ACR's network as a composable entity with a stable identifier") is deferred. When a paying customer wants it, we revisit.
+**Delta contract (returned from `/profile`):**
+
+```typescript
+interface CompositionDelta {
+  mcp_only: string[];       // component ids present in MCP observation but not agent self-report
+  agent_only: string[];     // component ids present in agent self-report but not MCP observation
+  disagreements: Array<{    // same id, different attribute values
+    id: string;
+    field: string;
+    mcp_value: unknown;
+    agent_value: unknown;
+  }>;
+  last_observed_at: string;
+  last_reported_at: string;
+}
+```
+
+### Sequence of changes
+
+1. Write and run migration `000012_composition_sources`
+2. Update shared schemas to accept nested composition structure (backwards compatible — flat fields still work)
+3. Update `register.ts` and `composition.ts` routes to accept and store into `agent_composition_sources` with explicit source tag. Preserve the merged canonical write to `agents.composition`
+4. Update `profile.ts` to compute and return `composition_delta` when both sources exist
+5. Extend `env-detect.ts` to enumerate visible skills and MCPs (using `parseFrontmatter` from `shared/parsers/frontmatter.ts`)
+6. Update `register-agent.ts` to pass the observation payload through at registration
+7. Update `update-composition.ts` to accept nested structure
+8. Add `session-state.ts` field `deep_composition` (boolean, default true, read from `ACR_DEEP_COMPOSITION` env var at session start)
+9. Create `disable-deep-composition.ts` tool that flips the session flag
+10. Wire the session flag into both observation and payload: if deep capture is off, MCP sends only top-level components, never sub-components
+11. Register the new tool in `server.ts`
+
+### Migration strategy
+
+- New table is additive, doesn't touch existing rows
+- Existing `agents.composition` field continues to work for clients that don't upgrade
+- Gradual rollout: server accepts nested composition but falls back to flat if not provided
+
+### Test plan
+
+- **Unit (shared/parsers/frontmatter.test.ts):** verify frontmatter parser handles valid, malformed, and missing frontmatter without crashing
+- **Unit (packages/mcp-server/src/env-detect.test.ts):** enumerator returns correct component list from a test fixture of SKILL.md files
+- **Unit (packages/ingestion-api/src/routes/register.test.ts):** composition with nested structure is stored correctly, both sources are tracked
+- **Unit (profile delta):** given two composition sources, compute correct delta
+- **Integration:** register with both sources, verify row in `agent_composition_sources` for each, verify `/profile` returns delta
+- **Integration (opt-out):** set `ACR_DEEP_COMPOSITION=false`, register → verify no sub-components in stored observation
+- **Integration (runtime opt-out):** call `disable_deep_composition`, then `update_composition` with sub-components → verify sub-components dropped before send
+- **Linting test:** grep for sub-component emission in MCP code and verify all paths check the `deep_composition` flag
+
+### Observability
+
+- Log count of agents with both sources vs one source (adoption metric)
+- Log count of agents with non-empty delta (inconsistency metric)
+- Log opt-out usage (how many sessions have `deep_composition=false`)
+
+### Rollback
+
+- New table and new routes can be dropped or reverted without affecting existing agents
+- Existing `agents.composition` continues to serve as the canonical composition
+- The MCP changes are backwards compatible: old registered agents still work
+
+### Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| `parseFrontmatter` throws on malformed SKILL.md → MCP crash | Medium | Wrap in try/catch, log errors, fall back to top-level-only composition |
+| MCP can't import from `shared/parsers/` due to package structure | Low | Verify import path works before starting; add as workspace dep if needed |
+| Opt-out flag missed in some emission path → privacy leak | High if not tested | Linting test greps all composition emission paths, asserts `deep_composition` is checked |
+| Performance hit from parsing dozens of SKILL.md at handshake | Low | Parser is cached after first read; only runs once per session |
 
 ---
 
-## Item 3 — Composition update cadence
+## Item 3 — Update cadence
 
-**Decision: Option 3G + opportunistic check on self-log (skill-instruction-based, portable).**
+### Goal
 
-**Claude Code plugin for compulsory behavior is deferred to Phase 2.**
+Near-compulsory composition re-registration via skill instructions plus a server-side staleness flag, without introducing persistent MCP state beyond session identity.
 
-### How it works in Phase 1
+### Critical correction from prior draft
 
-1. **Startup registration** — MCP registers composition on first connection, same as today.
-2. **Agent-explicit updates** — the ACR skill's instructions tell the agent to call `update_composition` at the start of every session and whenever it becomes aware of a new tool it's about to use. The skill is loaded in-context, so the instructions are always available.
-3. **Opportunistic check on self-log** — the existing `self-log` middleware runs on every tool call. Every few tool calls, it checks whether the agent has reported a composition update recently. If not, the response to the current tool call includes a small note asking the agent to re-declare. This is not polling — it's opportunistic, piggybacking on activity already happening, and only fires when there's been a gap.
+An earlier draft of this plan said the MCP would hold `lastComposedHash` as additional session state and check it on every self-log. **This was drift** — it violates `mcp-compute-boundary.md` constraint #3, which limits MCP local state to session identity and the 60-second correlation window.
 
-### Why this is "near-compulsory"
+**Corrected approach:** the server, not the MCP, tracks staleness. When the agent hits any receipt endpoint, the server checks when it last received an `update_composition` for that agent. If older than the staleness threshold, the receipt response includes `composition_stale: true`. The MCP reads this flag and renders a prompt in the text response telling the agent to re-declare. The MCP holds zero new state.
 
-In practice, if the agent reads its ACR skill instructions (which it does on every session because the skill sits in context), compliance with the "call `update_composition` at session start and on new-tool events" rule is high. The opportunistic check catches agents that miss the explicit call.
+### Acceptance criteria
 
-The remaining gap — an agent installs a skill and uses it before the MCP has received an explicit composition update — is typically a few tool calls wide, not minutes. The server can still classify those first few calls correctly once the update arrives, because receipts carry `composition_hash` at emit time and the server can reconcile.
+- [ ] ACR skill instructions tell the agent to call `update_composition` at session start and whenever it becomes aware of a new tool it's about to use
+- [ ] Server computes `composition_stale: boolean` on receipt responses by comparing `now() - last_composition_update_at` to a threshold (30 minutes default)
+- [ ] Threshold is configurable via environment variable `ACR_COMPOSITION_STALE_THRESHOLD_MINUTES`
+- [ ] MCP renders a prompt in tool response text when `composition_stale: true` is present in the receipt response
+- [ ] No new MCP local state is added beyond session identity + 60s window
+- [ ] Integration test: agent registers, waits past threshold, posts receipt → response has `composition_stale: true`
+- [ ] Integration test: agent registers, immediately posts receipt → response has `composition_stale: false`
 
-### Why no polling
+### Files affected
 
-- Background polling violates the "no background work" part of the compute boundary
-- Polling at 5-10 second intervals means 5,000-17,000 polls per day per agent — real cost
-- Filesystem polling (`.claude/settings.json`) is host-specific and brittle
-- Polling would require local state beyond the 60s window, which the compute boundary forbids
+| Path | Change type |
+|---|---|
+| `packages/openclaw-skill/SKILL.md` | edit — add explicit update instructions |
+| `packages/ingestion-api/src/routes/receipts.ts` | edit — add staleness computation and flag in response |
+| `shared/types/receipt.ts` | edit — add `composition_stale` to receipt response type |
+| `packages/mcp-server/src/tools/log-interaction.ts` | edit — render staleness prompt when flag is true |
+| `packages/mcp-server/src/middleware/self-log.ts` | edit — consume staleness flag if present, optionally log |
 
-### Work to do
+### Data model / interfaces
 
-- Update the ACR skill (`packages/openclaw-skill/SKILL.md`) to include explicit instructions: "call `update_composition` at session start and when you become aware of a new tool you're about to use"
-- Update `mcp-server/src/middleware/self-log.ts` to track "time since last observed composition update" and include a gentle note in tool responses when the gap is unusual
-- The MCP holds one additional piece of functional state: `lastComposedHash` (the composition_hash it last sent to the server). This is in the same class as `agent_id` — not rolling data, but functional state for the MCP's relationship to the server.
+**Extension to receipt response shape:**
 
-### Phase 2 (deferred, scoped separately)
+```typescript
+interface ReceiptAcceptedResponse {
+  accepted: number;
+  receipt_ids: string[];
+  threat_warnings?: ThreatWarning[];
+  composition_stale?: boolean;  // NEW
+  composition_stale_since_minutes?: number;  // NEW, diagnostic
+}
+```
 
-A Claude Code plugin that watches `.claude/settings.json` and `.claude/skills/` for file changes and fires `update_composition` directly on change. This gives truly compulsory update-on-install for Claude Code users, zero-latency.
+**Server-side staleness query (receipts.ts):**
 
-Plus similar host-specific plugins for Cursor, Continue, and other MCP hosts as they become priorities.
+```typescript
+const staleness = await queryOne<{ age_min: number }>(
+  `SELECT EXTRACT(EPOCH FROM (now() - updated_at)) / 60 AS age_min
+   FROM agents WHERE agent_id = $1`,
+  [agentId],
+);
+const thresholdMin = Number(process.env.ACR_COMPOSITION_STALE_THRESHOLD_MINUTES ?? 30);
+const isStale = (staleness?.age_min ?? 0) > thresholdMin;
+```
 
-These ship as separate packages from `@tethral/acr-mcp`. They talk to ACR's server directly, not to the MCP. The MCP never knows the plugin exists — both talk to the server independently.
+The `agents.updated_at` field is set whenever `register_agent` or `update_composition` is called (it already is in the current code).
+
+**MCP rendering:**
+
+```typescript
+// In log-interaction.ts response formatter
+if (data.composition_stale) {
+  text += `\n\n[ACR] Your composition hasn't been updated in over ${Math.round(data.composition_stale_since_minutes ?? 0)} minutes. If you've loaded new tools or skills, call update_composition to keep your interaction profile accurate.`;
+}
+```
+
+Pure text formatting. No state. No computation. Compliant with compute-boundary.
+
+### Sequence of changes
+
+1. Update `SKILL.md` instructions with explicit "call `update_composition` at session start and on new-tool events" guidance
+2. Update `shared/types/receipt.ts` with the new optional response fields
+3. Update `receipts.ts` handler to query `agents.updated_at`, compare to threshold, set flag in response
+4. Update `log-interaction.ts` MCP tool to render the prompt when flag is set
+5. Update `self-log.ts` to also check the flag (for observability, not presentation — self-log doesn't return text to the agent)
+
+### Test plan
+
+- **Unit:** staleness computation math (given `updated_at` and threshold, return correct flag)
+- **Unit:** MCP rendering: given receipt response with and without flag, verify text output
+- **Integration:** fresh agent, immediate receipt → flag false
+- **Integration:** agent + wait past threshold (test override threshold to 1 second) → flag true
+- **Integration:** agent calls `update_composition` → subsequent receipt has flag false
+
+### Observability
+
+- Log rate of `composition_stale: true` flags set (indicates how often agents drift)
+- Log distribution of staleness ages (informs future threshold tuning)
+
+### Rollback
+
+- The new fields in receipt response are optional → old MCP clients ignore them gracefully
+- Server changes can be reverted independently of MCP changes
+- No data migration required
+
+### Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Threshold too low → noisy prompts | Medium | Default 30 min, env var for tuning, observability-driven adjustment |
+| Threshold too high → agents drift without prompt | Medium | Same — adjustable via env var |
+| Agent ignores the prompt | Medium | This is the accepted tradeoff of "near-compulsory" vs compulsory. The Claude Code plugin in Phase 2 is the fix for truly compulsory. |
 
 ---
 
 ## Item 4 — Attribution phrasing
 
-**Decision: Option 4D — explanatory default, neutral on drilldown, actionable only when server-labeled. Subject is always "your interaction profile" or "your composition," never "you."**
+### Goal
 
-### The rhetorical invariant
+Operator-facing text that explains where cost came from using a rhetorical invariant that avoids blame, with every presenter tool response prefixed by the agent's current profile maturity so operators know how much to trust the findings. All attribution labels are computed server-side; the MCP renders from a deterministic template library.
 
-Attribution sentences never blame the operator. The subject of the sentence is always the profile or the composition, which is a *thing that behaves*, not the user who is responsible. This is load-bearing for how operators receive findings.
+### Acceptance criteria
 
-**Examples:**
+- [ ] Server returns structured `attribution` labels (not raw numbers) from `/friction` when sufficient data is present
+- [ ] MCP has a template library at `packages/mcp-server/src/presenter/attribution-templates.ts` mapping labels to English sentences
+- [ ] All template strings use "your interaction profile" or "your composition" as the subject of attribution sentences. Never "you", "your side", "your fault"
+- [ ] A linting test verifies no forbidden substrings exist in the template library
+- [ ] Every presenter tool response includes a maturity prefix computed from `/profile` (warmup / calibrating / stable_candidate)
+- [ ] The `get_friction_report` tool uses the template library and maturity prefix in its output
+- [ ] Actionable recommendations only appear when the server-supplied `attribution.recommended_action` field is non-null
+- [ ] The MCP never invents an attribution label, a magnitude, or a recommendation
 
-- ❌ "Most of the time on this call was spent on your side."
-- ❌ "Your orchestration caused the latency."
-- ❌ "You are slow on this target."
-- ✅ "Most of the latency on this call came from your interaction profile — specifically how your current composition handled the preparation step."
-- ✅ "Your composition accounted for most of the wait time on this call. The target itself responded in under 300ms."
-- ✅ "In your current composition, this interaction tends to spend most of its time in the orchestration layer."
+### Files affected
 
-The profile and composition are described as entities with behaviors, not as extensions of the operator. This is descriptive, not accusatory.
+| Path | Change type |
+|---|---|
+| `shared/schemas/friction.ts` | edit — add `AttributionLabel` schema |
+| `packages/ingestion-api/src/routes/friction.ts` | edit — compute and return attribution labels per top target |
+| `packages/mcp-server/src/presenter/attribution-templates.ts` | new |
+| `packages/mcp-server/src/presenter/maturity-prefix.ts` | new |
+| `packages/mcp-server/src/tools/get-friction-report.ts` | edit — consume templates, add maturity prefix |
+| `packages/mcp-server/test/presenter.lint.test.ts` | new (linting test) |
 
-### Three layers of presentation
+### Data model / interfaces
 
-1. **Explanatory (default)** — the server returns attribution data with a label (`sender_dominant`, `receiver_dominant`, `transmission_gap`, etc.) and the MCP maps the label to an English template that names where the cost came from. Default for all presenter tools.
+**AttributionLabel (shared contract):**
 
-2. **Neutral numbers (drilldown)** — when the operator asks for detail or when the presenter is rendering a dense summary, show the decomposition as numbers: "profile side: 72%, target side: 28%." This is available on request, not the default.
+```typescript
+export const AttributionCostSide = z.enum([
+  'profile_dominant',    // most cost on the agent's profile side
+  'target_dominant',     // most cost on the target's side
+  'balanced',            // roughly 50/50
+  'transmission_gap',    // cost is in the handoff between sides
+  'insufficient_data',   // not enough receipts to label
+]);
 
-3. **Actionable (server-labeled only)** — when the server attaches a specific next-step recommendation (e.g., from Friction Observer's `intervention_guidance.json`), the MCP surfaces it verbatim as "the network suggests: {server recommendation}." The MCP never invents recommendations. If the server didn't label one, there isn't one.
+export const AttributionCostPhase = z.enum([
+  'preparation',
+  'processing',
+  'queueing',
+  'handoff',
+  'unknown',
+]).optional();
 
-### Implementation
+export const AttributionMagnitude = z.enum([
+  'low', 'moderate', 'high', 'severe'
+]);
 
-Presenter tools use a small deterministic template library in the MCP. The library maps server labels to English sentences that follow the rhetorical invariant. This is a lookup, not business logic — the server decides the label, the MCP renders the template.
-
-Example template entries:
-
+export const AttributionLabelSchema = z.object({
+  target_system_id: z.string(),
+  cost_side: AttributionCostSide,
+  cost_phase: AttributionCostPhase,
+  magnitude_category: AttributionMagnitude,
+  recommended_action: z.string().max(240).nullable(),
+  // Raw numbers available for drilldown
+  profile_side_proportion: z.number().min(0).max(1).nullable(),
+  target_side_proportion: z.number().min(0).max(1).nullable(),
+});
 ```
-sender_dominant_latency:
-  "Most of the latency on {this_call} came from your interaction profile."
-receiver_dominant_latency:
-  "Most of the wait time on {this_call} was spent waiting on {target}."
-transmission_gap:
-  "{target} was fast to respond, but the time between sending and the response arriving took the bulk of this call."
+
+The server adds an `attribution: AttributionLabel[]` array to the `/friction` response, one entry per top target.
+
+**Template library shape:**
+
+```typescript
+// presenter/attribution-templates.ts
+interface TemplateContext {
+  target: string;
+  cost_side: AttributionCostSide;
+  cost_phase?: AttributionCostPhase;
+  magnitude_category: AttributionMagnitude;
+  profile_side_proportion?: number | null;
+  target_side_proportion?: number | null;
+}
+
+// Returns plain English sentence following the rhetorical invariant.
+// Pure function. No side effects. No LLM. No inference.
+export function renderAttribution(ctx: TemplateContext): string;
 ```
 
-All templates use "your interaction profile" or "your composition" as subjects, never "you."
+**Example templates (required to pass the lint test):**
 
-### Calibration surfacing
+```typescript
+const TEMPLATES: Record<AttributionCostSide, Record<AttributionMagnitude, string>> = {
+  profile_dominant: {
+    low:     "Your interaction profile accounted for slightly more of the time on calls to {target}.",
+    moderate:"Your interaction profile accounted for most of the time on calls to {target}.",
+    high:    "Your interaction profile accounted for the majority of the time on calls to {target} — significantly more than {target} itself.",
+    severe:  "Your interaction profile accounted for almost all of the time on calls to {target}. {target} itself was fast.",
+  },
+  target_dominant: {
+    low:     "{target} accounted for slightly more of the time on these calls than your interaction profile did.",
+    moderate:"{target} accounted for most of the time on these calls. Your interaction profile was quick.",
+    high:    "{target} accounted for the majority of the time on these calls — your interaction profile was quick in comparison.",
+    severe:  "{target} accounted for almost all of the time on these calls. Your interaction profile handled its part quickly.",
+  },
+  // ... balanced, transmission_gap, insufficient_data
+};
+```
 
-Every presenter tool output leads with (or trails with) the agent's current `maturity_state` from the `/profile` endpoint:
+### Maturity prefix
 
-- **warmup:** "Your profile is still warming up (N receipts across M targets). These findings will firm up once you reach ~50 receipts and 3 targets."
-- **calibrating:** "Your profile is calibrating (N receipts, M targets). Findings below are early signals — take them with appropriate uncertainty."
-- **stable_candidate:** "Your profile is stable (N receipts across M targets, D days active). Findings below are based on enough data to be reliable."
+**presenter/maturity-prefix.ts:**
 
-This is the "progression, not a gate" pattern surfaced in every interaction with a presenter tool. Users see the meter fill up and understand when findings become trustworthy.
+```typescript
+export function renderMaturityPrefix(profile: ProfileResponse): string {
+  const s = profile.profile_state;
+  switch (s.maturity_state) {
+    case 'warmup':
+      return `Your profile is still warming up — ${s.total_receipts} receipts across ${s.distinct_targets} targets. Findings below will firm up once you reach roughly 50 receipts and 3 targets.\n\n`;
+    case 'calibrating':
+      return `Your profile is calibrating — ${s.total_receipts} receipts across ${s.distinct_targets} targets over ${s.days_active} day(s). These are early signals; take them with appropriate uncertainty.\n\n`;
+    case 'stable_candidate':
+      return `Your profile is stable — ${s.total_receipts} receipts across ${s.distinct_targets} targets over ${s.days_active} day(s). Findings below are based on enough data to be reliable.\n\n`;
+  }
+}
+```
 
-### Work to do
+### Linting test
 
-- Build the attribution template library in the MCP (`packages/mcp-server/src/presenter/attribution-templates.ts`)
-- Wire presenter tools to fetch `/profile` for `maturity_state` and include it in every response
-- Add server endpoints that return attribution labels (not just numbers) — this may require extending friction.ts response shape
-- Document the invariant ("subject is always profile, never user") in the presenter style guide
+**packages/mcp-server/test/presenter.lint.test.ts:**
 
----
+```typescript
+import { TEMPLATES } from '../src/presenter/attribution-templates';
 
-## Item 5 — 60s window storage medium
+const FORBIDDEN_SUBSTRINGS = [
+  /\byou are\b/i,
+  /\byour fault\b/i,
+  /\byour side\b/i,
+  /\byou caused\b/i,
+  /\byou made\b/i,
+  /\byou were\b/i,
+];
 
-**Decision: Option 5A / 5D — in-process `Map`, no persistence. Positioned as a privacy and lightweight-use design choice.**
+test('no template uses forbidden attribution phrasing', () => {
+  for (const [side, magnitudes] of Object.entries(TEMPLATES)) {
+    for (const [mag, text] of Object.entries(magnitudes)) {
+      for (const forbidden of FORBIDDEN_SUBSTRINGS) {
+        expect(text).not.toMatch(forbidden);
+      }
+    }
+  }
+});
 
-### What the MCP holds
+test('every template mentions "interaction profile" or "composition"', () => {
+  for (const magnitudes of Object.values(TEMPLATES)) {
+    for (const text of Object.values(magnitudes)) {
+      const mentionsProfile = /interaction profile|composition/i.test(text);
+      // Exception: target_dominant templates talk about the target, not the profile
+      // Adjust test accordingly or split templates by side.
+      expect(mentionsProfile || text.includes('target')).toBe(true);
+    }
+  }
+});
+```
 
-A JavaScript `Map` keyed by `chain_id`, entries being the recent receipts' correlation keys: `receipt_id`, `target_system_id`, `created_at_ms`. Entries are evicted via timestamp check whenever a new entry is added — no background sweeper, no setInterval.
+### Sequence of changes
 
-Window length: ~60 seconds.
+1. Define `AttributionLabel` schema in shared
+2. Extend friction handler to compute attribution labels per top target (even if initial logic is simple: compare duration to chain overhead)
+3. Create presenter directory in MCP with `attribution-templates.ts` and `maturity-prefix.ts`
+4. Add linting test for templates
+5. Update `get-friction-report.ts` to consume templates and maturity prefix
+6. Update other presenter tools (`get-failure-registry`, `get-healthy-corridors`, etc.) to use `renderMaturityPrefix` — can be done incrementally
 
-### What the MCP does NOT do with the window
+### Migration strategy
 
-- No pattern matching across it (forward or reverse)
-- No aggregation, counting, or ranking
-- No prediction
-- No analysis
+- Attribution labels are added to friction response, never removed → backwards compatible
+- MCP presenter changes only affect text formatting → safe to rollback independently
 
-Passive buffer only. The MCP uses it to tag new receipts with explicit links to recent ones (`preceded_by`, `chain_id`) at ingest time. Server does all correlation beyond that.
+### Test plan
 
-### Privacy and lightweight-use framing
+- **Unit:** template library passes linting test (no forbidden substrings)
+- **Unit:** `renderAttribution` returns correct sentence for every (cost_side, magnitude) combination
+- **Unit:** `renderMaturityPrefix` returns correct prefix for each maturity state
+- **Integration:** friction endpoint returns attribution labels for known test receipts
+- **E2E:** MCP `get_friction_report` produces output that starts with maturity prefix and includes attribution sentences following the invariant
 
-This is positioned to users as a deliberate design choice, not a limitation:
+### Observability
 
-> ACR keeps a lightweight in-process correlation window of ~60 seconds and nothing more. Users get useful interaction data without overreach, without persistent surveillance state on their machine, and without ACR interfering with agent behavior. On process exit the window evaporates; the server always holds the authoritative long-term record.
+- Log when a server response omits attribution (`insufficient_data`) to track when we're not yet useful to a user
+- Log when templates receive an unknown label (safety net — shouldn't happen because it's a closed enum, but catch drift)
 
-This is the story in all user-facing docs, marketplace listings, and the privacy policy.
+### Rollback
 
-### Honest tradeoff
+- Template library is static data → revert the commit
+- Server-side attribution computation is additive → revert the friction handler change
+- Maturity prefix is additive on presenter tools → revert per tool
 
-The 60-second window means the MCP cannot tag causal links between interactions spaced more than 60 seconds apart. Long-range downstream effects have to be reconstructed by the server from receipts (using `chain_id` if the agent provided one, or post-hoc pattern analysis).
+### Risks
 
-This is acceptable because long-range correlation is the server's job by design. The server has every receipt and can run any analysis over any window. The MCP's role is to capture at ingest and link only what's right in front of it — anything else lives on the server.
-
-Presenter tools that surface findings about downstream effects should be honest about this: findings about delays greater than a minute come from the server's view of receipts, not from the MCP's local observation.
-
-### Work to do
-
-- Implement the in-process `Map` in `packages/mcp-server/src/middleware/correlation-window.ts` (new file)
-- Wire the `self-log` and `log_interaction` paths to check the window for recent receipts when assigning `preceded_by`
-- Add presenter-side honesty: findings about long-range downstream effects are labeled as "network view from receipts"
-- Document the privacy framing in README and the privacy policy
-
----
-
-## Summary of work for Phase 1
-
-| Item | Workstream | Effort |
+| Risk | Likelihood | Mitigation |
 |---|---|---|
-| **1. Categories** | Schema migration, Zod update, MCP `log_interaction` changes, read endpoint updates | Medium |
-| **2. Components capture** | Composition payload schema, MCP parser, operator opt-out mechanism, server-side delta finding | Medium-large |
-| **3. Update cadence** | Skill instructions update, `self-log` opportunistic check | Small |
-| **4. Attribution phrasing** | Template library, presenter wiring, maturity state surfacing, server endpoint extension | Medium |
-| **5. 60s window** | New middleware file, wire into log paths, privacy framing in docs | Small |
-
-Total: one coherent phase. No blockers between items. Work in all five items can proceed in parallel because they touch different files and different layers.
+| Server attribution is wrong in edge cases | Medium | Start with simple rules, refine based on observation. `insufficient_data` is always a safe default |
+| Template library has a forbidden substring | Low | Linting test catches this at build time |
+| Presenter tools don't surface maturity → operator can't calibrate trust | Medium | Dedicated check in PR review: every presenter tool must use `renderMaturityPrefix` |
 
 ---
 
-## Phase 2 (deferred, scoped separately)
+## Item 5 — 60-second correlation window
 
-- **Claude Code plugin** for compulsory update-on-install. Watches `.claude/settings.json` and `.claude/skills/` for file changes, fires `update_composition` directly to ACR's server API when detected. Separate package from `@tethral/acr-mcp`. Installs alongside Claude Code, not alongside the MCP. No changes to MCP required.
-- **Similar host-specific plugins** for Cursor, Continue, and other MCP hosts as they become priorities.
-- **Vendor-side canonical recursive registration (2C opt-in for vendors)** — lets MCP/skill authors register their packages as first-class composable entities with stable identifiers. Defer until a paying customer wants it.
-- **Flatten hot category fields** — promote `activity_class` and `target_type` (and any other category field that proves to be a hot query) from JSONB to indexed flat columns as a pure additive migration.
+### Goal
+
+The MCP keeps a lightweight in-process correlation buffer of ~60 seconds of recent receipt keys so it can tag linked receipts at ingest time, framed explicitly as a privacy + lightweight-use design choice. No persistence, no pattern matching.
+
+### Acceptance criteria
+
+- [ ] `packages/mcp-server/src/middleware/correlation-window.ts` exists and exports a function to record and query correlation keys
+- [ ] On receipt insert, the window evicts entries older than 60 seconds (eager eviction on insert, no timers)
+- [ ] `log_interaction` consults the window for a recent receipt on the same `chain_id` or target and sets `preceded_by` when appropriate
+- [ ] Window is in-process only (lost on restart) and this is documented
+- [ ] Unit tests verify eviction and lookup behavior
+- [ ] Integration test: two interactions <60s apart with the same chain_id → second receipt has `preceded_by` set
+- [ ] Integration test: two interactions >60s apart → second receipt does not have `preceded_by` set from the MCP
+- [ ] `README.md`, `packages/mcp-server/README.md`, and `public/terms.html` include the privacy + lightweight framing
+
+### Files affected
+
+| Path | Change type |
+|---|---|
+| `packages/mcp-server/src/middleware/correlation-window.ts` | new |
+| `packages/mcp-server/src/tools/log-interaction.ts` | edit — consult window, set `preceded_by` |
+| `packages/mcp-server/src/middleware/self-log.ts` | edit — also record into window (fire-and-forget) |
+| `packages/mcp-server/src/server.ts` | edit — instantiate single window per session |
+| `packages/mcp-server/README.md` | edit — privacy framing |
+| `README.md` | edit — privacy framing |
+| `public/terms.html` | edit — updated policy text |
+| `packages/mcp-server/test/correlation-window.test.ts` | new |
+
+### Data model / interfaces
+
+```typescript
+// correlation-window.ts
+interface CorrelationEntry {
+  receipt_id: string;
+  chain_id: string | null;
+  target_system_id: string;
+  created_at_ms: number;
+}
+
+export class CorrelationWindow {
+  private entries: Map<string, CorrelationEntry> = new Map();
+  private readonly windowMs: number = 60_000;
+
+  record(entry: CorrelationEntry): void {
+    this.evictExpired();
+    this.entries.set(entry.receipt_id, entry);
+  }
+
+  findPrecededBy(currentChainId: string | null, currentTarget: string): string | null {
+    this.evictExpired();
+    // Prefer same chain_id match
+    if (currentChainId) {
+      for (const [id, entry] of this.entries) {
+        if (entry.chain_id === currentChainId && id !== /* self */ '') {
+          return entry.target_system_id;
+        }
+      }
+    }
+    return null;
+  }
+
+  private evictExpired(): void {
+    const cutoff = Date.now() - this.windowMs;
+    for (const [id, entry] of this.entries) {
+      if (entry.created_at_ms < cutoff) {
+        this.entries.delete(id);
+      }
+    }
+  }
+
+  // For tests + observability
+  size(): number { return this.entries.size; }
+}
+```
+
+**Important:** the window is instantiated once per session in `server.ts` and passed into `log-interaction` and `self-log` via closures or a simple singleton. No global state. No disk.
+
+### Sequence of changes
+
+1. Create `correlation-window.ts` with unit tests
+2. Wire into `log-interaction.ts` to query window on receipt send and set `preceded_by`
+3. Wire into `self-log.ts` to record into window on fire-and-forget
+4. Update docs with privacy framing
+5. Update `public/terms.html` privacy policy text
+
+### Test plan
+
+- **Unit:** insert 3 entries, evict one by setting its timestamp > 60s ago → size is 2
+- **Unit:** insert, lookup by chain_id → returns matching entry
+- **Unit:** lookup when no match → returns null
+- **Unit:** lookup across >60s gap → returns null (evicted)
+- **Integration:** two `log_interaction` calls <60s apart with same chain_id → second receipt has `preceded_by: <first_target>`
+- **Integration:** restart process between calls → second call has no `preceded_by` (window is empty, documented behavior)
+
+### Observability
+
+- Log window size periodically (indicates typical workflow burst sizes)
+- Log the ratio of receipts that got `preceded_by` set from the window vs receipts where it was null (indicates how often in-flight correlation is possible)
+
+### Rollback
+
+- Revert the commit; the window is pure in-process logic
+- No server-side impact
+- No data migration
+
+### Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Window grows unbounded if eviction has a bug | Low | Unit test explicitly verifies eviction; size capped via hard limit (say 500 entries) as a safety net |
+| Process-wide singleton conflicts with multi-agent test harnesses | Low | Instantiate one window per `createAcrServer` call, not module-level |
+| Agent uses chain_id incorrectly → false linkage | Medium | Window only matches exact chain_id; if the agent gets it wrong, the server can still reconstruct from its full history |
 
 ---
 
-## Not in scope for this plan
+## Drift prevention checklist
 
-The following were discussed or adjacent but are intentionally out of scope:
+Every PR that touches the MCP, the ingest API, or the compute-boundary-related code must pass these checks. If a PR fails a check, it is held until the drift is fixed.
 
-- MCP tools for the new Layer 2 endpoints (`get_profile`, `get_coverage`, `get_healthy_corridors`, `get_failure_registry`, `get_trend`, and the composite `summarize_my_agent`) — tracked separately as the presenter-tool work
-- Dashboard exploration — deferred to after this phase
-- Security hardening (receipt auth, per-agent rate limiting, AST analysis for content scanner) — tracked separately
-- Pro tier endpoint implementation — covered by `proposals/layer2-endpoint-audit.md`
-- Enterprise tier / Friction Observer-operated runs — future work
+### MCP-side checks
+
+- [ ] **No new persistent state** beyond session identity + 60s correlation window
+  - Grep: `fs.writeFileSync`, `fs.appendFileSync`, `sqlite`, `createWriteStream` — if present, verify the change is intentional and explicitly approved
+  - Grep: session-state.ts changes, verify new fields are session-lifetime only
+- [ ] **No background work**
+  - Grep: `setInterval`, `setTimeout` (except the 2s timeout in self-log), `cron`, `schedule` — any new usage requires justification
+- [ ] **No aggregation across records**
+  - Grep: `.reduce(`, `.sort(`, `.filter(` in tool handlers — these are allowed ONLY in presenter code that works on a single pre-computed response, not across multiple receipts
+- [ ] **No client-side baseline/anomaly/prediction computation**
+  - Grep for math operations over arrays of server data; anything that looks like "compute what's normal" is drift
+- [ ] **No content capture**
+  - Grep for `request_body`, `response_body`, `content`, `payload` being sent in receipts — none allowed
+- [ ] **Attribution templates use the rhetorical invariant**
+  - Linting test at `packages/mcp-server/test/presenter.lint.test.ts` must pass
+- [ ] **Schema additions are additive**
+  - All new receipt fields optional; no existing field renamed or removed
+- [ ] **Presenter tools include maturity surfacing**
+  - Every new or updated presenter tool must call `renderMaturityPrefix` or explicitly note why it doesn't
+
+### Server-side checks
+
+- [ ] **Migrations are reversible**
+  - Every `.up.sql` has a matching `.down.sql` that restores the prior state
+- [ ] **New columns are nullable or have DEFAULT**
+  - No breaking schema changes on running clients
+- [ ] **Response shape changes are additive**
+  - New fields optional; existing fields keep their names and types
+- [ ] **Tier gating is on the server, not the client**
+  - If a new endpoint is paid-tier-only, the gating is enforced by the API key check in the handler, not by client logic
+
+### Process checks
+
+- [ ] **Every item has acceptance criteria checked off**
+- [ ] **Every item has a test plan run and passing**
+- [ ] **Every item has a rollback path documented and verified**
+- [ ] **Observability metrics are emitted from day one** (not added post-hoc)
 
 ---
 
-This plan is a draft. Nothing here is locked until it ships. Revisit as implementation reveals things the plan got wrong.
+## Not in scope for Phase 1
+
+Tracked separately; do not implement as part of this phase.
+
+- MCP tools that expose the new Layer 2 endpoints (`get_profile`, `get_coverage`, `get_healthy_corridors`, `get_failure_registry`, `get_trend`, and a composite `summarize_my_agent`) — presenter-tool work, separate from this plan
+- Dashboard exploration
+- Security hardening (receipt auth, per-agent rate limiting, AST analysis)
+- Pro tier endpoint depth (population comparison fields, changepoint detection, degradation matrix, regime fingerprinting)
+- Enterprise tier / Friction Observer-operated runs
+- Longitudinal corpus analysis pipelines beyond what friction.ts already has
+
+---
+
+## Next steps: Claude Code plugin (Phase 2)
+
+This is the work that ships next once Phase 1 is landed. It is **out of scope for Phase 1**. It is listed here so the handoff is clean and nothing about the architecture is a surprise when it's picked up.
+
+### Goal
+
+A standalone package that hooks into Claude Code to give truly compulsory composition update detection, bypassing the "near-compulsory" compromise in Item 3.
+
+### Architecture summary
+
+The plugin is **a separate package from `@tethral/acr-mcp`**. It does not live in the MCP server. It does not communicate with the MCP. It talks directly to ACR's ingestion API over HTTP.
+
+```
+User edits .claude/settings.json or .claude/skills/*
+              │
+              ▼
+Claude Code plugin (file watcher)
+              │
+              ▼
+HTTP POST /api/v1/composition/update  (ACR ingestion API)
+              │
+              ▼
+Server updates canonical composition
+              │
+              ▼
+Next receipt from MCP is classified against fresh composition
+```
+
+The MCP never knows the plugin exists. Both processes talk to the server independently.
+
+### Package structure
+
+```
+packages/claude-code-plugin/
+├── package.json              # name: @tethral/acr-claude-code-plugin
+├── tsconfig.json
+├── README.md
+├── src/
+│   ├── index.ts              # plugin entry, watchers + HTTP client
+│   ├── file-watcher.ts       # chokidar-based file watcher
+│   ├── composition-differ.ts # detect what changed in settings.json
+│   ├── acr-client.ts         # HTTP POST to /composition/update
+│   ├── config.ts             # reads ACR_API_URL, looks up agent_id
+│   └── hook-manifest.ts      # Claude Code hook registration
+└── test/
+    ├── file-watcher.test.ts
+    ├── composition-differ.test.ts
+    └── integration.test.ts
+```
+
+### Work breakdown
+
+1. **Package scaffolding** (1 day)
+   - New workspace package under `packages/claude-code-plugin/`
+   - package.json with `@tethral/acr-claude-code-plugin`
+   - TypeScript config, build pipeline, CI integration
+   - README with install instructions
+
+2. **Claude Code hook integration** (1-2 days)
+   - Research current Claude Code hook API (SessionStart, UserPromptSubmit, or custom file-watch)
+   - Hook manifest in the plugin's settings.json contribution
+   - Entry point that starts the file watcher when Claude Code loads the plugin
+
+3. **File watcher** (1 day)
+   - Use `chokidar` for cross-platform file watching
+   - Watch paths:
+     - `~/.claude/settings.json`
+     - `~/.claude/skills/**/*.md`
+     - `<cwd>/.claude/settings.json`
+     - `<cwd>/.claude/skills/**/*.md`
+   - Debounce events (settings.json can get multiple writes during a save)
+
+4. **Composition differ** (1 day)
+   - Read the before/after state of the watched files
+   - Compute what changed: new skills, removed skills, new MCPs, removed MCPs, sub-tool changes
+   - Produce a canonical diff structure
+
+5. **ACR HTTP client** (1 day)
+   - Look up the agent's `agent_id` (via shared state file written by the MCP, or via user configuration)
+   - POST to `/api/v1/composition/update` with the diffed composition
+   - Auth via same mechanism as MCP (or API key from env)
+   - Retry with backoff on network errors
+
+6. **Tests** (1 day)
+   - Unit test file-watcher debounce and event detection
+   - Unit test differ against fixture configs
+   - Integration test: change a fixture file, verify HTTP request fires with correct payload
+
+7. **Documentation and distribution** (1 day)
+   - README with install and config
+   - Publishing to npm under `@tethral/acr-claude-code-plugin`
+   - Landing page entry explaining what it does
+   - Troubleshooting guide
+
+**Total rough estimate: 7-10 days of focused work.**
+
+### Open questions for Phase 2
+
+- **Agent ID lookup.** How does the plugin know which agent_id to update? Options:
+  - Plugin reads a shared state file the MCP writes on startup
+  - Plugin is configured with an agent_id manually
+  - Plugin queries ACR's `/whoami` endpoint using a host identifier
+- **Multiple agents per host.** If a user has multiple agents (different projects, different Claude Code profiles), how does the plugin decide which one a given file change belongs to?
+- **Bootstrap.** What happens if the plugin is installed before the MCP? Does it queue updates, fail gracefully, or require the MCP to be installed first?
+- **Other hosts (Cursor, Continue, Zed).** Each one needs a separate plugin with host-specific hook integration. The architecture is the same but the integration point differs.
+
+### Why it's deferred
+
+- **Phase 1 items deliver more user-visible value.** The category schema, attribution phrasing, and two-source composition directly change what presenter tools show users. The plugin changes update-latency for a specific host.
+- **The near-compulsory path covers most cases.** If the agent follows skill instructions (which the compute-boundary doc explicitly treats as a first-class mechanism), composition drift is bounded.
+- **Phase 2 deserves its own design discussion.** File watching cross-platform, auth flow, multi-agent support, bootstrap ordering — these are real design questions that deserve their own review, not an afterthought bolted onto Phase 1.
+- **It's purely additive.** The plugin doesn't change any Phase 1 decisions. Shipping Phase 1 and Phase 2 in sequence has zero integration risk.
+
+### Triggers for picking it back up
+
+- A paying customer asks for compulsory composition tracking
+- Observability on Phase 1 shows high `composition_stale` rates across the user base
+- Claude Code ships a new hook API that makes it trivially easy to integrate
+
+---
+
+## Summary
+
+Phase 1 delivers five coherent improvements to ACR, all grounded in the compute-boundary document and its reference goals. The work is sequenced to land the small/independent items first (Item 1 categories, Item 5 correlation window) while the critical-path Item 2 (composition capture) enables Items 3 and 4. Drift prevention is enforced at review time through a concrete checklist, not after the fact. Every item has acceptance criteria, a test plan, a rollback path, and observability.
+
+The Claude Code plugin is explicitly out of scope for Phase 1 but is documented here so nothing is a surprise when it's picked up.
+
+This document is a draft. Revisit and amend as implementation reveals things the plan got wrong.
