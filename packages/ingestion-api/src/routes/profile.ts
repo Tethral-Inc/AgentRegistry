@@ -1,0 +1,165 @@
+import { Hono } from 'hono';
+import { query, queryOne, createLogger, makeError } from '@acr/shared';
+import { resolveAgentId } from '../helpers/resolve-agent.js';
+
+const log = createLogger({ name: 'profile' });
+const app = new Hono();
+
+/**
+ * GET /agent/{id}/profile — The interaction profile anchor.
+ *
+ * Returns a single object summarizing what the network knows about this
+ * agent's behavior. This is the conceptual home for the "interaction
+ * profile" — the unified record of an agent built from its logged signals.
+ *
+ * Free tier. Available to any registered agent.
+ *
+ * Lens-friendly: this endpoint returns the *profile state*, not any single
+ * lens output. Specific lenses (friction, coverage, trend, etc.) live at
+ * their own endpoints and can read from the same profile state.
+ */
+
+type MaturityState = 'warmup' | 'calibrating' | 'stable_candidate';
+type CoverageState = 'uninitialized' | 'narrow' | 'observed';
+
+function computeMaturity(receiptCount: number, distinctTargets: number, daysActive: number): MaturityState {
+  if (receiptCount <= 0 || distinctTargets <= 0) return 'warmup';
+  if (receiptCount < 50 || distinctTargets < 3 || daysActive < 1) return 'warmup';
+  if (receiptCount < 250 || distinctTargets < 5 || daysActive < 3) return 'calibrating';
+  return 'stable_candidate';
+}
+
+function computeCoverage(distinctTargets: number, distinctCategories: number, receiptCount: number): CoverageState {
+  if (receiptCount <= 0 || distinctTargets <= 0 || distinctCategories <= 0) return 'uninitialized';
+  if (distinctTargets < 4 || distinctCategories < 3) return 'narrow';
+  return 'observed';
+}
+
+app.get('/agent/:agent_id/profile', async (c) => {
+  const identifier = c.req.param('agent_id');
+  const resolved = await resolveAgentId(identifier);
+  const agentId = resolved.agent_id;
+  const agentName = resolved.name;
+
+  // Agent registration data — provider, transport, dates.
+  const agent = await queryOne<{
+    agent_id: string;
+    name: string | null;
+    provider_class: string | null;
+    composition_hash: string | null;
+    operational_domain: string | null;
+    created_at: string;
+    last_active_at: string;
+  }>(
+    `SELECT agent_id AS "agent_id",
+            name AS "name",
+            provider_class AS "provider_class",
+            composition_hash AS "composition_hash",
+            operational_domain AS "operational_domain",
+            created_at::text AS "created_at",
+            last_active_at::text AS "last_active_at"
+     FROM agents WHERE agent_id = $1 LIMIT 1`,
+    [agentId],
+  ).catch(() => null);
+
+  if (!agent) {
+    return c.json(makeError('NOT_FOUND', `Agent ${identifier} not found in the network`), 404);
+  }
+
+  // Aggregate counts across the agent's full lifetime + 24h slice.
+  const totals = await query<{
+    total_receipts: number;
+    distinct_targets: number;
+    distinct_categories: number;
+    distinct_chains: number;
+    receipts_24h: number;
+    days_active: number;
+    first_seen: string | null;
+    last_seen: string | null;
+  }>(
+    `SELECT
+       COUNT(*)::int AS "total_receipts",
+       COUNT(DISTINCT target_system_id)::int AS "distinct_targets",
+       COUNT(DISTINCT interaction_category)::int AS "distinct_categories",
+       COUNT(DISTINCT chain_id) FILTER (WHERE chain_id IS NOT NULL)::int AS "distinct_chains",
+       COUNT(*) FILTER (WHERE created_at >= now() - INTERVAL '24 hours')::int AS "receipts_24h",
+       COUNT(DISTINCT DATE(created_at))::int AS "days_active",
+       MIN(created_at)::text AS "first_seen",
+       MAX(created_at)::text AS "last_seen"
+     FROM interaction_receipts
+     WHERE emitter_agent_id = $1`,
+    [agentId],
+  ).catch(() => []);
+
+  const t = totals[0] ?? {
+    total_receipts: 0,
+    distinct_targets: 0,
+    distinct_categories: 0,
+    distinct_chains: 0,
+    receipts_24h: 0,
+    days_active: 0,
+    first_seen: null as string | null,
+    last_seen: null as string | null,
+  };
+
+  // Composition view — what skills / mcps / tools are tracked for this agent.
+  const composition = await queryOne<{
+    skill_count: number;
+    mcp_count: number;
+    tool_count: number;
+  }>(
+    `SELECT
+       COALESCE(jsonb_array_length(composition->'skills'), 0)::int AS "skill_count",
+       COALESCE(jsonb_array_length(composition->'mcps'), 0)::int AS "mcp_count",
+       COALESCE(jsonb_array_length(composition->'tools'), 0)::int AS "tool_count"
+     FROM agents WHERE agent_id = $1 LIMIT 1`,
+    [agentId],
+  ).catch(() => null);
+
+  const maturity = computeMaturity(t.total_receipts, t.distinct_targets, t.days_active);
+  const coverage = computeCoverage(t.distinct_targets, t.distinct_categories, t.total_receipts);
+
+  // Surface count — how many endpoints could give this user useful output.
+  // Empty profile = 0 surfaces. Active profile = friction/coverage/healthy/failures/trend = 5.
+  const surfacesAvailable = t.total_receipts > 0 ? 5 : 0;
+
+  // Progression hint — what unlocks next at the current maturity.
+  let progressionHint: string;
+  if (maturity === 'warmup') {
+    progressionHint = 'Keep logging interactions. Calibrating state unlocks at ~50 receipts and ~3 targets.';
+  } else if (maturity === 'calibrating') {
+    progressionHint = 'Profile is calibrating. Stable_candidate unlocks at ~250 receipts and ~5 targets.';
+  } else {
+    progressionHint = 'Profile is stable. Pro tier unlocks population baselines, historical scopes, and changepoint detection.';
+  }
+
+  c.header('Cache-Control', 'private, max-age=30');
+
+  return c.json({
+    agent_id: agent.agent_id,
+    name: agent.name ?? agentName,
+    provider_class: agent.provider_class,
+    operational_domain: agent.operational_domain,
+    composition_hash: agent.composition_hash,
+    composition_summary: composition ?? { skill_count: 0, mcp_count: 0, tool_count: 0 },
+    registered_at: agent.created_at,
+    last_active_at: agent.last_active_at,
+    profile_state: {
+      maturity_state: maturity,
+      coverage_state: coverage,
+      total_receipts: t.total_receipts,
+      receipts_last_24h: t.receipts_24h,
+      distinct_targets: t.distinct_targets,
+      distinct_categories: t.distinct_categories,
+      distinct_chains: t.distinct_chains,
+      days_active: t.days_active,
+      first_signal_at: t.first_seen,
+      last_signal_at: t.last_seen,
+    },
+    surfaces_available: surfacesAvailable,
+    progression_hint: progressionHint,
+    tier: 'free',
+  });
+});
+
+export { app as profileRoute };

@@ -22,6 +22,12 @@ import { networkSkillsRoute } from './routes/network-skills.js';
 import { skillCatalogRoute } from './routes/skill-catalog.js';
 import { notificationsRoute } from './routes/notifications.js';
 import { tristRoute } from './routes/trist.js';
+import { observatorySummaryRoute } from './routes/observatory-summary.js';
+import { profileRoute } from './routes/profile.js';
+import { coverageRoute } from './routes/coverage.js';
+import { healthyCorridorsRoute } from './routes/healthy-corridors.js';
+import { failureRegistryRoute } from './routes/failure-registry.js';
+import { trendRoute } from './routes/trend.js';
 
 export const app = new Hono().basePath('/');
 
@@ -51,6 +57,12 @@ app.route('/api/v1', networkSkillsRoute);
 app.route('/api/v1', skillCatalogRoute);
 app.route('/api/v1', notificationsRoute);
 app.route('/api/v1', tristRoute);
+app.route('/api/v1', observatorySummaryRoute);
+app.route('/api/v1', profileRoute);
+app.route('/api/v1', coverageRoute);
+app.route('/api/v1', healthyCorridorsRoute);
+app.route('/api/v1', failureRegistryRoute);
+app.route('/api/v1', trendRoute);
 app.route('/api', internalQueryRoute);
 
 // Vercel serverless handler
