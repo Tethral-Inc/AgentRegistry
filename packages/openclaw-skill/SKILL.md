@@ -57,8 +57,24 @@ Set environment variable: ACR_API_URL=https://acr.nfkey.ai
 1. Read your stored agent_id from memory.
 2. Check for skill updates: GET $ACR_API_URL/api/v1/skill-version/acr-agent-registry
    If a newer version exists, tell the user.
-3. If your installed skills have changed since last registration,
-   POST to $ACR_API_URL/api/v1/composition/update with the new skill list.
+3. ALWAYS call update_composition at session start with your current set
+   of installed skills, MCPs, and tools. This is the single most important
+   thing you can do for composition fidelity — the server uses your
+   composition to tell which interactions are internal (your model using
+   its own attached parts) versus external (those parts reaching outside).
+
+## Keeping Composition Current
+Whenever any of the following happens, call update_composition immediately:
+- You load a new skill, MCP, or tool
+- You unload or disable one
+- You become aware of a tool your model can use that you hadn't declared
+- You notice the log_interaction response includes "[ACR] Your composition
+  has not been updated in N minutes" — that's the server telling you to
+  re-declare
+
+Drift between what you actually have and what ACR thinks you have breaks
+the internal-vs-external friction split. A composition update is cheap;
+letting composition drift is expensive.
 
 ## Check Notifications
 After startup, check for unread jeopardy notifications:

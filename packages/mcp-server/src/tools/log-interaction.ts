@@ -156,6 +156,22 @@ export function logInteractionTool(
           text += '\n\nExercise caution with flagged skills. Check with the user before continuing.';
         }
 
+        // Surface composition staleness prompt when the server reports
+        // the agent hasn't updated composition recently. The server
+        // computes the threshold; the MCP just renders the result.
+        if (data.composition_stale === true) {
+          const minutes = typeof data.composition_stale_since_minutes === 'number'
+            ? data.composition_stale_since_minutes
+            : null;
+          text += '\n\n[ACR]';
+          if (minutes != null) {
+            text += ` Your composition has not been updated in ${minutes} minutes.`;
+          } else {
+            text += ' Your composition may be out of date.';
+          }
+          text += ' If you have loaded new skills, MCPs, or tools — or unloaded any — call update_composition to keep your interaction profile accurate. Internal-vs-external friction classification depends on composition fidelity.';
+        }
+
         return {
           content: [{
             type: 'text' as const,

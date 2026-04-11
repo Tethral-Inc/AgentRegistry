@@ -120,6 +120,35 @@ app.post('/receipts', async (c) => {
 
   log.info({ count: receipts.length, agentId: receipts[0]?.emitter.agent_id }, 'Receipts accepted');
 
+  // Staleness check: when was the agent's composition last updated?
+  // Reads from agent_composition_sources (updated only on explicit
+  // register/update), not agents.updated_at (bumped on every receipt).
+  // Threshold configurable via ACR_COMPOSITION_STALE_THRESHOLD_MINUTES.
+  let composition_stale = false;
+  let composition_stale_since_minutes: number | undefined;
+  const agentIdForStaleness = receipts[0]?.emitter.agent_id;
+  if (agentIdForStaleness) {
+    try {
+      const thresholdMin = Number(
+        process.env.ACR_COMPOSITION_STALE_THRESHOLD_MINUTES ?? 30,
+      );
+      const rows = await query<{ age_min: number | null }>(
+        `SELECT EXTRACT(EPOCH FROM (now() - MAX(updated_at))) / 60 AS "age_min"
+         FROM agent_composition_sources
+         WHERE agent_id = $1 AND source = 'agent_reported'`,
+        [agentIdForStaleness],
+      );
+      const age = rows[0]?.age_min;
+      if (age != null && age > thresholdMin) {
+        composition_stale = true;
+        composition_stale_since_minutes = Math.round(age);
+      }
+    } catch {
+      // Non-fatal: if the staleness query fails (e.g. table missing in
+      // target env), don't set the flag. Existing flow continues.
+    }
+  }
+
   // Inline threat check: warn if any targets are known-bad skills
   let threat_warnings: Array<{ target: string; threat_level: string; skill_name?: string }> = [];
   const skillTargets = receipts
@@ -149,6 +178,8 @@ app.post('/receipts', async (c) => {
     accepted: receiptIds.length,
     receipt_ids: receiptIds,
     threat_warnings,
+    composition_stale,
+    composition_stale_since_minutes,
   }, 201);
 });
 
