@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ensureRegistered, getAgentId } from '../state.js';
 import { defaultSession } from '../session-state.js';
+import type { CorrelationWindow } from '../middleware/correlation-window.js';
 
 function inferSystemType(systemId: string): string {
   const prefix = systemId.split(':')[0];
@@ -20,7 +21,11 @@ For multi-step workflows, use chain_id, chain_position, and preceded_by to link 
 
 ACR collects interaction metadata only (target names, timing, status). No request/response content is collected. We do not track the agent's owner. Terms: https://acr.nfkey.ai/terms`;
 
-export function logInteractionTool(server: McpServer, apiUrl: string) {
+export function logInteractionTool(
+  server: McpServer,
+  apiUrl: string,
+  correlationWindow?: CorrelationWindow,
+) {
   server.registerTool(
     'log_interaction',
     {
@@ -50,6 +55,18 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
     async (params) => {
       try {
         const id = params.agent_id || getAgentId() || await ensureRegistered();
+        const nowMs = Date.now();
+
+        // Consult the correlation window for an automatic preceded_by link
+        // if the agent didn't supply one explicitly. The window is a passive
+        // buffer: it doesn't analyze, it just holds recent receipts' chain
+        // context so in-flight workflows can be stitched at ingest time.
+        // If the agent explicitly provided preceded_by, that wins.
+        let precededBy = params.preceded_by;
+        if (!precededBy && correlationWindow && params.chain_id) {
+          const found = correlationWindow.findPrecededBy(params.chain_id, nowMs);
+          if (found) precededBy = found;
+        }
 
         const res = await fetch(`${apiUrl}/api/v1/receipts`, {
           method: 'POST',
@@ -67,7 +84,7 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
               category: params.category,
               status: params.status,
               duration_ms: params.duration_ms,
-              request_timestamp_ms: Date.now() - (params.duration_ms ?? 0),
+              request_timestamp_ms: nowMs - (params.duration_ms ?? 0),
               queue_wait_ms: params.queue_wait_ms,
               retry_count: params.retry_count,
               error_code: params.error_code,
@@ -81,13 +98,28 @@ export function logInteractionTool(server: McpServer, apiUrl: string) {
             source: 'agent' as const,
             chain_id: params.chain_id,
             chain_position: params.chain_position,
-            preceded_by: params.preceded_by,
+            preceded_by: precededBy,
           }),
         });
 
         const data = await res.json();
         if (!res.ok) {
           return { content: [{ type: 'text' as const, text: `Failed to log: ${JSON.stringify(data)}` }] };
+        }
+
+        // Record the receipt's correlation keys into the window so the
+        // next in-flight receipt in the same chain can find it.
+        // Only record if we have a chain_id — receipts without a chain
+        // don't participate in in-flight linkage.
+        if (correlationWindow && params.chain_id && Array.isArray(data.receipt_ids)) {
+          for (const receiptId of data.receipt_ids) {
+            correlationWindow.record({
+              receipt_id: String(receiptId),
+              chain_id: params.chain_id,
+              target_system_id: params.target_system_id,
+              created_at_ms: nowMs,
+            });
+          }
         }
 
         let text = `Logged ${data.accepted} receipt(s). IDs: ${data.receipt_ids.join(', ')}`;

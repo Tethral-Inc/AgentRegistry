@@ -19,6 +19,7 @@ import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
 import { acknowledgeThreatTool } from './tools/acknowledge-threat.js';
 import { withSelfLog } from './middleware/self-log.js';
+import { CorrelationWindow } from './middleware/correlation-window.js';
 import { defaultSession, SessionState } from './session-state.js';
 
 export interface AcrServerOptions {
@@ -26,6 +27,8 @@ export interface AcrServerOptions {
   resolverUrl?: string;
   /** Session state for this server instance. Defaults to the stdio singleton. */
   session?: SessionState;
+  /** Correlation window for in-flight receipt linkage. One per session. */
+  correlationWindow?: CorrelationWindow;
 }
 
 /**
@@ -74,6 +77,10 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   const apiUrl = options?.apiUrl ?? process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
   const resolverUrl = options?.resolverUrl ?? process.env.ACR_RESOLVER_URL ?? apiUrl;
   const session = options?.session ?? defaultSession;
+  // One correlation window per server instance. Not a module-level singleton
+  // so HTTP transport with concurrent sessions gets an independent window
+  // per agent.
+  const correlationWindow = options?.correlationWindow ?? new CorrelationWindow();
 
   const server = new McpServer({
     name: 'acr-agent-registry',
@@ -86,7 +93,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   withSelfLogging(server, () => session, apiUrl);
 
   registerAgentTool(server, apiUrl);
-  logInteractionTool(server, apiUrl);
+  logInteractionTool(server, apiUrl, correlationWindow);
   checkEntityTool(server, apiUrl, resolverUrl);
   checkEnvironmentTool(server, apiUrl, resolverUrl);
   getFrictionReportTool(server, apiUrl);
