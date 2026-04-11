@@ -54,13 +54,24 @@ These are not rules imposed from outside. They're consequences of what ACR is fo
 
 ### 1. The MCP never sends content — only facts and categories about the call.
 
-The MCP must never send or store the actual text of anything the agent is processing: no prompts, no completions, no request bodies, no response bodies, no file contents, no user input. What it *does* send is a rich set of facts and categories *about* the call — which target, what type of interaction, how long it took, success or failure, chain position, anomaly flags, and other classification fields that describe the shape of the call without revealing its content.
+The MCP must never send or store the actual text of anything the agent is processing: no prompts, no completions, no request bodies, no response bodies, no file contents, no user input.
 
-This matters because "metadata" shouldn't mean "just timing and status." Richer categorization — what kind of target this is, what category of work the call represents, what sub-type of interaction it is, what role the agent was playing — is itself valuable signal that's still not content. Expanding the category vocabulary is a feature, not a risk.
+What it *does* send is a rich set of facts and classification fields that describe the shape of the call without revealing its content. Rich classification matters because the same agent calling the same target can have very different friction profiles depending on **what kind of work is involved**. An LLM doing math responds differently than one composing creative writing or reasoning about visuals — we've already seen that happen. As agents specialize, it becomes valuable to know how much effort different *kinds of work* take.
 
-**Why:** ACR's privacy promise to operators is that we record facts about calls, not their contents. That promise is the legal and ethical basis for the product. If the MCP ever captured content, the promise is broken and the product is dead. But the promise doesn't say "only timing and status" — it says "no content." There's room to enrich the category layer as long as categories stay descriptive, not substantive.
+The category dimensions receipts should carry (evolving schema — all fields optional on the client, accepted server-side, default to `unknown` if not provided):
 
-*(Open: what additional category fields should receipts carry? This is a schema question to work through.)*
+- **Target type** — more granular than today's `mcp_server` / `api` / `skill` / `platform`. Examples: `api.llm_provider`, `api.payment`, `api.source_control`, `mcp.database`, `skill.parser`. Descriptive namespacing, not a fixed enum.
+- **Interaction category** — today's `interaction_category` field: `tool_call`, `data_exchange`, `commerce`, `research`, `code`, `communication`. Kept as-is for compatibility.
+- **Activity class** — the kind of work the interaction represents. Starting taxonomy: `language`, `math`, `visuals`, `creative`, `deterministic`, `sound`. Expandable as patterns emerge. This is the "what cognitive or computational domain is this" dimension.
+- **Interaction purpose** — what the agent was trying to accomplish: `read`, `write`, `search`, `generate`, `transform`, `acknowledge`.
+- **Workflow role** — where the call sits in the broader workflow: `initial`, `intermediate`, `recovery`, `cleanup`.
+- **Workflow phase** — if the agent runs in phases: `plan`, `act`, `reflect`.
+- **Data shape** — a content-free description of what kind of data moved: `tabular`, `text`, `binary`, `structured_json`, `stream`, `image`, `audio`.
+- **Criticality** — how essential this call was to the workflow: `core`, `enrichment`, `debug`.
+
+None of these are content. All of them describe the call without revealing what was in it. Taken together, they let the server slice friction readings by kind-of-work, not just by raw duration — which matters more as agents get specialized and the same target behaves differently depending on what it's being asked to do.
+
+**Why:** ACR's privacy promise is about *bodies*, not about keeping the category vocabulary thin. The promise says "no content." It does not say "only timing and status." Expanding the descriptive category layer is a feature, and as the corpus grows, these classification dimensions are what lets the server answer "why is math slow on this target when language is fine?" and other workload-sensitive questions the current schema can't answer.
 
 ### 2. The MCP does not do math or logic across a list of receipts.
 
@@ -70,26 +81,26 @@ The MCP should not count receipts, average durations, sort targets by speed, pic
 
 The MCP is still free to call the server, get back a pre-sorted list with pre-computed numbers, and pick which entries to mention in the user-facing text. That's presentation, not computation.
 
-### 3. The MCP holds short-term working memory, not a long-term record.
+### 3. The MCP holds a ~60-second rolling correlation window — a passive buffer, not a store.
 
-The MCP's long-term truth always lives on the server. But a strict "forget everything between tool calls" rule is too narrow for what ACR needs to do, because measuring **downstream consequences** requires the MCP to hold a short window of recent activity so it knows what to look for when the downstream signal eventually arrives.
+The MCP's long-term truth always lives on the Tethral server. But a strict "forget everything between tool calls" rule is too tight, because when two interactions happen seconds apart, it's useful if the MCP can tag the second one as following the first before sending it to the server, rather than leaving the server to reconstruct the linkage afterward.
 
-So the rule is: the MCP may keep a bounded working memory — on the order of ~12 hours — of what the agent has done and what downstream effects it's still watching for. Beyond that window, everything belongs to the server's record.
+So the rule is: **the MCP holds a rolling window of ~60 seconds** of the correlation keys from recent receipts. Long enough to catch typical in-flight workflow correlation (a call that immediately follows another, a retry that comes seconds later). Short enough that the MCP is never holding a meaningful slice of history that could drift from the server's record.
 
-What the MCP may hold in working memory:
+What the MCP holds in the 60-second window:
 - The agent's identity (`agent_id`, `agent_name`, `transport_type`, server URL)
-- Recent interactions that may have downstream consequences the MCP should try to observe
-- Correlation keys (chain IDs, interaction IDs) that tie an in-flight workflow together
-- Pending "watch-fors" — "this interaction just happened, if X follows, log them as linked"
+- A rolling list of recent receipts' correlation keys: `receipt_id`, `chain_id`, target, timestamp
+- Nothing else. No bodies. No aggregates. No labels from the server.
 
-What the MCP must not hold in working memory:
-- Content of any past call
-- Aggregated summaries, counts, averages, or rankings
-- Any state that tries to substitute for the server's record
+What the MCP does **not** do with the window:
+- No pattern matching across it — the MCP doesn't know history or patterns, in the forward sense ("what usually comes next") or the reverse sense ("what usually came before")
+- No aggregation over it — not "how many calls in the last 60 seconds," not averages, not counts, not rankings
+- No analysis of any kind
+- No prediction
 
-**Why:** If the MCP forgets everything between tool calls, it can't correlate a call's downstream effects with the call that caused them — the causal link gets lost in the gap. A 12-hour working window is enough to capture typical downstream effects without the window turning into a parallel corpus that drifts from the server's truth. Anything beyond that window is the server's job.
+The MCP is a passive buffer. It holds just enough context to link a new receipt to recent ones in the same workflow at the point of ingest, and that's it. The server does all actual correlation, all pattern matching, all history work. Beyond 60 seconds, correlation is entirely the server's job — it has the full record and can reconstruct any relationship between any two receipts, no matter how far apart.
 
-*(Open: what exactly gets kept in working memory, how it's structured, how it's flushed, and how the MCP knows when a "watch-for" is resolved. This is a product-schema question to work through.)*
+**Why:** Without a short correlation window, receipts arrive at the server as disconnected events and the server has to do harder work to reassemble the natural chains of a workflow. A tight 60-second window on the client keeps in-flight linkage cheap and correct at the point of capture. If the window were longer — or if the MCP started analyzing what was in it — the MCP would be holding a parallel mini-corpus that drifts from the server's truth, and every constraint in this doc would start to bend.
 
 ### 4. The MCP does not try to guess what's normal, what's weird, or what's coming next.
 
@@ -171,19 +182,20 @@ Given the constraints above, the MCP is expected to:
 
 ## Open items that need discussion
 
-This is a working document. Several things are not settled. Items are marked **[resolved]** when the constraint discussion has answered them, **[open]** when they still need work.
+This is a working document. Items are marked **[resolved]** when the constraint discussion has answered them, **[open]** when they still need work.
 
-- **[resolved] Capturing composition from two sources.** Both the MCP's own observation AND the agent's self-report feed the server, and the comparison between them is itself a signal. (Constraint #5.)
+- **[resolved] Capturing composition from two sources.** Both the MCP's own observation AND the agent's self-report feed the server. The comparison between them is itself a signal. (Constraint #5.)
 - **[resolved] Internal vs external interaction logging.** Both layers are logged. Internal = model engaging its own attached part. External = that part reaching outside. They chain via `chain_id`. Server classifies by comparing target against registered composition. (Constraint #6.)
-- **[resolved] MCP working memory.** MCP holds short-term working memory up to ~12 hours for downstream-consequence tracking. Longer-term record lives only on the Tethral server. (Constraint #3.)
+- **[resolved] MCP working memory window.** The MCP holds a ~60-second rolling buffer of recent correlation keys (not 12 hours, as an earlier draft had). Passive buffer only — no pattern matching forward or reverse. (Constraint #3.)
 - **[resolved] Longitudinal patterns as tier boundary.** Baselines, forecasting, drift detection, and regime fingerprinting are produced by the Tethral server's corpus compute and gate cleanly to Pro tier. (Constraint #4.)
+- **[resolved] Mismatch handling between MCP observation and agent self-report.** Server keeps both and reports the delta. No forced resolution; the mismatch itself is informative. (Constraint #5.)
+- **[resolved] Category schema — first-pass taxonomy.** Receipts should carry target_type, interaction_category (existing), activity_class (language / math / visuals / creative / deterministic / sound), interaction_purpose (read / write / search / generate / transform / acknowledge), workflow_role (initial / intermediate / recovery / cleanup), workflow_phase (plan / act / reflect), data_shape (tabular / text / binary / structured_json / stream / image / audio), and criticality (core / enrichment / debug). All optional on the client. (Constraint #1.)
 
-- **[open] Category schema expansion.** What additional category fields should receipts carry beyond today's `interaction_category`? The privacy promise forbids content, but richer descriptive categorization (target type, interaction sub-type, role, workflow phase, ...) is allowed and probably valuable. Needs a schema proposal.
-- **[open] Working memory structure.** What exactly does the MCP's ~12h working memory look like? How is it stored (in-process only? tmpfile? SQLite?), how is it flushed, how does the MCP know when a "watch-for" is resolved, and how does it handle process restarts inside the 12h window?
+- **[open] Concrete category schema migration.** The first-pass taxonomy is listed in constraint #1, but turning it into an actual database migration — new columns on `interaction_receipts`, backwards-compatible receipt validation, MCP changes to populate new fields from tool annotations where possible — is still work to scope.
 - **[open] Capturing components-of-attachments.** When an attachment (skill, MCP) has its own internal composition — sub-scripts, sub-tools, nested MCPs — how does the MCP discover them? Parse metadata? Recursive self-report from the attachment? Hybrid? What does the composition object look like when it's recursive?
 - **[open] Composition update cadence.** Every session? On detected change? Periodically with a version check? How does the MCP detect a change worth reporting?
-- **[open] Attribution phrasing in presentation.** When the server labels a cost decomposition as "sender-side" or "receiver-side," how does the MCP phrase that for the operator without sounding accusatory ("this is your fault") or flat ("cost distribution: 60/40")? This is a presentation-copy question, not an architecture question.
-- **[open] Mismatch flagging between MCP observation and agent self-report.** When the MCP and the agent disagree about composition, what does the server do? Log it, flag it, notify the operator, correct automatically? This depends on how trustworthy each source is in practice.
+- **[open] Attribution phrasing in presentation.** When the server labels a cost decomposition as "sender-side" or "receiver-side," how does the MCP phrase that for the operator without sounding accusatory or flat? This is a presentation-copy question, not an architecture question.
+- **[open] 60-second window storage.** In-process memory only, or survives process restart via a short-lived tmpfile? Dying on MCP restart is simpler and probably fine given the window is so short, but needs confirming.
 
 These are product and schema questions, not architectural ones. They're listed here because they affect what "capture composition" and "log interactions" actually mean in practice.
 
