@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "acr-landing",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "public", "-p", "4765", "-c-1"],
+      "port": 4765
+    }
+  ]
+}

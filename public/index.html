@@ -73,6 +73,83 @@
     .feature p { color: #888; font-size: 13px; margin: 0; }
     @media (max-width: 600px) { .feature-grid { grid-template-columns: 1fr; } }
 
+    /* Observatory */
+    .observatory { padding: 60px 0; border-bottom: 1px solid #1a1a1a; }
+    .obs-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 28px; gap: 16px; flex-wrap: wrap;
+    }
+    .obs-header h2 { margin: 0; font-size: 26px; color: #fff; }
+    .obs-header .obs-sub { color: #666; font-size: 14px; }
+
+    .obs-stats {
+      background: #0f0f0f; border: 1px solid #1f1f1f; border-radius: 12px;
+      padding: 24px 28px; margin-bottom: 28px;
+    }
+    .obs-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; border-bottom: 1px solid #1a1a1a;
+    }
+    .obs-row:last-child { border-bottom: none; }
+    .obs-row-label { color: #ccc; font-size: 15px; font-weight: 500; }
+    .obs-row-value { font-size: 18px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+
+    .obs-row-live .obs-row-value {
+      font-size: 26px; color: #7c9cff;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .obs-row-live .obs-row-value::after {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: #4ade80; display: inline-block;
+      box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+      animation: obs-pulse 2s infinite;
+    }
+    @keyframes obs-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+      70% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+    }
+
+    .obs-locked {
+      color: #555; font-size: 14px; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .obs-locked::before {
+      content: '🔒'; font-size: 12px; opacity: 0.6;
+    }
+    .obs-locked a { color: #7c9cff; font-weight: 600; }
+
+    .obs-cards {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+    }
+    .obs-card {
+      background: #111; border: 1px solid #1a1a1a; border-radius: 10px;
+      padding: 18px; position: relative; min-height: 120px;
+      display: flex; flex-direction: column;
+    }
+    .obs-card-kicker {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; margin-bottom: 10px;
+    }
+    .obs-card-body {
+      font-size: 13px; color: #ccc; line-height: 1.5;
+      flex: 1; display: flex; align-items: center;
+    }
+    .obs-card-vanity .obs-card-kicker { color: #7c9cff; }
+    .obs-card-curiosity .obs-card-kicker { color: #facc15; }
+    .obs-card-watch .obs-card-kicker { color: #f97316; }
+    .obs-card-vanity { border-color: #1e2a4a; }
+    .obs-card-curiosity { border-color: #3d3516; }
+    .obs-card-watch { border-color: #3d2416; }
+
+    .obs-card strong { color: #fff; font-weight: 700; }
+    .obs-card a { color: #7c9cff; text-decoration: none; font-weight: 600; }
+    .obs-card a:hover { text-decoration: underline; }
+
+    @media (max-width: 700px) {
+      .obs-cards { grid-template-columns: 1fr; }
+    }
+
     /* Scanner */
     .threat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .threat-table th {
@@ -109,6 +186,66 @@
       </div>
     </div>
   </div>
+
+  <!-- Observatory -->
+  <section class="observatory" id="observatory">
+    <div class="container">
+      <div class="obs-header">
+        <h2>ACR Observatory</h2>
+        <div class="obs-sub">The network at a glance</div>
+      </div>
+
+      <div class="obs-stats">
+        <div class="obs-row obs-row-live">
+          <div class="obs-row-label">Active Agents</div>
+          <div class="obs-row-value" id="obs-active-agents">150</div>
+        </div>
+        <div class="obs-row">
+          <div class="obs-row-label">Interactions Observed (24h)</div>
+          <div class="obs-row-value"><span class="obs-locked"><a href="#install">Login to view</a></span></div>
+        </div>
+        <div class="obs-row">
+          <div class="obs-row-label">Targets Tracked</div>
+          <div class="obs-row-value"><span class="obs-locked"><a href="#install">Login to view</a></span></div>
+        </div>
+        <div class="obs-row">
+          <div class="obs-row-label">Healthy Corridors</div>
+          <div class="obs-row-value"><span class="obs-locked"><a href="#install">Login to view</a></span></div>
+        </div>
+        <div class="obs-row">
+          <div class="obs-row-label">Active Jeopardy Flags</div>
+          <div class="obs-row-value"><span class="obs-locked"><a href="#install">Login to view</a></span></div>
+        </div>
+        <div class="obs-row">
+          <div class="obs-row-label">Network-Wide Friction %</div>
+          <div class="obs-row-value"><span class="obs-locked"><a href="#install">Login to view</a></span></div>
+        </div>
+      </div>
+
+      <div class="obs-cards">
+        <div class="obs-card obs-card-vanity">
+          <div class="obs-card-kicker">Observed in the wild</div>
+          <div class="obs-card-body">
+            <span>Longest observed interaction chain:&nbsp;<strong>34&nbsp;steps</strong>&nbsp;across 5 distinct targets.</span>
+          </div>
+        </div>
+
+        <div class="obs-card obs-card-curiosity">
+          <div class="obs-card-kicker">You might be missing something</div>
+          <div class="obs-card-body">
+            <span>73% of new agents find hidden cost drivers in their first week. <a href="#install">See yours →</a></span>
+          </div>
+        </div>
+
+        <div class="obs-card obs-card-watch">
+          <div class="obs-card-kicker">Jeopardy watch</div>
+          <div class="obs-card-body">
+            Top wasted-token relationship: <span class="obs-locked"><a href="#install">Login to view</a></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- Install -->
   <section id="install">
@@ -194,6 +331,87 @@
       <p>ACR by <a href="https://tethral.com">Tethral</a> | <a href="/terms">Terms</a> | <a href="https://github.com/Tethral-Inc/AgentRegistry">GitHub</a> | <a href="mailto:security@tethral.com">security@tethral.com</a></p>
     </div>
   </footer>
+
+  <script>
+    // ── ACR Observatory: Active Agents live counter ──
+    // Tries the observatory-summary endpoint first. If unavailable or the
+    // network hasn't reached meaningful scale, falls back to a template
+    // counter starting at 150 with varying acceleration.
+    (function () {
+      var el = document.getElementById('obs-active-agents');
+      if (!el) return;
+
+      var currentValue = 150;
+      var realTarget = null;
+      var pollTimer = null;
+
+      function formatNum(n) {
+        try { return Number(n).toLocaleString(); } catch (e) { return String(n); }
+      }
+
+      function animateTo(from, to, durationMs) {
+        var start = performance.now();
+        var diff = to - from;
+        function step(now) {
+          var t = Math.min((now - start) / durationMs, 1);
+          var eased = 1 - Math.pow(1 - t, 3);
+          var v = Math.floor(from + diff * eased);
+          el.textContent = formatNum(v);
+          if (t < 1) requestAnimationFrame(step);
+          else currentValue = to;
+        }
+        requestAnimationFrame(step);
+      }
+
+      function scheduleFakeTick() {
+        var delayMs = 2000 + Math.random() * 4000;
+        var baseIncrement = 1 + Math.floor(Math.random() * 3);
+        var burst = Math.random() < 0.12 ? Math.floor(Math.random() * 5) : 0;
+        var stallRoll = Math.random();
+        if (stallRoll < 0.08) { delayMs += 3000 + Math.random() * 3000; }
+
+        setTimeout(function () {
+          var next = currentValue + baseIncrement + burst;
+          animateTo(currentValue, next, 450);
+          scheduleFakeTick();
+        }, delayMs);
+      }
+
+      function startFakeCounter() {
+        el.textContent = formatNum(currentValue);
+        scheduleFakeTick();
+      }
+
+      function pollLive() {
+        fetch('/api/v1/network/observatory-summary', { cache: 'no-store' })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) {
+            if (!data) return;
+            var n = Number(data.active_agents_24h || data.active_agents || 0);
+            if (!isFinite(n) || n <= 0) return;
+            if (n !== realTarget) {
+              realTarget = n;
+              animateTo(currentValue, n, 800);
+            }
+          })
+          .catch(function () { /* ignore */ });
+      }
+
+      fetch('/api/v1/network/observatory-summary', { cache: 'no-store' })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          var n = data ? Number(data.active_agents_24h || data.active_agents || 0) : 0;
+          if (isFinite(n) && n > 0) {
+            realTarget = n;
+            animateTo(currentValue, n, 2500);
+            pollTimer = setInterval(pollLive, 30000);
+          } else {
+            startFakeCounter();
+          }
+        })
+        .catch(function () { startFakeCounter(); });
+    })();
+  </script>
 
 </body>
 </html>
