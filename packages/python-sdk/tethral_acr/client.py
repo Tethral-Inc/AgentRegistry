@@ -105,6 +105,55 @@ class ACRClient:
             receipt["preceded_by"] = preceded_by
         return self._post("/api/v1/receipts", receipt)
 
+    def submit_receipt_with_categories(
+        self,
+        receipt: dict,
+        target_type: str | None = None,
+        activity_class: str | None = None,
+        interaction_purpose: str | None = None,
+        workflow_role: str | None = None,
+        workflow_phase: str | None = None,
+        data_shape: str | None = None,
+        criticality: str | None = None,
+        **extra_categories: str,
+    ) -> dict:
+        """Submit an interaction receipt with descriptive classification.
+
+        All category fields are optional and content-free. Unknown dimensions
+        passed via ``extra_categories`` are accepted — the taxonomy is
+        expected to evolve.
+
+        Example::
+
+            client.submit_receipt_with_categories(
+                receipt={...},
+                activity_class="math",
+                interaction_purpose="generate",
+                criticality="core",
+            )
+        """
+        categories: dict[str, str] = {}
+        if target_type:
+            categories["target_type"] = target_type
+        if activity_class:
+            categories["activity_class"] = activity_class
+        if interaction_purpose:
+            categories["interaction_purpose"] = interaction_purpose
+        if workflow_role:
+            categories["workflow_role"] = workflow_role
+        if workflow_phase:
+            categories["workflow_phase"] = workflow_phase
+        if data_shape:
+            categories["data_shape"] = data_shape
+        if criticality:
+            categories["criticality"] = criticality
+        for key, value in extra_categories.items():
+            if value:
+                categories[key] = value
+        if categories:
+            receipt["categories"] = {**receipt.get("categories", {}), **categories}
+        return self._post("/api/v1/receipts", receipt)
+
     def update_composition(
         self,
         agent_id: str,

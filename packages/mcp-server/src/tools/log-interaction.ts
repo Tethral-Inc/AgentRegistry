@@ -19,7 +19,9 @@ How to use: After each external call completes, call log_interaction with the ta
 
 For multi-step workflows, use chain_id, chain_position, and preceded_by to link sequential calls so the friction lens can analyze chain overhead and directional friction between targets.
 
-ACR collects interaction metadata only (target names, timing, status). No request/response content is collected. We do not track the agent's owner. Terms: https://acr.nfkey.ai/terms`;
+Classification fields (all optional, all content-free): set activity_class ("language", "math", "visuals", "creative", "deterministic", "sound") and other category fields (target_type, interaction_purpose, workflow_role, workflow_phase, data_shape, criticality) to describe the kind of work this call represents. Richer classification unlocks friction breakdowns by kind-of-work, which matters as agents specialize.
+
+ACR collects interaction metadata only (target names, timing, status, descriptive classifications). No request/response content is collected. We do not track the agent's owner. Terms: https://acr.nfkey.ai/terms`;
 
 export function logInteractionTool(
   server: McpServer,
@@ -48,6 +50,14 @@ export function logInteractionTool(
         chain_id: z.string().max(64).optional().describe('ID linking sequential calls in a chain. Same chain_id for all calls in a multi-step workflow.'),
         chain_position: z.number().nonnegative().optional().describe('Position in chain (0-indexed). First call = 0, second = 1.'),
         preceded_by: z.string().optional().describe('target_system_id of the call that immediately preceded this one.'),
+        // Category classification (all optional, all descriptive, all non-content)
+        target_type: z.string().max(64).optional().describe('More granular target type, e.g. "api.llm_provider", "api.payment", "mcp.database".'),
+        activity_class: z.string().max(32).optional().describe('Kind of work the call represents. Examples: language, math, visuals, creative, deterministic, sound. Expandable — add new values as they emerge.'),
+        interaction_purpose: z.string().max(32).optional().describe('What the agent was trying to accomplish. Examples: read, write, search, generate, transform, acknowledge.'),
+        workflow_role: z.string().max(32).optional().describe('Where this call sits in the broader workflow. Examples: initial, intermediate, recovery, cleanup.'),
+        workflow_phase: z.string().max(32).optional().describe('If the agent runs in phases. Examples: plan, act, reflect.'),
+        data_shape: z.string().max(32).optional().describe('Content-free description of what kind of data moved. Examples: tabular, text, binary, structured_json, stream, image, audio.'),
+        criticality: z.string().max(32).optional().describe('How essential this call was to the workflow. Examples: core, enrichment, debug.'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       _meta: { priorityHint: 0.9 },
@@ -67,6 +77,17 @@ export function logInteractionTool(
           const found = correlationWindow.findPrecededBy(params.chain_id, nowMs);
           if (found) precededBy = found;
         }
+
+        // Collect category fields into a categories object. Only include
+        // fields the caller actually set. Empty object if none were set.
+        const categories: Record<string, string> = {};
+        if (params.target_type) categories.target_type = params.target_type;
+        if (params.activity_class) categories.activity_class = params.activity_class;
+        if (params.interaction_purpose) categories.interaction_purpose = params.interaction_purpose;
+        if (params.workflow_role) categories.workflow_role = params.workflow_role;
+        if (params.workflow_phase) categories.workflow_phase = params.workflow_phase;
+        if (params.data_shape) categories.data_shape = params.data_shape;
+        if (params.criticality) categories.criticality = params.criticality;
 
         const res = await fetch(`${apiUrl}/api/v1/receipts`, {
           method: 'POST',
@@ -99,6 +120,7 @@ export function logInteractionTool(
             chain_id: params.chain_id,
             chain_position: params.chain_position,
             preceded_by: precededBy,
+            categories: Object.keys(categories).length > 0 ? categories : undefined,
           }),
         });
 

@@ -93,6 +93,21 @@ export interface InteractionReceipt {
   chain_id?: string;
   chain_position?: number;
   preceded_by?: string;
+  /**
+   * Descriptive classification fields for the interaction. All optional,
+   * all content-free. Known dimensions are listed below; the taxonomy is
+   * evolving, so additional dimensions are accepted too.
+   */
+  categories?: {
+    target_type?: string;           // e.g. "api.llm_provider", "mcp.database"
+    activity_class?: string;        // "language", "math", "visuals", "creative", "deterministic", "sound"
+    interaction_purpose?: string;   // "read", "write", "search", "generate", "transform", "acknowledge"
+    workflow_role?: string;         // "initial", "intermediate", "recovery", "cleanup"
+    workflow_phase?: string;        // "plan", "act", "reflect"
+    data_shape?: string;            // "tabular", "text", "binary", "structured_json", "stream", "image", "audio"
+    criticality?: string;           // "core", "enrichment", "debug"
+    [key: string]: string | undefined;
+  };
 }
 
 // --- Skill Check ---

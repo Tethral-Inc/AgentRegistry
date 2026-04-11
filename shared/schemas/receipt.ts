@@ -65,6 +65,22 @@ export const AnomalySchema = z.object({
 export const TransportType = z.enum(['stdio', 'streamable-http']);
 export const ReceiptSource = z.enum(['agent', 'server']);
 
+// Categories: descriptive classification fields about the call.
+// The taxonomy is expected to evolve. Known dimensions get per-field
+// validation (length caps, string types). Unknown dimensions are accepted
+// via .catchall() so newer clients adding new classification dimensions
+// don't have their receipts rejected. All values are capped at 64 chars
+// as a privacy + sanity guard — a category token is short, content is not.
+export const CategoriesSchema = z.object({
+  target_type: z.string().max(64).optional(),
+  activity_class: z.string().max(32).optional(),
+  interaction_purpose: z.string().max(32).optional(),
+  workflow_role: z.string().max(32).optional(),
+  workflow_phase: z.string().max(32).optional(),
+  data_shape: z.string().max(32).optional(),
+  criticality: z.string().max(32).optional(),
+}).catchall(z.string().max(64));
+
 export const InteractionReceiptSchema = z.object({
   receipt_id: z.string().optional(),
   emitter: EmitterSchema,
@@ -76,6 +92,7 @@ export const InteractionReceiptSchema = z.object({
   chain_id: z.string().max(64).optional(),
   chain_position: z.number().nonnegative().optional(),
   preceded_by: z.string().optional(),
+  categories: CategoriesSchema.optional(),
 });
 
 export const ReceiptBatchSchema = z.object({

@@ -42,6 +42,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
     receipts_with_retry_count: number;
     receipts_with_anomaly_flag: number;
     distinct_target_types: number;
+    receipts_with_activity_class: number;
+    receipts_with_any_category: number;
   }>(
     `SELECT
        COUNT(*)::int AS "total_receipts",
@@ -55,7 +57,9 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(*) FILTER (WHERE queue_wait_ms IS NOT NULL)::int AS "receipts_with_queue_wait",
        COUNT(*) FILTER (WHERE retry_count IS NOT NULL AND retry_count > 0)::int AS "receipts_with_retry_count",
        COUNT(*) FILTER (WHERE anomaly_flagged = true)::int AS "receipts_with_anomaly_flag",
-       COUNT(DISTINCT target_system_type)::int AS "distinct_target_types"
+       COUNT(DISTINCT target_system_type)::int AS "distinct_target_types",
+       COUNT(*) FILTER (WHERE categories ? 'activity_class')::int AS "receipts_with_activity_class",
+       COUNT(*) FILTER (WHERE categories IS NOT NULL AND categories != '{}'::jsonb)::int AS "receipts_with_any_category"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1`,
     [agentId],
@@ -71,6 +75,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
     receipts_with_retry_count: 0,
     receipts_with_anomaly_flag: 0,
     distinct_target_types: 0,
+    receipts_with_activity_class: 0,
+    receipts_with_any_category: 0,
   };
 
   // Maturity / coverage states (same logic as profile.ts so they stay aligned).
@@ -136,6 +142,22 @@ app.get('/agent/:agent_id/coverage', async (c) => {
     });
   }
 
+  if (s.total_receipts > 20 && s.receipts_with_activity_class === 0) {
+    recommendations.push({
+      signal: 'categories.activity_class',
+      reason: 'None of your receipts have an activity_class set. Classifying the kind of work each call represents (language, math, visuals, creative, deterministic, sound) unlocks kind-of-work breakdowns in the friction lens. The same target can behave very differently depending on what kind of work you are asking it to do.',
+      unlocks: ['activity-class breakdown in friction lens', 'workload-sensitive friction analysis'],
+    });
+  }
+
+  if (s.total_receipts > 100 && s.receipts_with_any_category < s.total_receipts / 2) {
+    recommendations.push({
+      signal: 'categories.*',
+      reason: 'Fewer than half of your receipts include any classification fields. Adding target_type, interaction_purpose, workflow_role, or workflow_phase gives the friction lens more dimensions to slice on, which is especially useful as your agent specializes.',
+      unlocks: ['multi-dimensional friction breakdowns', 'specialized-workload insights'],
+    });
+  }
+
   c.header('Cache-Control', 'private, max-age=60');
 
   return c.json({
@@ -152,6 +174,11 @@ app.get('/agent/:agent_id/coverage', async (c) => {
       receipts_with_queue_wait: s.receipts_with_queue_wait,
       receipts_with_retry_count: s.receipts_with_retry_count,
       receipts_with_anomaly_flag: s.receipts_with_anomaly_flag,
+      receipts_with_activity_class: s.receipts_with_activity_class,
+      receipts_with_any_category: s.receipts_with_any_category,
+      category_coverage: s.total_receipts > 0
+        ? Math.round((s.receipts_with_any_category / s.total_receipts) * 1000) / 1000
+        : 0,
     },
     recommendations,
     tier: 'free',

@@ -478,6 +478,89 @@ app.get('/agent/:agent_id/friction', async (c) => {
     interaction_count: count,
   }));
 
+  // ── Category breakdowns (free tier) ──
+  // Groups receipts by classification fields so the friction lens can show
+  // "kind of work" distribution. Only dimensions populated by at least one
+  // receipt in the period are surfaced. Uncategorized receipts are ignored.
+  // All queries run only when at least one receipt has a non-empty categories
+  // object, to avoid pointless empty queries during warmup.
+  let byActivityClass: Array<{ activity_class: string; interaction_count: number; total_duration_ms: number }> = [];
+  let byTargetType: Array<{ target_type: string; interaction_count: number; total_duration_ms: number }> = [];
+  let byInteractionPurpose: Array<{ interaction_purpose: string; interaction_count: number; total_duration_ms: number }> = [];
+
+  try {
+    const categoryRows = await query<{
+      dimension: string;
+      value: string;
+      interaction_count: number;
+      total_duration_ms: number;
+    }>(
+      `SELECT 'activity_class' AS "dimension",
+              categories->>'activity_class' AS "value",
+              COUNT(*)::int AS "interaction_count",
+              COALESCE(SUM(duration_ms), 0)::int AS "total_duration_ms"
+       FROM interaction_receipts
+       WHERE emitter_agent_id = $1
+         AND created_at >= $2
+         AND created_at <= $3
+         AND categories ? 'activity_class'
+       GROUP BY categories->>'activity_class'
+       UNION ALL
+       SELECT 'target_type' AS "dimension",
+              categories->>'target_type' AS "value",
+              COUNT(*)::int AS "interaction_count",
+              COALESCE(SUM(duration_ms), 0)::int AS "total_duration_ms"
+       FROM interaction_receipts
+       WHERE emitter_agent_id = $1
+         AND created_at >= $2
+         AND created_at <= $3
+         AND categories ? 'target_type'
+       GROUP BY categories->>'target_type'
+       UNION ALL
+       SELECT 'interaction_purpose' AS "dimension",
+              categories->>'interaction_purpose' AS "value",
+              COUNT(*)::int AS "interaction_count",
+              COALESCE(SUM(duration_ms), 0)::int AS "total_duration_ms"
+       FROM interaction_receipts
+       WHERE emitter_agent_id = $1
+         AND created_at >= $2
+         AND created_at <= $3
+         AND categories ? 'interaction_purpose'
+       GROUP BY categories->>'interaction_purpose'`,
+      [agentId, start.toISOString(), end.toISOString()],
+    );
+
+    for (const row of categoryRows) {
+      if (row.dimension === 'activity_class') {
+        byActivityClass.push({
+          activity_class: row.value,
+          interaction_count: row.interaction_count,
+          total_duration_ms: row.total_duration_ms,
+        });
+      } else if (row.dimension === 'target_type') {
+        byTargetType.push({
+          target_type: row.value,
+          interaction_count: row.interaction_count,
+          total_duration_ms: row.total_duration_ms,
+        });
+      } else if (row.dimension === 'interaction_purpose') {
+        byInteractionPurpose.push({
+          interaction_purpose: row.value,
+          interaction_count: row.interaction_count,
+          total_duration_ms: row.total_duration_ms,
+        });
+      }
+    }
+
+    byActivityClass.sort((a, b) => b.interaction_count - a.interaction_count);
+    byTargetType.sort((a, b) => b.interaction_count - a.interaction_count);
+    byInteractionPurpose.sort((a, b) => b.interaction_count - a.interaction_count);
+  } catch (err) {
+    // Category query failures are non-fatal — the rest of the friction
+    // report is still useful. Log but don't surface.
+    log.warn({ err }, 'Category breakdown query failed');
+  }
+
   return c.json({
     agent_id: agentId,
     name: agentName,
@@ -495,6 +578,9 @@ app.get('/agent/:agent_id/friction', async (c) => {
     top_targets: visibleTargets,
     by_transport: byTransport,
     by_source: bySource,
+    by_activity_class: byActivityClass,
+    by_target_type: byTargetType,
+    by_interaction_purpose: byInteractionPurpose,
     population_comparison: populationComparison,
     chain_analysis: chainAnalysis,
     directional_pairs: directionalPairs,

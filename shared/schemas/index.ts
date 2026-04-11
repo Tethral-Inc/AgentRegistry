@@ -13,6 +13,7 @@ export {
   ReceiptSubmissionSchema,
   TransportType,
   ReceiptSource,
+  CategoriesSchema,
 } from './receipt.js';
 
 export {
