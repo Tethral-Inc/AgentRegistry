@@ -11,9 +11,22 @@ export class SessionState {
   private _registering = false;
   private _transportType: 'stdio' | 'streamable-http';
   private _clientType: string | null = null;
+  // Deep composition capture flag — when false, the MCP only reports
+  // top-level components, never sub-components. Operator privacy control.
+  // Default is true (deep capture enabled); set to false via
+  // ACR_DEEP_COMPOSITION=false env var or the disable_deep_composition tool.
+  private _deepComposition: boolean = (process.env.ACR_DEEP_COMPOSITION ?? 'true') !== 'false';
 
   constructor(transportType: 'stdio' | 'streamable-http' = 'stdio') {
     this._transportType = transportType;
+  }
+
+  get deepComposition(): boolean {
+    return this._deepComposition;
+  }
+
+  setDeepComposition(enabled: boolean): void {
+    this._deepComposition = enabled;
   }
 
   get agentId(): string | null {

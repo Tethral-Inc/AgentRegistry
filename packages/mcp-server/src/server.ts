@@ -18,6 +18,7 @@ import { getSkillVersionsTool } from './tools/get-skill-versions.js';
 import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
 import { acknowledgeThreatTool } from './tools/acknowledge-threat.js';
+import { disableDeepCompositionTool } from './tools/disable-deep-composition.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { defaultSession, SessionState } from './session-state.js';
@@ -106,6 +107,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   updateCompositionTool(server, apiUrl, () => session);
   getNotificationsTool(server, apiUrl, () => session);
   acknowledgeThreatTool(server, apiUrl, () => session);
+  disableDeepCompositionTool(server, () => session);
 
   return server;
 }

@@ -123,6 +123,79 @@ app.get('/agent/:agent_id/profile', async (c) => {
   // Empty profile = 0 surfaces. Active profile = friction/coverage/healthy/failures/trend = 5.
   const surfacesAvailable = t.total_receipts > 0 ? 5 : 0;
 
+  // Composition delta: compare what the MCP observed vs what the agent
+  // self-reported. The comparison itself is a signal. Only surfaced when
+  // both sources are present.
+  const sourceRows = await query<{
+    source: string;
+    composition: string;
+    updated_at: string;
+  }>(
+    `SELECT source AS "source",
+            composition::text AS "composition",
+            updated_at::text AS "updated_at"
+     FROM agent_composition_sources
+     WHERE agent_id = $1`,
+    [agentId],
+  ).catch(() => []);
+
+  let compositionDelta: {
+    mcp_only: string[];
+    agent_only: string[];
+    last_observed_at: string | null;
+    last_reported_at: string | null;
+  } | null = null;
+
+  if (sourceRows.length === 2) {
+    const mcpRow = sourceRows.find((r) => r.source === 'mcp_observed');
+    const agentRow = sourceRows.find((r) => r.source === 'agent_reported');
+    if (mcpRow && agentRow) {
+      try {
+        const mcpComp = JSON.parse(mcpRow.composition) as Record<string, unknown>;
+        const agentComp = JSON.parse(agentRow.composition) as Record<string, unknown>;
+
+        // Build a flat set of component ids from each source. The flat
+        // legacy fields (skills, mcps, tools, skill_hashes) are strings.
+        // The richer *_components fields are arrays of objects with ids.
+        const flattenIds = (comp: Record<string, unknown>): Set<string> => {
+          const ids = new Set<string>();
+          for (const key of ['skills', 'mcps', 'tools', 'skill_hashes']) {
+            const arr = comp[key];
+            if (Array.isArray(arr)) {
+              for (const v of arr) if (typeof v === 'string') ids.add(v);
+            }
+          }
+          for (const key of ['skill_components', 'mcp_components', 'api_components', 'tool_components']) {
+            const arr = comp[key];
+            if (Array.isArray(arr)) {
+              for (const v of arr) {
+                if (v && typeof v === 'object' && 'id' in v) {
+                  ids.add(String((v as { id: unknown }).id));
+                }
+              }
+            }
+          }
+          return ids;
+        };
+
+        const mcpIds = flattenIds(mcpComp);
+        const agentIds = flattenIds(agentComp);
+        const mcpOnly = [...mcpIds].filter((id) => !agentIds.has(id));
+        const agentOnly = [...agentIds].filter((id) => !mcpIds.has(id));
+
+        compositionDelta = {
+          mcp_only: mcpOnly,
+          agent_only: agentOnly,
+          last_observed_at: mcpRow.updated_at,
+          last_reported_at: agentRow.updated_at,
+        };
+      } catch (err) {
+        // Parse failure is non-fatal; just omit the delta
+        log.warn({ err, agentId }, 'Failed to compute composition delta');
+      }
+    }
+  }
+
   // Progression hint — what unlocks next at the current maturity.
   let progressionHint: string;
   if (maturity === 'warmup') {
@@ -158,6 +231,7 @@ app.get('/agent/:agent_id/profile', async (c) => {
     },
     surfaces_available: surfacesAvailable,
     progression_hint: progressionHint,
+    composition_delta: compositionDelta,
     tier: 'free',
   });
 });

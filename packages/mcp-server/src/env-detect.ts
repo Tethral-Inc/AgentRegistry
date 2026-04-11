@@ -38,3 +38,26 @@ export function detectEnvironment(
 export function getOsRelease(): string {
   return release();
 }
+
+/**
+ * Observe the agent's composition from the MCP's vantage point.
+ *
+ * This is the MCP-observed side of the two-source composition pattern.
+ * The MCP doesn't have a portable way to enumerate an agent's skills and
+ * MCPs across all MCP hosts — that requires host integration (Claude Code
+ * plugin in Phase 2, similar plugins for other hosts). In Phase 1 this
+ * is a stub that returns empty: the plumbing is in place so the
+ * agent_composition_sources table and the profile's composition_delta
+ * computation work as soon as any observation is populated.
+ *
+ * Keep this pure and fast. No file I/O, no network, no parsing of
+ * arbitrary files. It should always return in <1ms.
+ */
+export function observeComposition(): Record<string, unknown> {
+  // Phase 1: MCP observation returns an empty composition. Phase 2's
+  // host plugins (Claude Code, Cursor, etc.) populate the mcp_observed
+  // source directly by calling the server API, bypassing this function.
+  // This keeps the MCP compute-thin and the observation source
+  // correctly attributed to whichever host integration produced it.
+  return {};
+}

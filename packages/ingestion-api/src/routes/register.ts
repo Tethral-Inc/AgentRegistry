@@ -90,6 +90,36 @@ app.post('/register', async (c) => {
     );
   }
 
+  // Store per-source composition so the server can track MCP observation
+  // vs agent self-report separately and compute the delta. Default source
+  // is agent_reported for backwards compatibility with clients that don't
+  // set composition_source.
+  if (data.composition) {
+    const source = data.composition_source ?? 'agent_reported';
+    const sourceCompositionHash = componentHashes.length > 0
+      ? compositionHash
+      : computeCompositionHash([]);
+    await execute(
+      `INSERT INTO agent_composition_sources (agent_id, source, composition, composition_hash, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (agent_id, source) DO UPDATE
+       SET composition = EXCLUDED.composition,
+           composition_hash = EXCLUDED.composition_hash,
+           updated_at = now()`,
+      [
+        agentId,
+        source,
+        JSON.stringify(data.composition),
+        sourceCompositionHash,
+      ],
+    ).catch((err) => {
+      // Non-fatal: if the new table doesn't exist yet (migration hasn't
+      // run in the target environment), fall through without blocking
+      // registration.
+      log.warn({ err }, 'agent_composition_sources insert failed');
+    });
+  }
+
   // Auto-subscribe agent to threat notifications for their installed skills
   for (const hash of componentHashes) {
     await execute(

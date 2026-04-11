@@ -24,7 +24,7 @@ app.post('/composition/update', async (c) => {
     );
   }
 
-  const { agent_id, composition } = parsed.data;
+  const { agent_id, composition, composition_source } = parsed.data;
 
   // Verify agent exists
   const agent = await queryOne<{ agent_id: string }>(
@@ -77,7 +77,28 @@ app.post('/composition/update', async (c) => {
     }
   }
 
-  log.info({ agentId: agent_id, compositionHash }, 'Composition updated');
+  // Store per-source composition so the server can track MCP observation
+  // vs agent self-report separately. Default is agent_reported for
+  // backwards compatibility.
+  const source = composition_source ?? 'agent_reported';
+  await execute(
+    `INSERT INTO agent_composition_sources (agent_id, source, composition, composition_hash, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (agent_id, source) DO UPDATE
+     SET composition = EXCLUDED.composition,
+         composition_hash = EXCLUDED.composition_hash,
+         updated_at = now()`,
+    [
+      agent_id,
+      source,
+      JSON.stringify(composition),
+      compositionHash,
+    ],
+  ).catch((err) => {
+    log.warn({ err }, 'agent_composition_sources update failed');
+  });
+
+  log.info({ agentId: agent_id, compositionHash, source }, 'Composition updated');
 
   return c.json({
     composition_hash: compositionHash,
