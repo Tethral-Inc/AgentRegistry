@@ -6,20 +6,15 @@ const log = createLogger({ name: 'trend' });
 const app = new Hono();
 
 /**
- * GET /agent/{id}/trend — Period-over-period directional trend.
+ * GET /agent/{id}/trend — Period-over-period raw comparison.
  *
- * Free tier returns DIRECTIONAL ONLY: improving / worsening / stable per
- * target. No magnitudes, no z-scores, no population overlay.
+ * Returns the raw per-target stats for the current window and the
+ * previous window of the same length, alongside the delta between them.
+ * Does NOT return a synthetic "direction" label computed from hidden
+ * thresholds. Clients interpret the numbers.
  *
- * The same endpoint at the Pro tier (gated by API key check) would return
- * magnitude (% change), significance, and population overlay. That extension
- * is intentionally not built in this commit — it's a Pro tier addition.
- *
- * Thin client principle: this answers "is anything getting better or worse?"
- * without requiring the client to keep history.
+ * Free tier.
  */
-
-type Direction = 'improving' | 'worsening' | 'stable' | 'insufficient_data';
 
 interface TargetWindow {
   target: string;
@@ -71,29 +66,6 @@ async function fetchWindow(agentId: string, start: Date, end: Date): Promise<Tar
   ).catch(() => []);
 }
 
-/**
- * Pure directional comparison — no magnitudes leak.
- *
- * A target is:
- *  - improving if median latency dropped by >=10% AND failure rate didn't grow
- *  - worsening if median latency rose by >=10% OR failure rate grew by >=5pp
- *  - stable if neither
- *  - insufficient_data if either window had <5 receipts
- */
-function classifyDirection(current: TargetWindow | undefined, previous: TargetWindow | undefined): Direction {
-  if (!current || !previous) return 'insufficient_data';
-  if (current.receipt_count < 5 || previous.receipt_count < 5) return 'insufficient_data';
-  if (current.median_duration_ms == null || previous.median_duration_ms == null) return 'insufficient_data';
-  if (previous.median_duration_ms === 0) return 'insufficient_data';
-
-  const latencyChange = (current.median_duration_ms - previous.median_duration_ms) / previous.median_duration_ms;
-  const failureChange = current.failure_rate - previous.failure_rate;
-
-  if (latencyChange >= 0.1 || failureChange >= 0.05) return 'worsening';
-  if (latencyChange <= -0.1 && failureChange <= 0) return 'improving';
-  return 'stable';
-}
-
 app.get('/agent/:agent_id/trend', async (c) => {
   const identifier = c.req.param('agent_id');
   const scopeParam = c.req.query('scope') ?? 'day';
@@ -115,36 +87,39 @@ app.get('/agent/:agent_id/trend', async (c) => {
     fetchWindow(agentId, previous.start, previous.end),
   ]);
 
-  // Index previous by target.
   const previousMap = new Map<string, TargetWindow>();
   for (const r of previousRows) previousMap.set(r.target, r);
 
-  // Compute per-target direction. Only include targets present in current.
-  const perTarget = currentRows
-    .map((cur) => ({
+  // Per-target: raw numbers for both windows + computed delta. No
+  // interpretation. A target only appears here if it had >=5 receipts in
+  // the CURRENT window (inclusion filter is part of the response).
+  const perTarget = currentRows.map((cur) => {
+    const prev = previousMap.get(cur.target);
+    const latencyChange =
+      prev && prev.median_duration_ms && prev.median_duration_ms > 0 && cur.median_duration_ms != null
+        ? (cur.median_duration_ms - prev.median_duration_ms) / prev.median_duration_ms
+        : null;
+    const failureChange =
+      prev != null ? cur.failure_rate - prev.failure_rate : null;
+
+    return {
       target: cur.target,
-      direction: classifyDirection(cur, previousMap.get(cur.target)),
-    }))
-    .sort((a, b) => {
-      const order: Record<Direction, number> = {
-        worsening: 0,
-        improving: 1,
-        stable: 2,
-        insufficient_data: 3,
-      };
-      return order[a.direction] - order[b.direction];
-    });
-
-  // Overall trend — most worrying direction across targets.
-  let overallTrend: Direction = 'insufficient_data';
-  const counts = { worsening: 0, improving: 0, stable: 0, insufficient_data: 0 };
-  for (const t of perTarget) counts[t.direction]++;
-
-  if (perTarget.length === 0) overallTrend = 'insufficient_data';
-  else if (counts.worsening > counts.improving) overallTrend = 'worsening';
-  else if (counts.improving > counts.worsening) overallTrend = 'improving';
-  else if (counts.stable > 0) overallTrend = 'stable';
-  else overallTrend = 'insufficient_data';
+      current: {
+        median_duration_ms: cur.median_duration_ms,
+        failure_rate: cur.failure_rate,
+        receipt_count: cur.receipt_count,
+      },
+      previous: prev
+        ? {
+            median_duration_ms: prev.median_duration_ms,
+            failure_rate: prev.failure_rate,
+            receipt_count: prev.receipt_count,
+          }
+        : null,
+      latency_change_ratio: latencyChange != null ? Math.round(latencyChange * 10000) / 10000 : null,
+      failure_rate_delta: failureChange != null ? Math.round(failureChange * 10000) / 10000 : null,
+    };
+  });
 
   c.header('Cache-Control', 'private, max-age=60');
 
@@ -154,12 +129,13 @@ app.get('/agent/:agent_id/trend', async (c) => {
     scope,
     current_period: { start: current.start.toISOString(), end: current.end.toISOString() },
     comparison_period: { start: previous.start.toISOString(), end: previous.end.toISOString() },
-    overall_trend: overallTrend,
+    inclusion_filter: {
+      min_receipts_current_period: 5,
+      min_receipts_previous_period: 5,
+      requires_duration_ms: true,
+    },
     per_target: perTarget,
-    counts,
     tier: 'free',
-    note:
-      'Free tier shows directional trends only (improving / worsening / stable). Pro tier adds magnitude (% change), significance, and population overlay (is this happening to other agents calling the same target?).',
   });
 });
 

@@ -6,34 +6,15 @@ const log = createLogger({ name: 'profile' });
 const app = new Hono();
 
 /**
- * GET /agent/{id}/profile — The interaction profile anchor.
+ * GET /agent/{id}/profile — Raw interaction profile counts.
  *
- * Returns a single object summarizing what the network knows about this
- * agent's behavior. This is the conceptual home for the "interaction
- * profile" — the unified record of an agent built from its logged signals.
+ * Returns observed facts about the agent's registered composition and the
+ * raw counts that describe its interaction history. No synthetic labels,
+ * no derived state, no narrative guidance. Clients are responsible for
+ * their own interpretation.
  *
  * Free tier. Available to any registered agent.
- *
- * Lens-friendly: this endpoint returns the *profile state*, not any single
- * lens output. Specific lenses (friction, coverage, trend, etc.) live at
- * their own endpoints and can read from the same profile state.
  */
-
-type MaturityState = 'warmup' | 'calibrating' | 'stable_candidate';
-type CoverageState = 'uninitialized' | 'narrow' | 'observed';
-
-function computeMaturity(receiptCount: number, distinctTargets: number, daysActive: number): MaturityState {
-  if (receiptCount <= 0 || distinctTargets <= 0) return 'warmup';
-  if (receiptCount < 50 || distinctTargets < 3 || daysActive < 1) return 'warmup';
-  if (receiptCount < 250 || distinctTargets < 5 || daysActive < 3) return 'calibrating';
-  return 'stable_candidate';
-}
-
-function computeCoverage(distinctTargets: number, distinctCategories: number, receiptCount: number): CoverageState {
-  if (receiptCount <= 0 || distinctTargets <= 0 || distinctCategories <= 0) return 'uninitialized';
-  if (distinctTargets < 4 || distinctCategories < 3) return 'narrow';
-  return 'observed';
-}
 
 app.get('/agent/:agent_id/profile', async (c) => {
   const identifier = c.req.param('agent_id');
@@ -116,13 +97,6 @@ app.get('/agent/:agent_id/profile', async (c) => {
     [agentId],
   ).catch(() => null);
 
-  const maturity = computeMaturity(t.total_receipts, t.distinct_targets, t.days_active);
-  const coverage = computeCoverage(t.distinct_targets, t.distinct_categories, t.total_receipts);
-
-  // Surface count — how many endpoints could give this user useful output.
-  // Empty profile = 0 surfaces. Active profile = friction/coverage/healthy/failures/trend = 5.
-  const surfacesAvailable = t.total_receipts > 0 ? 5 : 0;
-
   // Composition delta: compare what the MCP observed vs what the agent
   // self-reported. The comparison itself is a signal. Only surfaced when
   // both sources are present.
@@ -196,16 +170,6 @@ app.get('/agent/:agent_id/profile', async (c) => {
     }
   }
 
-  // Progression hint — what unlocks next at the current maturity.
-  let progressionHint: string;
-  if (maturity === 'warmup') {
-    progressionHint = 'Keep logging interactions. Calibrating state unlocks at ~50 receipts and ~3 targets.';
-  } else if (maturity === 'calibrating') {
-    progressionHint = 'Profile is calibrating. Stable_candidate unlocks at ~250 receipts and ~5 targets.';
-  } else {
-    progressionHint = 'Profile is stable. Pro tier unlocks population baselines, historical scopes, and changepoint detection.';
-  }
-
   c.header('Cache-Control', 'private, max-age=30');
 
   return c.json({
@@ -217,9 +181,7 @@ app.get('/agent/:agent_id/profile', async (c) => {
     composition_summary: composition ?? { skill_count: 0, mcp_count: 0, tool_count: 0 },
     registered_at: agent.created_at,
     last_active_at: agent.last_active_at,
-    profile_state: {
-      maturity_state: maturity,
-      coverage_state: coverage,
+    counts: {
       total_receipts: t.total_receipts,
       receipts_last_24h: t.receipts_24h,
       distinct_targets: t.distinct_targets,
@@ -229,8 +191,6 @@ app.get('/agent/:agent_id/profile', async (c) => {
       first_signal_at: t.first_seen,
       last_signal_at: t.last_seen,
     },
-    surfaces_available: surfacesAvailable,
-    progression_hint: progressionHint,
     composition_delta: compositionDelta,
     tier: 'free',
   });

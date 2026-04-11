@@ -6,24 +6,21 @@ const log = createLogger({ name: 'coverage' });
 const app = new Hono();
 
 /**
- * GET /agent/{id}/coverage — Data sufficiency view.
+ * GET /agent/{id}/coverage — Raw signal coverage over the agent's history.
  *
- * Tells the operator how much data they have, where the gaps are, and
- * what they should log differently to unlock more analytical surfaces.
+ * Returns observed counts describing what fields the agent populates on
+ * its receipts. No synthetic state labels (warmup / calibrating / ...),
+ * no narrative advice. Triggers describe what the server observed and
+ * what rule was applied. Clients decide whether a trigger is worth
+ * acting on and how to phrase the suggestion in the UI.
  *
- * Free tier. The recommendations themselves are templated — no ML, no
- * personalization, just rule-based suggestions based on what the receipt
- * stream looks like.
- *
- * Thin client principle: this is the answer to "what should the agent log
- * more of?" — a question the MCP cannot answer locally because it has no
- * historical view. The server has all of it.
+ * Free tier.
  */
 
-interface Recommendation {
+interface Trigger {
   signal: string;
-  reason: string;
-  unlocks: string[];
+  rule: string;
+  observed: Record<string, number>;
 }
 
 app.get('/agent/:agent_id/coverage', async (c) => {
@@ -79,82 +76,94 @@ app.get('/agent/:agent_id/coverage', async (c) => {
     receipts_with_any_category: 0,
   };
 
-  // Maturity / coverage states (same logic as profile.ts so they stay aligned).
-  let maturityState: 'warmup' | 'calibrating' | 'stable_candidate';
-  if (s.total_receipts <= 0 || s.distinct_targets <= 0) maturityState = 'warmup';
-  else if (s.total_receipts < 50 || s.distinct_targets < 3) maturityState = 'warmup';
-  else if (s.total_receipts < 250 || s.distinct_targets < 5) maturityState = 'calibrating';
-  else maturityState = 'stable_candidate';
-
-  let coverageState: 'uninitialized' | 'narrow' | 'observed';
-  if (s.total_receipts <= 0 || s.distinct_targets <= 0 || s.distinct_categories <= 0) coverageState = 'uninitialized';
-  else if (s.distinct_targets < 4 || s.distinct_categories < 3) coverageState = 'narrow';
-  else coverageState = 'observed';
-
-  // Templated recommendations — pure rule-based, no ML.
-  const recommendations: Recommendation[] = [];
+  // Triggers: each trigger states the rule that fired, the observed inputs
+  // it fired on, and the signal field it's about. No prose, no "unlocks"
+  // list, no advice. The MCP presenter composes the suggestion text from
+  // this structured data if it wants to.
+  const triggers: Trigger[] = [];
 
   if (s.total_receipts === 0) {
-    recommendations.push({
+    triggers.push({
       signal: 'log_interaction',
-      reason: 'No receipts logged yet. Call log_interaction after every external tool call to start building your interaction profile.',
-      unlocks: ['friction lens', 'coverage analysis', 'healthy corridors', 'failure registry', 'trend detection'],
+      rule: 'total_receipts == 0',
+      observed: { total_receipts: 0 },
     });
   }
 
   if (s.total_receipts > 0 && s.chain_coverage < 0.25) {
-    recommendations.push({
+    triggers.push({
       signal: 'chain_id',
-      reason: 'Less than 25% of your receipts include a chain_id. Sequential tool calls in the same workflow should share a chain_id so chain analysis can detect overhead between steps.',
-      unlocks: ['chain analysis', 'directional friction (Pro)', 'chain pattern detection (Pro)'],
+      rule: 'chain_coverage < 0.25',
+      observed: {
+        total_receipts: s.total_receipts,
+        chain_coverage: Math.round(s.chain_coverage * 1000) / 1000,
+      },
     });
   }
 
   if (s.total_receipts > 20 && s.distinct_categories < 3) {
-    recommendations.push({
+    triggers.push({
       signal: 'interaction.category',
-      reason: 'You are only logging 1-2 interaction categories. Use specific categories (tool_call, data_exchange, commerce, communication, etc.) so the friction lens can break down by category.',
-      unlocks: ['category breakdown in friction reports'],
+      rule: 'distinct_categories < 3 AND total_receipts > 20',
+      observed: {
+        total_receipts: s.total_receipts,
+        distinct_categories: s.distinct_categories,
+      },
     });
   }
 
   if (s.total_receipts > 20 && s.receipts_with_queue_wait === 0) {
-    recommendations.push({
+    triggers.push({
       signal: 'interaction.queue_wait_ms',
-      reason: 'No receipts include queue_wait_ms. If your tool call waited in a queue before execution, log that wait separately so the friction lens can attribute time correctly.',
-      unlocks: ['queue overhead attribution in friction lens'],
+      rule: 'receipts_with_queue_wait == 0 AND total_receipts > 20',
+      observed: {
+        total_receipts: s.total_receipts,
+        receipts_with_queue_wait: 0,
+      },
     });
   }
 
   if (s.total_receipts > 20 && s.receipts_with_retry_count === 0) {
-    recommendations.push({
+    triggers.push({
       signal: 'interaction.retry_count',
-      reason: 'No receipts include retry_count. If your tool call retried before succeeding, log the retry count so retry overhead can be attributed.',
-      unlocks: ['retry overhead attribution (Pro)'],
+      rule: 'receipts_with_retry_count == 0 AND total_receipts > 20',
+      observed: {
+        total_receipts: s.total_receipts,
+        receipts_with_retry_count: 0,
+      },
     });
   }
 
   if (s.total_receipts > 50 && s.distinct_target_types < 2) {
-    recommendations.push({
+    triggers.push({
       signal: 'target.system_type',
-      reason: 'You are only logging one type of target system. If your agent calls APIs in addition to MCP tools, log them too — the friction lens compares performance across system types.',
-      unlocks: ['cross-system-type comparison'],
+      rule: 'distinct_target_types < 2 AND total_receipts > 50',
+      observed: {
+        total_receipts: s.total_receipts,
+        distinct_target_types: s.distinct_target_types,
+      },
     });
   }
 
   if (s.total_receipts > 20 && s.receipts_with_activity_class === 0) {
-    recommendations.push({
+    triggers.push({
       signal: 'categories.activity_class',
-      reason: 'None of your receipts have an activity_class set. Classifying the kind of work each call represents (language, math, visuals, creative, deterministic, sound) unlocks kind-of-work breakdowns in the friction lens. The same target can behave very differently depending on what kind of work you are asking it to do.',
-      unlocks: ['activity-class breakdown in friction lens', 'workload-sensitive friction analysis'],
+      rule: 'receipts_with_activity_class == 0 AND total_receipts > 20',
+      observed: {
+        total_receipts: s.total_receipts,
+        receipts_with_activity_class: 0,
+      },
     });
   }
 
   if (s.total_receipts > 100 && s.receipts_with_any_category < s.total_receipts / 2) {
-    recommendations.push({
+    triggers.push({
       signal: 'categories.*',
-      reason: 'Fewer than half of your receipts include any classification fields. Adding target_type, interaction_purpose, workflow_role, or workflow_phase gives the friction lens more dimensions to slice on, which is especially useful as your agent specializes.',
-      unlocks: ['multi-dimensional friction breakdowns', 'specialized-workload insights'],
+      rule: 'receipts_with_any_category < total_receipts / 2 AND total_receipts > 100',
+      observed: {
+        total_receipts: s.total_receipts,
+        receipts_with_any_category: s.receipts_with_any_category,
+      },
     });
   }
 
@@ -162,8 +171,6 @@ app.get('/agent/:agent_id/coverage', async (c) => {
 
   return c.json({
     agent_id: agentId,
-    coverage_state: coverageState,
-    maturity_state: maturityState,
     signals: {
       total_receipts: s.total_receipts,
       distinct_targets: s.distinct_targets,
@@ -176,11 +183,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
       receipts_with_anomaly_flag: s.receipts_with_anomaly_flag,
       receipts_with_activity_class: s.receipts_with_activity_class,
       receipts_with_any_category: s.receipts_with_any_category,
-      category_coverage: s.total_receipts > 0
-        ? Math.round((s.receipts_with_any_category / s.total_receipts) * 1000) / 1000
-        : 0,
     },
-    recommendations,
+    triggers,
     tier: 'free',
   });
 });

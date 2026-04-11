@@ -156,10 +156,6 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
     distinct_failing_targets: failures.length,
     failures,
     tier: 'free',
-    note:
-      failures.length === 0
-        ? 'No failures recorded in this period.'
-        : 'Failures are grouped by target with status, error code, and category breakdown. Pro tier adds population context (are other agents seeing the same failures?).',
   });
 });
 

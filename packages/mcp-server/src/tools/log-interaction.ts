@@ -156,20 +156,13 @@ export function logInteractionTool(
           text += '\n\nExercise caution with flagged skills. Check with the user before continuing.';
         }
 
-        // Surface composition staleness prompt when the server reports
-        // the agent hasn't updated composition recently. The server
-        // computes the threshold; the MCP just renders the result.
-        if (data.composition_stale === true) {
-          const minutes = typeof data.composition_stale_since_minutes === 'number'
-            ? data.composition_stale_since_minutes
-            : null;
-          text += '\n\n[ACR]';
-          if (minutes != null) {
-            text += ` Your composition has not been updated in ${minutes} minutes.`;
-          } else {
-            text += ' Your composition may be out of date.';
-          }
-          text += ' If you have loaded new skills, MCPs, or tools — or unloaded any — call update_composition to keep your interaction profile accurate. Internal-vs-external friction classification depends on composition fidelity.';
+        // Report composition age when the server supplies it. No
+        // threshold — the server returns the raw age and the MCP decides
+        // how to present it. For now we surface the number whenever it's
+        // present so the operator can see it.
+        if (typeof data.composition_last_updated_minutes_ago === 'number') {
+          text += `\n\n[ACR] Composition last updated ${data.composition_last_updated_minutes_ago} minute(s) ago.`;
+          text += ' If you have loaded or unloaded skills, MCPs, or tools since then, call update_composition.';
         }
 
         return {

@@ -1041,6 +1041,18 @@ Tracked separately; do not implement as part of this phase.
 - Enterprise tier / Friction Observer-operated runs
 - Longitudinal corpus analysis pipelines beyond what friction.ts already has
 
+### Inherited synthetic labels — documented drift, not in scope to fix now
+
+ACR predates the alignment discipline described in this plan. Several pre-existing synthetic labels live in the database and routes that Phase 1 code consumes but did not create. They're listed here so nothing new gets built on top of them without an explicit decision, and so they're tracked for later cleanup.
+
+- **`system_health.health_status`** — pre-existing column with values `healthy / degraded / unhealthy / flagged`. Used by `network-status.ts`, `observatory-summary.ts`, and the friction target enrichment. The label is a synthetic verdict derived from hidden thresholds that aren't returned to clients. Should eventually be replaced with raw rates (`failure_rate`, `anomaly_rate`, `sample_count`) and let clients shape them.
+- **`skill_hashes.threat_level`** — pre-existing column with values `none / low / medium / high / critical`. Used by `check-entity.ts`, `threat-feed.ts`, `network-status.ts`, and the MCP `check_entity` tool. Synthetic verdict; the derivation is opaque to the client. Same cleanup pattern applies: return the underlying signals and let the client decide.
+- **`check-entity` MCP tool output strings** — the tool still prints `FLAGGED BY ACR — REVIEW BEFORE USE` and compares `threat_level === 'high' || 'critical'` to decide which warning to show. Softer than `BLOCKED — DO NOT INSTALL` but still uses inherited labels and hidden comparisons.
+
+None of these are being changed in this pass. They're called out so:
+1. No new Phase 1 code builds on top of them without first asking whether the inherited label is the right thing to consume.
+2. A future alignment pass knows where to start.
+
 ---
 
 ## Next steps: Claude Code plugin (Phase 2)

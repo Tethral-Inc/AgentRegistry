@@ -6,21 +6,15 @@ const log = createLogger({ name: 'healthy-corridors' });
 const app = new Hono();
 
 /**
- * GET /agent/{id}/healthy-corridors — The "what's working" surface.
+ * GET /agent/{id}/healthy-corridors — Targets passing a specific filter.
  *
- * Returns targets where the agent has consistently low friction, low
- * failure rate, and low anomaly rate. This is the reassurance / preservation
- * signal — telling the operator what NOT to touch.
+ * Returns targets that match the filter described in `filter_applied`.
+ * The server does not claim these targets ARE "healthy" — the label in
+ * the endpoint name is a shorthand for the filter. Clients see the exact
+ * filter and the raw per-target stats and decide what the result means
+ * for them.
  *
- * Free tier. The free version returns count + list with basic stability
- * metrics. Pro tier could later add baseline comparison and variance
- * breakdown showing WHY the corridor is stable.
- *
- * Free tier thresholds:
- *  - At least 10 receipts in the period
- *  - 0% failure rate
- *  - 0% anomaly rate
- *  - Consistent — coefficient of variation under 0.5
+ * Free tier.
  */
 
 interface CorridorRow {
@@ -97,8 +91,11 @@ app.get('/agent/:agent_id/healthy-corridors', async (c) => {
     [agentId, start.toISOString(), end.toISOString()],
   ).catch(() => []);
 
-  // Filter to corridors with reasonable coefficient of variation.
-  const corridors = rows
+  // The SQL already filters to receipts >= 10, 0 failures, 0 anomalies.
+  // Client-side: also drop entries where coefficient of variation is too
+  // high. Both filters are described in filter_applied so the client sees
+  // exactly what the result represents.
+  const matches = rows
     .filter((r) => {
       if (r.median_duration_ms == null || r.median_duration_ms <= 0) return false;
       if (r.stddev_duration_ms == null) return true;
@@ -109,7 +106,11 @@ app.get('/agent/:agent_id/healthy-corridors', async (c) => {
       target_type: r.target_system_type,
       interaction_count: r.receipt_count,
       median_duration_ms: r.median_duration_ms,
-      stability_reason: 'no_failures_no_anomalies_low_variance',
+      stddev_duration_ms: r.stddev_duration_ms,
+      coefficient_of_variation:
+        r.median_duration_ms && r.stddev_duration_ms != null
+          ? Math.round((r.stddev_duration_ms / r.median_duration_ms) * 1000) / 1000
+          : null,
     }));
 
   c.header('Cache-Control', 'private, max-age=60');
@@ -120,13 +121,15 @@ app.get('/agent/:agent_id/healthy-corridors', async (c) => {
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),
-    corridor_count: corridors.length,
-    corridors,
+    filter_applied: {
+      min_receipts: 10,
+      failure_count: 0,
+      anomaly_count: 0,
+      max_coefficient_of_variation: 0.5,
+    },
+    match_count: matches.length,
+    matches,
     tier: 'free',
-    note:
-      corridors.length === 0
-        ? 'No healthy corridors detected yet. A corridor needs at least 10 interactions in the period with no failures, no anomalies, and consistent latency.'
-        : 'Healthy corridors are targets your agent uses successfully and consistently. Preserve them.',
   });
 });
 

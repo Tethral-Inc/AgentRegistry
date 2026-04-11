@@ -1,8 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
-import { renderAttribution, type AttributionLabel } from '../presenter/attribution-templates.js';
-import { renderMaturityPrefix, type ProfileStateForPrefix } from '../presenter/maturity-prefix.js';
 
 /**
  * Resolve an agent name to an agent_id via the lookup endpoint.
@@ -47,19 +45,12 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        // Presenter pattern: gather from multiple endpoints to build a
-        // composite user-facing summary. Fetch the profile for the
-        // maturity prefix AND the friction lens in parallel.
-        const [frictionRes, profileRes] = await Promise.all([
-          fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=${scope}`),
-          fetch(`${apiUrl}/api/v1/agent/${id}/profile`),
-        ]);
-
-        if (!frictionRes.ok) {
-          const errText = await frictionRes.text().catch(() => `HTTP ${frictionRes.status}`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=${scope}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Friction report error: ${errText}` }] };
         }
-        const data = await frictionRes.json();
+        const data = await res.json();
 
         if (data.error) {
           return { content: [{ type: 'text' as const, text: `Error: ${data.error.message}` }] };
@@ -68,32 +59,16 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         const s = data.summary;
         const displayName = data.name || agent_name || getAgentName() || id;
 
-        // Maturity prefix from profile endpoint (cross-cutting — every
-        // presenter tool should show this so operators know how much to
-        // trust the findings).
-        let maturityPrefix = '';
-        if (profileRes.ok) {
-          try {
-            const profileData = await profileRes.json();
-            if (profileData?.profile_state) {
-              maturityPrefix = renderMaturityPrefix(profileData.profile_state as ProfileStateForPrefix);
-            }
-          } catch {
-            // Profile fetch failure is non-fatal — skip the prefix.
-          }
-        }
-
         if (s.total_interactions === 0) {
           return {
             content: [{
               type: 'text' as const,
-              text: `${maturityPrefix}No interactions recorded for ${displayName} (scope "${scope}"). Call log_interaction after each external tool call or API request to populate your friction data.`,
+              text: `No interactions recorded for ${displayName} (scope "${scope}"). Call log_interaction after each external tool call or API request to populate your friction data.`,
             }],
           };
         }
 
-        let text = maturityPrefix;
-        text += `Friction Report for ${displayName} (${scope})\n`;
+        let text = `Friction Report for ${displayName} (${scope})\n`;
         text += `Agent ID: ${data.agent_id}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Tier: ${data.tier || 'free'}\n\n`;
@@ -166,16 +141,6 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               text += `, anomaly ${((t.network_anomaly_rate ?? 0) * 100).toFixed(1)}%`;
               text += ` across ${t.network_agent_count ?? 0} agents\n`;
             }
-          }
-        }
-
-        // Attribution — "where did the cost come from" for each top target,
-        // rendered via the template library with the rhetorical invariant
-        // (subject is "your interaction profile", never "you")
-        if (data.attribution && Array.isArray(data.attribution) && data.attribution.length > 0) {
-          text += '\n── Attribution ──\n';
-          for (const label of data.attribution as AttributionLabel[]) {
-            text += `  ${renderAttribution(label)}\n`;
           }
         }
 
