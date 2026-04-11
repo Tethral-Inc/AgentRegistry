@@ -27,6 +27,62 @@ A **next steps** section covers the Claude Code plugin, which is explicitly out 
 
 ---
 
+## Priorities and guardrails
+
+This isn't a rulebook. It's a short set of reminders for what ACR is, what it isn't, and what's worth keeping in mind when you're knee-deep in an implementation and tempted to take a shortcut or add a "small thing" while you're in the area.
+
+### What ACR is
+
+Pulled from `proposals/mcp-compute-boundary.md`. Keep these in mind when a design decision gets fuzzy:
+
+- An **interaction profile registry** — we observe behavior, we don't analyze or block
+- A **corpus built over time** — schema stability and long-term comparability matter more than any single feature
+- A **two-layer friction observer** — internal (agent engaging its own parts) and external (those parts reaching outside)
+- A **compute-thin presenter** — the server computes, the MCP renders and chooses what matters to surface
+- A **lightweight, privacy-respectful sensor** — no content, no owner tracking, no surveillance state on the user's machine
+
+### What ACR isn't
+
+Worth spelling out, because implementation is exactly when "while we're in here" scope creep happens:
+
+- **Not a security product** — we don't evaluate skills, score threats, or block anything. We observe and notify.
+- **Not a threat detector** — when we surface anomalies, we're relaying community signals, not making judgments.
+- **Not a skill catalog or distributor** — we observe what the ecosystem has. We don't advertise counts; OpenClaw is at 50k and ours is static.
+- **Not an analytics platform** — we measure interaction behavior, not user behavior. We don't fingerprint, don't profile humans, don't correlate people to sessions.
+- **Not a compliance tool** — privacy is how the product is built, not a checkbox we satisfy later.
+- **Not Datadog** — we're upstream of infrastructure monitoring. We measure the agent itself, not the systems underneath.
+
+If a field name, response shape, error message, or marketing line drifts toward any of those, that's a signal to stop and re-read the positioning. Not because there's a rule against it — because it isn't what we do.
+
+### Priority ordering (rough, for when schedule pressure forces choices)
+
+All five items are in Phase 1 scope. If something has to give:
+
+- **Item 2 (composition capture) is the load-bearing item.** Items 3 and 4 depend on it. Internal-vs-external friction classification — one of the two main things ACR reads from the interaction surface — cannot work without it. If only one item ships, this is the one.
+- **Item 5 (60s correlation window)** is the smallest and the most architecturally cheap. It closes a real gap (in-flight workflow linkage) with minimal risk. Easy quick win.
+- **Item 1 (categories)** is the biggest user-facing change to the ingest schema. The value appears with a lag — receipts have to accumulate with the new fields populated before the read endpoints show meaningful breakdowns.
+- **Item 4 (attribution phrasing)** is the highest-visibility change because every presenter tool response gets a maturity prefix and eventually an attribution sentence. Users will notice it immediately.
+- **Item 3 (update cadence)** is the smallest patch: a skill-instruction update plus a server-side `composition_stale` flag. Low code, low risk, depends on Item 2.
+
+### Minimum viable Phase 1
+
+If we have to cut: ship **Item 2 + Item 5 + Item 4** first. That gives us the internal-vs-external split (Item 2), in-flight correlation (Item 5), and visible presenter improvements (Item 4). Items 1 and 3 can follow without blocking the product narrative.
+
+### Things worth remembering during implementation
+
+Not rules. Reminders to catch "I was about to do X, oh wait":
+
+- **No skill counts** in any response, log line, or UI string. The corpus grows — don't brag about its size.
+- **No accusatory language** in attribution, error messages, warnings, or notifications. The subject is "your interaction profile" or "your composition," never "you."
+- **No content capture** anywhere — not just in receipts. Don't add a "prompt snippet" field to a new schema because "it would be useful for debugging."
+- **Privacy framing is positive, not defensive.** The 60s window and the opt-out are design choices. When you write copy, lead with what the user gets (fast, light, private), not what we declined to take.
+- **The server computes, the MCP renders.** If you're writing `.reduce(` or `.sort(` in an MCP tool handler, pause and ask whether that math belongs on the server instead.
+- **Don't invent rules.** If a constraint isn't in the compute-boundary doc and doesn't fall out of ACR's actual purpose, it probably shouldn't be in the plan either. "While I'm here let me also forbid..." is how we end up with cargo-culted rigor that confines for no reason.
+
+If any of these feel redundant with the compute-boundary doc, they're meant to. They're here so you don't have to open three docs while you're writing the code.
+
+---
+
 ## Reference goals
 
 These are pulled from `proposals/mcp-compute-boundary.md` and from conversation. Every decision in this plan is weighed against them. If the plan appears to violate one, that is drift and must be flagged.
@@ -71,6 +127,40 @@ This lets Item 5 and Item 1 land quickly while Item 2 is the critical path for I
 ### Checkpoints
 
 After each item, run the **drift checklist** at the bottom of this document before merging. If any check fails, the PR is held until the drift is resolved.
+
+---
+
+## Cross-cutting concerns
+
+These aren't bound to any single item — they apply across multiple items and should be kept in mind on every change.
+
+### SDK parity
+
+When a user-facing change lands on the MCP, it should also land on the TypeScript SDK (`@tethral/acr-sdk`) and the Python SDK (`tethral-acr`). Item 1 explicitly lists the SDK changes. Items 2 and 4 touch the receipt payload and the friction response respectively, which may require SDK updates too. Before closing any item, check whether the SDKs need parity changes — and if they do, include them in the same phase.
+
+### Maturity surfacing in every presenter tool
+
+`profile_state.maturity_state` (`warmup` / `calibrating` / `stable_candidate`) should appear at the top of every presenter tool's output, not just in `get_friction_report`. If you're writing or updating any presenter tool in this phase, include the `renderMaturityPrefix(profile)` helper (landing as part of Item 4) as the first line of the response. This is the "progression, not a gate" pattern made visible — users see the meter fill up as their profile matures.
+
+Applies to: `get_friction_report`, `get_interaction_log`, `get_network_status`, `get_skill_tracker`, any future presenter tool.
+
+### Privacy framing copy
+
+The 60s correlation window, the operator opt-out for deep composition, the no-content rule, and the no-owner-tracking rule are all part of one story: ACR is built to be lightweight, privacy-respectful, and non-interfering. When you write user-facing copy — README, MCP tool descriptions, marketplace listings, terms page, error messages — lead with what the user gets (fast, light, private), not what we declined to take (content, history, fingerprints).
+
+The framing is positive and marketable, not defensive. "We keep a ~60-second correlation window and nothing else" is better than "We don't store your data."
+
+### Documentation sync
+
+When an MCP tool's behavior changes, its `description` string in `registerTool` changes too. The description is the only thing the agent's LLM reads at decision time — if it's stale, the agent uses the tool wrong. Every PR that changes tool behavior should include a description update in the same commit.
+
+### No-content check on every schema addition
+
+Any new receipt field, any new payload object, any new response shape — before merging, skim the change for field names that look like content (`body`, `payload`, `text`, `content`, `prompt`, `completion`, `input`, `output`, `snippet`). If one lands, it should be rejected unless it's explicitly metadata — `response_size_bytes` is fine because it's a number; `response_body` is not fine because it's content.
+
+### Attribution rhetorical invariant (cross-cutting, not just Item 4)
+
+The "subject is your interaction profile or your composition, never 'you'" invariant from Item 4 applies to every user-facing string, not just the friction templates. Error messages, notification text, warning banners, and log strings that an operator might see all follow the same rule. The linting test in Item 4 can be extended to grep the entire MCP source tree if we find drift.
 
 ---
 
@@ -143,8 +233,9 @@ ALTER TABLE interaction_receipts DROP COLUMN IF EXISTS categories;
 **Zod schema addition (`shared/schemas/receipt.ts`):**
 
 ```typescript
-// Known values per dimension — lenient, not strict enum.
-// Unknown string values are accepted (evolving taxonomy support).
+// Known dimensions with per-field validation.
+// Unknown dimensions are accepted via catchall so the taxonomy can evolve
+// without rejecting receipts from newer clients.
 const CategoriesSchema = z.object({
   target_type: z.string().max(64).optional(),
   activity_class: z.string().max(32).optional(),
@@ -153,10 +244,12 @@ const CategoriesSchema = z.object({
   workflow_phase: z.string().max(32).optional(),
   data_shape: z.string().max(32).optional(),
   criticality: z.string().max(32).optional(),
-}).strict().optional();
+}).catchall(z.string().max(64)).optional();
 ```
 
-`.strict()` rejects unknown keys at the top level (forces schema discipline). Values within each dimension are loose strings with length caps (privacy + sanity).
+**Why `.catchall()` and not `.strict()`:** the taxonomy is explicitly expected to evolve. If a newer client sends a receipt with an additional dimension (e.g., `skill_level: 'intermediate'`), the server should accept it, not reject the whole receipt. `.catchall(z.string().max(64))` gives us the right behavior: known keys get their specific validation, unknown keys are accepted as long as they're strings under 64 characters.
+
+The length caps on both known and unknown values are privacy + sanity guards against someone accidentally (or maliciously) shoving a prompt into a "category" field. A 64-character value is plenty for a classifier token and too small to hide content in.
 
 ### Migration strategy
 
@@ -842,6 +935,98 @@ Every PR that touches the MCP, the ingest API, or the compute-boundary-related c
 - [ ] **Every item has a test plan run and passing**
 - [ ] **Every item has a rollback path documented and verified**
 - [ ] **Observability metrics are emitted from day one** (not added post-hoc)
+
+---
+
+## Phase 1 success and completion
+
+This section is a runbook-style checklist for knowing when Phase 1 is actually done, what to watch after deploy, and what to do when the plan turns out to be wrong. None of it is a hard gate — it's the stuff you want to run through before calling it shipped.
+
+### Definition of Ready (before starting implementation)
+
+Before picking up any item, these should be true:
+
+- [ ] Local dev environment builds cleanly: `pnpm install && pnpm build`
+- [ ] Migration harness runs: `node scripts/run-migration.mjs up`
+- [ ] Integration test harness runs against local DB: `node scripts/test-agent-lifecycle.mjs`
+- [ ] You've read `proposals/mcp-compute-boundary.md`
+- [ ] You've skimmed `proposals/positioning-audit.md` so the framing doesn't drift mid-implementation
+- [ ] You know which tier an endpoint belongs to (Basic / Pro / Enterprise) before adding fields to its response
+- [ ] You've checked this plan's **Cross-cutting concerns** section to see if your change has knock-on effects (SDK parity, maturity surfacing, privacy framing, etc.)
+
+### Definition of Done for Phase 1
+
+Phase 1 is complete when all of these are true:
+
+- [ ] Each of the five items' acceptance criteria are checked off on their respective PRs
+- [ ] Unit, integration, and E2E test suites pass
+- [ ] The drift prevention checklist has been run on every merged PR (and filed in the PR description)
+- [ ] The privacy framing copy has landed in:
+  - [ ] Root `README.md`
+  - [ ] `packages/mcp-server/README.md`
+  - [ ] `public/terms.html`
+  - [ ] Any marketplace listing text that mentions composition or state handling
+- [ ] SDK parity: TypeScript and Python SDKs accept the new category parameters (if they need them for the MCP/SDK users) and are published to npm and PyPI
+- [ ] A staging smoke test succeeds, covering:
+  - [ ] Fresh agent registers → profile returns `maturity_state: warmup`
+  - [ ] After ~50 receipts → profile returns `maturity_state: calibrating`
+  - [ ] Posting a receipt with `categories.activity_class = 'math'` → `/friction` shows a math breakdown
+  - [ ] Two receipts <60s apart on the same `chain_id` → second receipt has `preceded_by` set
+  - [ ] Agent that hasn't updated composition for >30 min → receipt response has `composition_stale: true`
+  - [ ] `get_friction_report` output starts with a maturity prefix and uses the attribution rhetorical invariant (no "your fault," no "your side," subject is "your interaction profile")
+  - [ ] Setting `ACR_DEEP_COMPOSITION=false` → registered composition has no sub-component data
+- [ ] Observability dashboards exist for the per-item metrics listed below
+- [ ] A short "what changed in Phase 1" note is added to the root `README.md` changelog section (or equivalent)
+
+### Success metrics (for observing, not for gating)
+
+These are baselines to watch post-deploy so we know whether the phase did what we intended. None of them are hard targets.
+
+**Adoption**
+- % of receipts carrying non-empty `categories` in the first 30 days (how fast is the new schema being populated?)
+- Unique values observed per category dimension (informs taxonomy refinement — if `activity_class: 'legal'` starts appearing, we know to formalize it)
+- % of agents reporting two-source composition (both MCP observation and agent self-report)
+
+**Quality**
+- % of agents progressing through maturity states (`warmup` → `calibrating` → `stable_candidate`) within their first week
+- % of profiles where the two-source composition delta is non-empty (how often does observation disagree with self-report?)
+- Rate of `composition_stale: true` flags set per agent per day (how often is drift being caught?)
+
+**Privacy and trust**
+- % of sessions with `ACR_DEEP_COMPOSITION=false` (operator opt-out rate)
+- Any user-reported confusion about attribution text (via GitHub issues, support channels)
+- Any privacy-related inbound questions
+
+**MCP health**
+- MCP tool latency distribution (detect observer-effect regressions from this phase's changes)
+- Self-log success rate (fire-and-forget instrumentation is still firing)
+- 60s correlation window hit rate (how often does the MCP find a matching recent receipt to link against?)
+
+### Phase-level risks
+
+Item-level risks are in each item's section. These are risks to the phase as a whole, with the fallback response pre-written so we're not improvising if something goes wrong.
+
+| Risk | Fallback response |
+|---|---|
+| Category taxonomy proves wrong after real usage | Observability on unique values per dimension surfaces what people actually use. Iterate the taxonomy as a follow-up; the JSONB schema is additive so iteration is cheap — no migration needed. |
+| Two-source composition delta is noisy and mostly useless | Scale back the delta computation to simpler "present/absent" diffs. Don't surface noisy findings to users until we understand what "meaningful delta" means in practice. The storage is still valuable even if the delta display is hidden. |
+| Near-compulsory update cadence leaves too much drift | Ship the Claude Code plugin (Phase 2) sooner than planned to close the gap for Claude Code users. Observability on `composition_stale` rates tells us when to prioritize this. |
+| Operators don't find the opt-out mechanism | Add a tool-description-level mention on `register_agent` and a one-line notice the first time composition is captured deep. Low-cost addition. |
+| Attribution templates don't cover real server-returned cases | The template library has a fallback path for `insufficient_data` and for unknown labels — fall back to neutral numerical presentation (Option 4A) rather than failing to render. |
+| Schema migration fails on production DB size | Migrations use `CONCURRENTLY` for indexes and `DEFAULT` for columns — no table locks expected. If a rollback is needed, `.down.sql` files already exist. Test on a production-sized staging DB before prod deploy. |
+| The plan itself has a flaw we won't discover until mid-implementation | See the revision process below. |
+
+### Revision process
+
+This plan is a draft. If you're implementing something and the plan is wrong — the acceptance criteria don't make sense, a file path has changed, a dependency is different in the real codebase, a constraint turned out wrong — amend this document. Open a PR that:
+
+1. Updates the plan to reflect what you've learned
+2. Explains the change in the commit message (what was wrong, what's correct, why)
+3. Gets reviewed alongside (or just before) the implementation PR that depends on the change
+
+Don't let the plan drift silently while the code diverges. The plan changes — it's supposed to.
+
+If a change is urgent (you're mid-implementation and blocked), amend the plan first and tag the commit "plan-amendment" so it's easy to audit later. Better to update the doc with a clear rationale than to leave it stale and have the next engineer pick up a broken plan.
 
 ---
 
