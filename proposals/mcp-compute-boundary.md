@@ -42,51 +42,75 @@ The MCP is the piece of ACR that runs in the agent's process. Its job is:
 1. **Register composition.** The model, its attachments, and — where visible — the components of those attachments. Keep it current as the agent changes.
 2. **Capture interactions.** Every external tool call, API request, MCP interaction, and — where visible — internal interactions the agent has with its own attached parts. With timing, status, chain context, category, and anomaly flags. No content.
 3. **Gather answers from the server.** Call one or more Layer 2 endpoints to pull together what the user needs to see.
-4. **Present in plain language.** Write user-facing summaries from server-returned structured data, choosing what to surface, in what order, with what emphasis.
+4. **Present what matters to the operator.** Not every piece of data the server returns is worth showing. The MCP's job is to pick the handful of things the operator actually needs — the most costly interaction, the target that's suddenly failing, the healthy corridor worth preserving, the jeopardy flag they should know about — and put them in front of the operator in language they can act on. Raw dumps of server JSON are not presentation. Telling the operator *what's costing them, what's working, what changed, and what to look at next* is presentation.
 
-Presentation is deliberate work. The MCP picks which of the server's labeled findings to mention first, phrases them in English the operator can act on, and ties together multiple endpoints when a single summary needs several data sources. That is not computation, and the MCP is expected to do it.
+The MCP picks which of the server's labeled findings to mention first, phrases them in English the operator can act on, and ties together multiple endpoints when a single summary needs several data sources. The server does the math. The MCP decides what's worth the operator's attention and says it clearly. Both jobs are real work.
 
 ---
 
 ## Constraints that fall out of ACR's purpose
 
-These are not rules imposed from outside. They're consequences of what ACR is for. If ACR's purpose changes, the constraints change with it.
+These are not rules imposed from outside. They're consequences of what ACR is for. If ACR's purpose changes, the constraints change with it. Each constraint below is named plainly; the explanation says what it means and why it exists, without jargon.
 
-### 1. No content capture, ever.
+### 1. The MCP never sends content — only facts about the call.
 
-ACR's privacy promise is that we record metadata only. The MCP never sends request bodies, response bodies, prompts, completions, file contents, or any identifier tied to a human. This is constitutive of the product — violating it breaks the privacy promise and the legal basis for operation.
+The MCP must never send or store the actual text of anything the agent is processing: no prompts, no completions, no request bodies, no response bodies, no file contents, no user input. Only facts *about* the call — which target, which category, how long it took, success or failure, chain position, anomaly flags.
 
-### 2. No computation over records on the client.
+**Why:** ACR's privacy promise to operators is that we record metadata only. That promise is the legal and ethical basis for the product. If the MCP ever captured content, the promise is broken and the product is dead.
 
-Attribution (was the cost on the agent's side or the target's?), decomposition (where in the chain did it land?), and downstream mapping all depend on population data and longitudinal history the MCP doesn't have. If the MCP did this math locally, it would get a different answer than the server, and the corpus would stop being coherent across clients.
+### 2. The MCP does not do math or logic across a list of receipts.
 
-Concretely: no `sort`, `filter`, `count`, `mean`, `sum`, or comparison across receipts on the client. The server has the full picture. The MCP asks for the answer and renders it.
+The MCP should not count receipts, average durations, sort targets by speed, pick "the worst failing call," or compare one receipt to another. Any time the answer to a question requires loading a set of past calls and computing something from them, the server does it.
 
-### 3. No persistent local state beyond session identity.
+**Why:** Every agent is running its own copy of the MCP. If each copy does its own math, each copy gets slightly different answers depending on what it has in memory, what's cached, what version of the code it's running. The corpus stops being consistent. The server has every receipt and is the single source of truth — ask it.
 
-The corpus lives on the server. Caches, rolling buffers, and memoization on the client drift from that truth and corrupt longitudinal readings. The only state the MCP holds is `agent_id`, `agent_name`, `transport_type`, and `api_url` — enough to keep talking to the server without re-authenticating.
+The MCP is still free to call the server, get back a pre-sorted list with pre-computed numbers, and pick which entries to mention in the user-facing text. That's presentation, not computation.
 
-### 4. No baseline, anomaly, or prediction work on the client.
+### 3. The MCP only remembers the agent's identity for the current session.
 
-These all require "what's normal for this composition under these conditions" — a question only the corpus can answer. The server computes the baseline and labels the finding. The MCP presents the label.
+The only things the MCP keeps in memory are: `agent_id`, `agent_name`, `transport_type`, and the server URL. Enough to know who's talking to the server and how to reach it. No cached report from five minutes ago. No buffer of recent calls. No list of targets the agent has seen. When the session ends, forget all of it except how to re-authenticate next time.
 
-### 5. Composition fidelity is load-bearing.
+**Why:** Anything the MCP remembers locally will eventually disagree with what the server knows, and then there are two versions of the truth. The server has to win that disagreement every time, so it's simpler if the MCP just doesn't remember.
 
-Because ACR distinguishes internal from external friction, the MCP must capture the agent's composition accurately. Missing attachments, incorrect skill hashes, or stale composition data corrupt the internal-vs-external split. `register_agent` and `update_composition` exist so the server can tell which interactions are an agent talking to itself versus an agent talking to the outside world.
+### 4. The MCP does not try to guess what's normal, what's weird, or what's coming next.
 
-### 6. Capture both internal and external interactions.
+Three things the MCP should not attempt:
 
-When an agent's model calls one of its own attached MCPs or skills, that's an **internal interaction** and should be logged. When the agent calls an external API or another agent, that's an **external interaction** and should be logged. Both go through `log_interaction`. The server separates them by comparing the target against the agent's registered composition.
+- **"What's normal"** — figuring out a baseline requires seeing lots of agents over lots of time. The MCP only sees one agent in one session. It's the wrong vantage point.
+- **"Is this weird"** — you can't flag something as anomalous unless you know what non-anomalous looks like. Same problem.
+- **"What's about to happen"** — forecasting requires history. The MCP doesn't have history; the server does.
 
-### 7. Observer-effect discipline.
+**Why:** All three require data the MCP doesn't have. If the MCP tried anyway, it would return confident-sounding numbers that are just wrong. The server computes these with the full corpus and returns labeled findings. The MCP renders the labels.
 
-The MCP is a sensor inside the thing being measured. If the sensor is slow, every measurement it takes is inflated by the sensor's own latency, and the friction reading becomes self-referential. This means: no synchronous heavy work before returning to the agent, no blocking the agent's hot path, and `log_interaction` stays fire-and-forget.
+### 5. The MCP must report composition correctly, or half the product breaks.
 
-This is a qualitative discipline, not a hard millisecond budget.
+The MCP is responsible for telling the server what the agent is made of: the model, its attached MCPs, its attached skills, its attached APIs, and (where visible) the sub-components of those attachments. It must keep that information current as the agent changes. If the MCP reports composition wrong — missing attachments, wrong hashes, stale data — the server can't tell which interactions are the agent talking to its own parts (internal friction) versus the agent talking to outside systems (external friction).
 
-### 8. Stable ingest schema.
+**Why:** Internal-vs-external is one of the two main readings ACR produces. If composition is wrong, that reading is wrong, and a major part of the product silently produces garbage. `register_agent` and `update_composition` exist specifically to let the MCP fix this when it changes.
 
-The corpus is built over months and years. Breaking receipt field names or semantics mid-stream breaks historical comparability. Schema additions are fine. Removals and renames require explicit migration and a version bump.
+### 6. The MCP logs every interaction the agent makes — inside itself and outside.
+
+When the agent's model uses one of its own attached tools (an MCP it has, a skill it's loaded, an internal helper) — that's an internal interaction and should be logged. When the agent calls an external API, another agent, or an outside system — that's an external interaction and should be logged. Both go through `log_interaction`. Both matter.
+
+**Why:** Without internal logging, you can't tell whether an agent is slow because of its own orchestration or because of what it's calling. You'd see "calling GitHub took 1.2 seconds" and blame GitHub, when really the agent spent 900ms on its own internal work before ever reaching out. ACR needs both layers to do attribution correctly.
+
+The server figures out which is which by comparing the target of each interaction against the agent's registered composition. That's another reason constraint #5 (correct composition) has to hold — the server literally uses it to classify interactions.
+
+### 7. The MCP must be fast and must not block the agent.
+
+The MCP runs inside the thing it's measuring. If the MCP is slow, the agent is slow, and then the friction report blames the agent's *targets* for time the MCP actually caused itself. The measurement pollutes itself.
+
+Concretely: `log_interaction` is fire-and-forget. No synchronous waits for the server to respond before returning to the agent. No heavy work in between. No "let me check one more thing" calls that block the hot path.
+
+This is not a hard millisecond budget — it's a discipline. If a change to the MCP makes the agent's perceived latency go up, something is wrong and should be moved server-side.
+
+**Why:** Observer effect. A fast, non-blocking sensor produces clean measurements. A slow sensor produces measurements of its own slowness.
+
+### 8. The shape of the data the MCP sends up can't keep changing.
+
+The fields in a receipt — `duration_ms`, `target_system_id`, `status`, `chain_id`, and the rest — have fixed names and fixed meanings. New fields can be added (that's fine). Existing fields cannot be renamed or have their meaning quietly changed. Removing a field requires explicit migration and a version bump.
+
+**Why:** ACR is building a corpus of receipts over months and years. If a receipt from January uses `duration_ms` and a receipt from June uses `latency_ms`, those receipts aren't comparable anymore, and the longitudinal record is broken. Long-term comparability is the whole point of keeping the corpus, so the short-term convenience of renaming a field doesn't win.
 
 ---
 
