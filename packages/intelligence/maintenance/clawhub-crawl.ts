@@ -170,23 +170,18 @@ export async function handler() {
         result.newHashes++;
       }
 
-      // UPSERT
+      // UPSERT — no synthetic threat_level, just record the hash and known_bad flag
       await execute(
-        `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, threat_level, known_bad_source)
-         VALUES ($1, $2, 'clawhub', $3, $4)
+        `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, known_bad_source)
+         VALUES ($1, $2, 'clawhub', $3)
          ON CONFLICT (skill_hash) DO UPDATE SET
            skill_name = COALESCE(EXCLUDED.skill_name, skill_hashes.skill_name),
            skill_source = COALESCE(EXCLUDED.skill_source, skill_hashes.skill_source),
-           threat_level = CASE
-             WHEN EXCLUDED.threat_level = 'critical' THEN 'critical'
-             ELSE skill_hashes.threat_level
-           END,
            known_bad_source = COALESCE(EXCLUDED.known_bad_source, skill_hashes.known_bad_source),
            last_updated = now()`,
         [
           skillHash,
           skill.name,
-          knownBadSource ? 'critical' : 'none',
           knownBadSource,
         ],
       );

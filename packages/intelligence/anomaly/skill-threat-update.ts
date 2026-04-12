@@ -12,21 +12,12 @@ interface CompositionRow {
   component_hashes: string[];
 }
 
-interface ThreatUpdate {
+interface SignalUpdate {
   skillHash: string;
   reporterCount: number;
   anomalyCount: number;
   totalCount: number;
   anomalyRate: number;
-  threatLevel: string;
-}
-
-function computeThreatLevel(reporterCount: number, anomalyRate: number): string {
-  if (reporterCount >= 50 && anomalyRate >= 0.60) return 'critical';
-  if (reporterCount >= 25 && anomalyRate >= 0.40) return 'high';
-  if (reporterCount >= 10 && anomalyRate >= 0.25) return 'medium';
-  if (reporterCount >= 3 && anomalyRate >= 0.10) return 'low';
-  return 'none';
 }
 
 export async function handler() {
@@ -80,8 +71,8 @@ export async function handler() {
       }
     }
 
-    // 4. Compute threat levels and upsert
-    const updates: ThreatUpdate[] = [];
+    // 4. Compute raw signal counts and upsert
+    const updates: SignalUpdate[] = [];
 
     for (const [skillHash, reporters] of skillSignals) {
       // Get total interaction count for this skill to compute anomaly rate
@@ -97,41 +88,38 @@ export async function handler() {
       const total = parseInt(countResult[0]?.total ?? '0', 10);
       const anomalies = parseInt(countResult[0]?.anomalies ?? '0', 10);
       const anomalyRate = total > 0 ? anomalies / total : 0;
-      const threatLevel = computeThreatLevel(reporters.size, anomalyRate);
 
-      if (threatLevel !== 'none') {
+      if (anomalies > 0) {
         updates.push({
           skillHash,
           reporterCount: reporters.size,
           anomalyCount: anomalies,
           totalCount: total,
           anomalyRate,
-          threatLevel,
         });
 
-        // 7. UPSERT into skill_hashes
+        // UPSERT raw signal counts into skill_hashes — no synthetic label
         await execute(
           `INSERT INTO skill_hashes (skill_hash, anomaly_signal_count, anomaly_signal_rate,
-           threat_level, agent_count, interaction_count, last_updated)
-           VALUES ($1, $2, $3, $4, $5, $6, now())
+           agent_count, interaction_count, last_updated)
+           VALUES ($1, $2, $3, $4, $5, now())
            ON CONFLICT (skill_hash) DO UPDATE SET
              anomaly_signal_count = $2,
              anomaly_signal_rate = $3,
-             threat_level = $4,
-             agent_count = GREATEST(skill_hashes.agent_count, $5),
-             interaction_count = GREATEST(skill_hashes.interaction_count, $6),
+             agent_count = GREATEST(skill_hashes.agent_count, $4),
+             interaction_count = GREATEST(skill_hashes.interaction_count, $5),
              last_updated = now()`,
-          [skillHash, anomalies, anomalyRate, threatLevel, reporters.size, total],
+          [skillHash, anomalies, anomalyRate, reporters.size, total],
         );
       }
     }
 
-    // 9. Alert on high/critical
-    const critical = updates.filter((u) => u.threatLevel === 'high' || u.threatLevel === 'critical');
-    if (critical.length > 0) {
-      // Enrich with catalog metadata
+    // Notify subscribed agents when signal counts are elevated
+    // (using raw thresholds: 25+ reporters AND 40%+ anomaly rate)
+    const elevated = updates.filter((u) => u.reporterCount >= 25 && u.anomalyRate >= 0.40);
+    if (elevated.length > 0) {
       const catalogLookups = new Map<string, { skill_name: string; description: string; version: string } | null>();
-      for (const c of critical) {
+      for (const c of elevated) {
         const catalogInfo = await queryOne<{ skill_name: string; description: string; version: string }>(
           `SELECT skill_name AS "skill_name", description AS "description", version AS "version"
            FROM skill_catalog WHERE current_hash = $1 LIMIT 1`,
@@ -146,11 +134,11 @@ export async function handler() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: `ACR Threat Alert: ${critical.length} skill(s) reached high/critical threat level.\n${critical.map((c) => {
+            text: `ACR Signal Alert: ${elevated.length} skill(s) with elevated anomaly signals.\n${elevated.map((c) => {
               const info = catalogLookups.get(c.skillHash);
               const label = info?.skill_name ?? c.skillHash.substring(0, 12) + '...';
               const ver = info?.version ? ` v${info.version}` : '';
-              return `- *${label}*${ver} (${c.threatLevel}, ${c.reporterCount} reporters, ${(c.anomalyRate * 100).toFixed(1)}% anomaly rate)`;
+              return `- *${label}*${ver} (${c.reporterCount} reporters, ${(c.anomalyRate * 100).toFixed(1)}% anomaly rate)`;
             }).join('\n')}`,
           }),
         });
@@ -158,36 +146,34 @@ export async function handler() {
     }
 
     // Notify subscribed agents
-    for (const u of updates) {
-      if (u.threatLevel === 'high' || u.threatLevel === 'critical') {
-        const subs = await query<{ agent_id: string }>(
-          `SELECT agent_id AS "agent_id" FROM skill_subscriptions
-           WHERE skill_hash = $1 AND active = true`,
-          [u.skillHash],
-        ).catch(() => []);
+    for (const u of elevated) {
+      const subs = await query<{ agent_id: string }>(
+        `SELECT agent_id AS "agent_id" FROM skill_subscriptions
+         WHERE skill_hash = $1 AND active = true`,
+        [u.skillHash],
+      ).catch(() => []);
 
-        for (const sub of subs) {
-          await execute(
-            `INSERT INTO skill_notifications
-             (agent_id, skill_hash, notification_type, severity, title, message, metadata)
-             VALUES ($1, $2, 'threat_warning', $3, $4, $5, $6)`,
-            [sub.agent_id, u.skillHash, u.threatLevel,
-             'Threat escalation: skill flagged as ' + u.threatLevel,
-             u.reporterCount + ' agents reported anomalies. Anomaly rate: ' + (u.anomalyRate * 100).toFixed(1) + '%.',
-             JSON.stringify({ reporter_count: u.reporterCount, anomaly_rate: u.anomalyRate })],
-          ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
-        }
+      for (const sub of subs) {
+        await execute(
+          `INSERT INTO skill_notifications
+           (agent_id, skill_hash, notification_type, severity, title, message, metadata)
+           VALUES ($1, $2, 'anomaly_signal', 'elevated', $3, $4, $5)`,
+          [sub.agent_id, u.skillHash,
+           'Elevated anomaly signals: ' + u.reporterCount + ' reporters',
+           u.reporterCount + ' agents reported anomalies. Anomaly rate: ' + (u.anomalyRate * 100).toFixed(1) + '%.',
+           JSON.stringify({ reporter_count: u.reporterCount, anomaly_rate: u.anomalyRate })],
+        ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
       }
     }
 
-    log.info({ updatedCount: updates.length, criticalCount: critical.length }, 'Threat update completed');
+    log.info({ updatedCount: updates.length, elevatedCount: elevated.length }, 'Skill signal update completed');
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ updated: updates.length, critical: critical.length }),
+      body: JSON.stringify({ updated: updates.length, elevated: elevated.length }),
     };
   } catch (err) {
-    log.error({ err }, 'Skill threat update failed');
+    log.error({ err }, 'Skill signal update failed');
     return { statusCode: 500, body: 'Internal error' };
   }
 }

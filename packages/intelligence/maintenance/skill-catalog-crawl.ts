@@ -41,26 +41,8 @@ function isKnownBad(skillName: string): boolean {
   return false;
 }
 
-function computeQualityScore(params: {
-  frontmatter: ParsedFrontmatter | null;
-  content: string;
-  tags: string[];
-  requires: string[];
-  threatLevel: string;
-}): number {
-  let score = 0;
-  const fm = params.frontmatter;
-  if (fm?.name) score += 10;
-  if (fm?.description && String(fm.description).length > 20) score += 20;
-  if (fm?.version) score += 15;
-  if (fm?.author) score += 10;
-  if (params.tags.length > 0) score += 5;
-  if (fm?.category) score += 5;
-  if (params.requires.length > 0) score += 5;
-  if (params.content.length > 500) score += 10;
-  if (params.threatLevel === 'none') score += 10;
-  return Math.min(score, 100);
-}
+// No synthetic quality_score. Raw metadata presence fields are stored
+// directly in the catalog — clients see what's there and what's missing.
 
 function compareSemver(oldVer: string | null, newVer: string | null): string {
   if (!oldVer || !newVer) return 'unknown';
@@ -161,18 +143,11 @@ async function processSkill(
   // Run content security scan
   const scanResult = scanSkillContent(content, name);
 
-  let threatLevel: string;
-  if (isKnownBad(name) || scanResult.max_severity === 'critical') threatLevel = 'critical';
-  else if (scanResult.max_severity === 'high') threatLevel = 'high';
-  else if (scanResult.max_severity === 'medium') threatLevel = 'medium';
-  else if (scanResult.max_severity === 'low') threatLevel = 'low';
-  else threatLevel = 'none';
+  const knownBad = isKnownBad(name);
 
   if (scanResult.findings.length > 0) {
-    log.warn({ name, source: skill.source, findings: scanResult.findings.length, maxSeverity: scanResult.max_severity, patterns: scanResult.threat_patterns }, 'Security findings detected');
+    log.warn({ name, source: skill.source, findings: scanResult.findings.length, maxSeverity: scanResult.max_severity, patterns: scanResult.threat_patterns }, 'Scanner findings detected');
   }
-
-  const qualityScore = computeQualityScore({ frontmatter, content, tags, requires, threatLevel });
 
   // Check existing catalog entry
   const existing = await queryOne<CatalogRow>(
@@ -191,16 +166,15 @@ async function processSkill(
       `INSERT INTO skill_catalog
        (skill_name, skill_source, source_url, current_hash, skill_content, content_snippet,
         description, version, author, tags, requires, category, frontmatter_raw,
-        status, quality_score, scan_result, threat_patterns, scan_score,
+        status, scan_result, threat_patterns, scan_score,
         last_crawled_at, content_changed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now(), now())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now(), now())
        RETURNING skill_id AS "skill_id"`,
       [
         name, skill.source, skill.sourceUrl, skillHash, content, contentSnippet,
         description, version, author, tags, requires, category,
         JSON.stringify(frontmatter ?? {}),
-        (threatLevel === 'critical' || threatLevel === 'high') ? 'flagged' : 'active',
-        qualityScore,
+        knownBad ? 'flagged' : 'active',
         JSON.stringify(scanResult),
         scanResult.threat_patterns,
         scanResult.scan_score,
@@ -215,24 +189,20 @@ async function processSkill(
         [catalogRow.skill_id, skillHash, version, content],
       );
 
-      // UPSERT into skill_hashes with catalog link
+      // UPSERT into skill_hashes with catalog link — no synthetic threat_level
       await execute(
-        `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, threat_level, catalog_skill_id)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, catalog_skill_id)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (skill_hash) DO UPDATE SET
            skill_name = COALESCE(EXCLUDED.skill_name, skill_hashes.skill_name),
            skill_source = COALESCE(EXCLUDED.skill_source, skill_hashes.skill_source),
            catalog_skill_id = COALESCE(EXCLUDED.catalog_skill_id, skill_hashes.catalog_skill_id),
-           threat_level = CASE
-             WHEN EXCLUDED.threat_level = 'critical' THEN 'critical'
-             ELSE skill_hashes.threat_level
-           END,
            last_updated = now()`,
-        [skillHash, name, skill.source, threatLevel, catalogRow.skill_id],
+        [skillHash, name, skill.source, catalogRow.skill_id],
       );
 
-      // Notify subscribed agents if new skill is flagged
-      if (threatLevel === 'critical' || threatLevel === 'high') {
+      // Notify subscribed agents if scanner found patterns
+      if (scanResult.threat_patterns.length > 0) {
         const subscribers = await query<{ agent_id: string }>(
           `SELECT agent_id AS "agent_id" FROM skill_subscriptions
            WHERE skill_hash = $1 AND active = true`,
@@ -243,10 +213,10 @@ async function processSkill(
           await execute(
             `INSERT INTO skill_notifications
              (agent_id, skill_hash, notification_type, severity, title, message, metadata)
-             VALUES ($1, $2, 'threat_blocked', $3, $4, $5, $6)`,
-            [sub.agent_id, skillHash, threatLevel,
-             'BLOCKED: ' + name + ' flagged by security scanner',
-             'The skill "' + name + '" you have installed has been flagged with ' + scanResult.threat_patterns.length + ' security issue(s). Consider uninstalling. Patterns: ' + scanResult.threat_patterns.join(', '),
+             VALUES ($1, $2, 'scanner_finding', 'info', $3, $4, $5)`,
+            [sub.agent_id, skillHash,
+             'Scanner findings for ' + name,
+             'External scanner detected ' + scanResult.threat_patterns.length + ' pattern(s): ' + scanResult.threat_patterns.join(', '),
              JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
           ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
         }
@@ -283,35 +253,30 @@ async function processSkill(
         description = $5, version = $6, author = $7, tags = $8, requires = $9,
         category = $10, frontmatter_raw = $11,
         last_crawled_at = now(), last_crawl_error = NULL, content_changed_at = now(),
-        status = CASE WHEN $12 = 'critical' THEN 'flagged' ELSE 'active' END,
-        quality_score = $13,
-        scan_result = $14, threat_patterns = $15, scan_score = $16,
+        status = CASE WHEN $12 THEN 'flagged' ELSE 'active' END,
+        scan_result = $13, threat_patterns = $14, scan_score = $15,
         updated_at = now()
-       WHERE skill_id = $17`,
+       WHERE skill_id = $16`,
       [
         skillHash, existing.current_hash, content, contentSnippet,
         description, version, author, tags, requires,
         category, JSON.stringify(frontmatter ?? {}),
-        threatLevel, qualityScore,
+        knownBad,
         JSON.stringify(scanResult), scanResult.threat_patterns, scanResult.scan_score,
         existing.skill_id,
       ],
     );
 
-    // UPSERT new hash into skill_hashes
+    // UPSERT new hash into skill_hashes — no synthetic threat_level
     await execute(
-      `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, threat_level, catalog_skill_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, catalog_skill_id)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (skill_hash) DO UPDATE SET
          skill_name = COALESCE(EXCLUDED.skill_name, skill_hashes.skill_name),
          skill_source = COALESCE(EXCLUDED.skill_source, skill_hashes.skill_source),
          catalog_skill_id = COALESCE(EXCLUDED.catalog_skill_id, skill_hashes.catalog_skill_id),
-         threat_level = CASE
-           WHEN EXCLUDED.threat_level = 'critical' THEN 'critical'
-           ELSE skill_hashes.threat_level
-         END,
          last_updated = now()`,
-      [skillHash, name, skill.source, threatLevel, existing.skill_id],
+      [skillHash, name, skill.source, existing.skill_id],
     );
 
     log.info(
@@ -331,8 +296,8 @@ async function processSkill(
       }).catch((err) => { log.debug({ err }, 'Slack notification failed'); });
     }
 
-    // Notify subscribed agents about the threat
-    if (threatLevel === 'critical' || threatLevel === 'high') {
+    // Notify subscribed agents if scanner found patterns on updated content
+    if (scanResult.threat_patterns.length > 0) {
       const subscribers = await query<{ agent_id: string }>(
         `SELECT agent_id AS "agent_id" FROM skill_subscriptions
          WHERE skill_hash = $1 AND active = true`,
@@ -343,10 +308,10 @@ async function processSkill(
         await execute(
           `INSERT INTO skill_notifications
            (agent_id, skill_hash, notification_type, severity, title, message, metadata)
-           VALUES ($1, $2, 'threat_blocked', $3, $4, $5, $6)`,
-          [sub.agent_id, skillHash, threatLevel,
-           'BLOCKED: ' + name + ' flagged by security scanner',
-           'The skill "' + name + '" you have installed has been flagged with ' + scanResult.threat_patterns.length + ' security issue(s). Consider uninstalling. Patterns: ' + scanResult.threat_patterns.join(', '),
+           VALUES ($1, $2, 'scanner_finding', 'info', $3, $4, $5)`,
+          [sub.agent_id, skillHash,
+           'Scanner findings for updated ' + name,
+           'External scanner detected ' + scanResult.threat_patterns.length + ' pattern(s): ' + scanResult.threat_patterns.join(', '),
            JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
         ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
       }

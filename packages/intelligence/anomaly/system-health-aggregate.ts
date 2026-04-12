@@ -12,12 +12,8 @@ interface AggregateRow {
   median_duration: number | null;
 }
 
-function computeHealthStatus(failureRate: number, anomalyRate: number): string {
-  if (anomalyRate >= 0.30) return 'flagged';
-  if (failureRate >= 0.15 || anomalyRate >= 0.15) return 'unhealthy';
-  if (failureRate < 0.05 && anomalyRate < 0.05) return 'healthy';
-  return 'degraded';
-}
+// No synthetic health_status label. Raw rates (failure_rate, anomaly_rate)
+// are written directly — clients interpret the numbers.
 
 export async function handler() {
   try {
@@ -51,14 +47,13 @@ export async function handler() {
 
       const anomalyRate = totalCount > 0 ? anomalyCount / totalCount : 0;
       const failureRate = totalCount > 0 ? failureCount / totalCount : 0;
-      const healthStatus = computeHealthStatus(failureRate, anomalyRate);
 
       await execute(
         `INSERT INTO system_health (
            system_id, system_type, total_interactions, distinct_agent_count,
            anomaly_signal_count, anomaly_rate, median_duration_ms,
-           failure_rate, health_status, last_seen_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+           failure_rate, last_seen_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
          ON CONFLICT (system_id) DO UPDATE SET
            total_interactions = $3,
            distinct_agent_count = $4,
@@ -66,7 +61,6 @@ export async function handler() {
            anomaly_rate = $6,
            median_duration_ms = $7,
            failure_rate = $8,
-           health_status = $9,
            last_seen_at = now()`,
         [
           row.target_system_id,
@@ -77,7 +71,6 @@ export async function handler() {
           anomalyRate,
           row.median_duration,
           failureRate,
-          healthStatus,
         ],
       );
 
