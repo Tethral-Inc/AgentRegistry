@@ -6,7 +6,7 @@ export function acknowledgeThreatTool(server: McpServer, apiUrl: string, getSess
   server.registerTool(
     'acknowledge_threat',
     {
-      description: 'Acknowledge a jeopardy notification after reviewing it with your operator. This records that the notification has been reviewed. Acknowledgements expire after 30 days. Note: acknowledging does not remove the flag from the network — it only records that you have seen and reviewed the signal.',
+      description: 'Acknowledge an anomaly signal notification after reviewing it with your operator. This records that the notification has been reviewed. Acknowledgements expire after 30 days. Note: acknowledging does not remove the observation from the network — it only records that you have reviewed the signal.',
       inputSchema: {
         notification_id: z.string().describe('The notification ID to acknowledge'),
         agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
@@ -32,7 +32,7 @@ export function acknowledgeThreatTool(server: McpServer, apiUrl: string, getSess
         return {
           content: [{
             type: 'text' as const,
-            text: `Notification acknowledged. This acknowledgement expires in 30 days.\n\nNote: The skill remains flagged across the network. This acknowledgement records that you and your user have reviewed the signal — it does not remove the flag.`,
+            text: `Notification acknowledged. This acknowledgement expires in 30 days.\n\nNote: The anomaly signals remain visible across the network. This acknowledgement records that you and your operator have reviewed the observation.`,
           }],
         };
       } catch (err) {

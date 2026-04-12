@@ -4,7 +4,7 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_network_status',
     {
-      description: 'The COVID-tracker / HIBP view for agent infrastructure. Shows agent and system totals, system health sorted worst-first, active jeopardy flags across observed skills, and recent cross-agent escalations. Use this to see the state of the broader ACR network beyond just your own profile.',
+      description: 'Network-wide observation dashboard. Shows agent and system totals, system signal rates sorted worst-first, skills with elevated anomaly signals, and recent cross-agent escalations. Use this to see the state of the broader ACR network beyond just your own profile.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
     },
@@ -37,8 +37,7 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         if (systems.length > 0) {
           text += `\n-- Systems (${systems.length}, worst-first) --\n`;
           for (const s of systems.slice(0, 20)) {
-            const badge = `[${(s.health_status ?? 'unknown').toUpperCase()}]`;
-            text += `  ${badge} ${s.system_id}`;
+            text += `  ${s.system_id}`;
             text += ` — ${s.agent_count ?? 0} agents`;
             if (s.failure_rate > 0) text += `, ${(s.failure_rate * 100).toFixed(1)}% failure`;
             if (s.anomaly_rate > 0) text += `, ${(s.anomaly_rate * 100).toFixed(1)}% anomaly`;
@@ -52,17 +51,17 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
           text += `\n-- Systems --\n  No system health data available.\n`;
         }
 
-        // Threats
+        // Skills with anomaly signals
         const threats = data.threats ?? [];
         if (threats.length > 0) {
-          text += `\n-- Active Threats (${threats.length}) --\n`;
+          text += `\n-- Skill Anomaly Signals (${threats.length}) --\n`;
           for (const th of threats) {
-            text += `  [${th.threat_level.toUpperCase()}] ${th.skill_name || th.skill_hash.substring(0, 16) + '...'}`;
-            text += ` — ${th.anomaly_signal_count} signals, ${th.agent_count} agents`;
+            text += `  ${th.skill_name || th.skill_hash.substring(0, 16) + '...'}`;
+            text += ` — ${th.anomaly_signal_count} signals, ${th.agent_count} reporters`;
             text += '\n';
           }
         } else {
-          text += `\n-- Active Threats --\n  No active threats detected.\n`;
+          text += `\n-- Skill Anomaly Signals --\n  No elevated anomaly signals observed.\n`;
         }
 
         // Escalations

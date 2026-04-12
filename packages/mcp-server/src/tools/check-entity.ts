@@ -52,7 +52,7 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
             return {
               content: [{
                 type: 'text' as const,
-                text: `Unknown skill. This hash has not been seen in the ACR network. Exercise caution with unfamiliar skills.${similarText}`,
+                text: `Unknown skill. This hash has not been observed by the ACR network.${similarText}`,
               }],
             };
           }
@@ -85,8 +85,7 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
           // Scan signals — if the content scanner observed something,
           // the scanner's raw findings (which patterns it matched) are
           // reported here. No pass/fail verdict.
-          if (data.scan_score != null) text += `  Content scanner score: ${data.scan_score}\n`;
-          if (data.blocked_reason) text += `  Content scanner notes: ${data.blocked_reason}\n`;
+          if (data.scan_score != null) text += `  Content scanner score (external): ${data.scan_score}\n`;
 
           // Version freshness — raw comparison, no advice.
           if (data.is_current_version === false) {

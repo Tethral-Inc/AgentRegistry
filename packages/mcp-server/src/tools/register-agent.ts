@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { setAgentId, setAgentName } from '../state.js';
 import { defaultSession } from '../session-state.js';
 
-const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate jeopardy notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
+const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate anomaly signal notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
 
 // Minimal shape for a composable component — matches shared/schemas/agent.ts
 // CompositionSchema. Kept local to the MCP so we don't need to import Zod
@@ -109,9 +109,9 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
           text += `\nConnected Systems: ${briefing.connected_systems.length}`;
         }
         if (briefing.active_threats.length > 0) {
-          text += `\n\nActive Threats: ${briefing.active_threats.length}`;
+          text += `\n\nSkills with anomaly signals: ${briefing.active_threats.length}`;
           for (const t of briefing.active_threats) {
-            text += `\n- [${t.threat_level.toUpperCase()}] ${t.description}`;
+            text += `\n- ${t.description} — ${t.anomaly_signal_count ?? 0} signals, ${t.agent_count ?? 0} reporters`;
           }
         }
 

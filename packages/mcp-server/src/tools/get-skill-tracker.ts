@@ -5,17 +5,17 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_skill_tracker',
     {
-      description: 'Track skill adoption, anomaly rates, and threat levels across the agent population. Use without skill_hash for an overview, or with skill_hash for a deep-dive with provider breakdown and cross-provider correlation data.',
+      description: 'Track skill adoption and anomaly signal rates across the agent population. Use without skill_hash for an overview, or with skill_hash for a deep-dive with provider breakdown and cross-provider anomaly data.',
       inputSchema: {
         skill_hash: z.string().optional().describe('Specific skill hash for deep-dive view'),
-        threat_level: z.string().optional().describe('Filter by threat level (none, low, medium, high, critical)'),
-        sort: z.enum(['agent_count', 'interaction_count', 'anomaly_signal_rate', 'threat_level']).optional().default('agent_count').describe('Sort field'),
+        min_anomaly_signals: z.number().optional().describe('Only show skills with at least this many anomaly signals'),
+        sort: z.enum(['agent_count', 'interaction_count', 'anomaly_signal_rate']).optional().default('agent_count').describe('Sort field'),
         limit: z.number().min(1).max(100).optional().default(20).describe('Max skills to show'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.5 },
     },
-    async ({ skill_hash, threat_level, sort, limit }) => {
+    async ({ skill_hash, min_anomaly_signals, sort, limit }) => {
       try {
         // Deep-dive mode
         if (skill_hash) {
@@ -30,7 +30,7 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
 
         // List mode
         const params = new URLSearchParams();
-        if (threat_level) params.set('threat_level', threat_level);
+        if (min_anomaly_signals != null) params.set('min_anomaly_signals', String(min_anomaly_signals));
         if (sort) params.set('sort', sort);
         if (limit) params.set('limit', String(limit));
 
@@ -48,8 +48,7 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
         let text = `Skill Tracker\n${'='.repeat(20)}\n\n`;
 
         for (const s of data.skills) {
-          const threatBadge = s.threat_level !== 'none' ? ` — ${(s.threat_level as string).toUpperCase()}` : '';
-          text += `${s.skill_name || (s.skill_hash as string).substring(0, 16) + '...'}${threatBadge}\n`;
+          text += `${s.skill_name || (s.skill_hash as string).substring(0, 16) + '...'}\n`;
           text += `  ${s.agent_count} agents | ${s.interaction_count} interactions`;
           const sigRate = s.anomaly_signal_rate as number;
           if (sigRate > 0) {
@@ -75,7 +74,6 @@ function formatSkillDetail(skill: Record<string, unknown>): string {
   let text = `Skill: ${skill.skill_name || skill.skill_hash}\n`;
   text += `${'='.repeat(40)}\n`;
   text += `  Hash: ${skill.skill_hash}\n`;
-  text += `  Threat level: ${(skill.threat_level as string).toUpperCase()}\n`;
   text += `  Adoption: ${skill.agent_count} agents | ${skill.interaction_count} interactions\n`;
 
   const sigCount = skill.anomaly_signal_count as number;
@@ -101,9 +99,8 @@ function formatSkillDetail(skill: Record<string, unknown>): string {
     }
   }
 
-  const correlated = skill.cross_provider_correlation as boolean;
-  if (correlated) {
-    text += `\n  Cross-provider correlation: YES (${crossProvider?.length ?? 0} providers reporting anomalies)\n`;
+  if (crossProvider && crossProvider.length >= 2) {
+    text += `\n  ${crossProvider.length} providers reporting anomalies\n`;
   }
 
   return text;

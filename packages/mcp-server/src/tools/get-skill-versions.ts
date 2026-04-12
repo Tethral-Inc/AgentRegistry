@@ -44,13 +44,12 @@ export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolver
         if (skillData.description) text += `Description: ${skillData.description}\n`;
 
         if (skillData.is_current_version === false) {
-          text += `\nOUTDATED: You are ${skillData.versions_behind ?? '?'} version(s) behind.`;
+          text += `\n${skillData.versions_behind ?? '?'} version(s) behind.`;
           if (skillData.current_hash) {
-            text += `\nCurrent hash: ${skillData.current_hash.slice(0, 16)}...`;
+            text += ` Current hash: ${skillData.current_hash.slice(0, 16)}...`;
           }
-          text += '\nConsider updating to the latest version.';
         } else if (skillData.is_current_version === true) {
-          text += '\nYou have the latest version.';
+          text += '\nThis is the latest version observed by the network.';
         }
 
         // Try to get full version history from the catalog API
@@ -74,7 +73,7 @@ export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolver
                   version: string | null;
                   change_type: string;
                   detected_at: string;
-                  threat_level: string | null;
+                  anomaly_signal_count: number | null;
                 }>;
               };
 
@@ -82,12 +81,11 @@ export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolver
                 text += '\n\nVersion History:';
                 for (const v of versionsData.versions) {
                   const isCurrent = v.skill_hash === skill_hash ? ' ← YOU' : '';
-                  const threat = v.threat_level && v.threat_level !== 'none'
-                    ? ` [${v.threat_level.toUpperCase()}]`
-                    : '';
+                  const signals = (v as Record<string, unknown>).anomaly_signal_count as number | null;
+                  const signalText = signals && signals > 0 ? ` (${signals} signals)` : '';
                   const ver = v.version ? `v${v.version}` : v.skill_hash.slice(0, 12);
                   const date = v.detected_at.split('T')[0];
-                  text += `\n  ${date} | ${ver} (${v.change_type})${threat}${isCurrent}`;
+                  text += `\n  ${date} | ${ver} (${v.change_type})${signalText}${isCurrent}`;
                 }
               }
             }

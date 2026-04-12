@@ -22,7 +22,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_friction_report',
     {
-      description: "Query the friction lens of your interaction profile — one of several lenses available (more on the roadmap). The friction lens surfaces where time and tokens are being lost: bottleneck targets, chain overhead, retry waste, directional friction between targets, and how you compare to the population baseline. Friction is a continuum, not a verdict — high friction could be infrastructure, a hard task, or a compromised component. Use it together with jeopardy notifications to interpret correctly. Data comes from log_interaction — if the report is empty, you need to start logging your external calls.",
+      description: "Query the friction lens of your interaction profile — one of several lenses available (more on the roadmap). The friction lens surfaces where time and tokens are being lost: bottleneck targets, chain overhead, retry waste, directional friction between targets, and how you compare to the population baseline. Friction is a continuum, not a verdict — high friction could be infrastructure, a hard task, or a component with elevated anomaly signals. Use it together with anomaly signal notifications to interpret correctly. Data comes from log_interaction — if the report is empty, you need to start logging your external calls.",
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),

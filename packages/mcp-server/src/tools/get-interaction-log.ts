@@ -9,15 +9,8 @@ const STATUS_TRANSLATIONS: Record<string, string> = {
   partial: 'partial — incomplete response received',
 };
 
-const ANOMALY_TRANSLATIONS: Record<string, string> = {
-  unexpected_behavior: 'unexpected behavior from target',
-  data_exfiltration: 'suspected data exfiltration attempt',
-  prompt_injection: 'suspicious content detected in response',
-  malformed_output: 'malformed or invalid response format',
-  excessive_latency: 'target responding slower than expected',
-  unauthorized_access: 'unauthorized access attempt detected',
-  other: 'other anomaly',
-};
+// Anomaly categories are passed through as-is from the agent's report.
+// No synthetic descriptions — the category name is the data.
 
 async function resolveId(agentName: string | undefined, agentId: string | undefined, apiUrl: string): Promise<string> {
   if (agentName) {
@@ -173,7 +166,7 @@ function formatDetail(data: Record<string, unknown>, displayName: string): strin
 
   if (r.anomaly_flagged) {
     const cat = r.anomaly_category as string;
-    text += `\nAnomaly: ${cat} — ${ANOMALY_TRANSLATIONS[cat] ?? cat}\n`;
+    text += `\nAnomaly: ${cat}\n`;
     if (r.anomaly_detail) {
       text += `[reported] ${r.anomaly_detail}\n`;
     }
@@ -184,10 +177,9 @@ function formatDetail(data: Record<string, unknown>, displayName: string): strin
   // Network context
   if (ctx) {
     text += `\n-- Network Context --\n`;
-    text += `${r.target_system_id} is ${(ctx.health_status as string).toUpperCase()}`;
-    text += ` — failure ${((ctx.failure_rate as number) * 100).toFixed(1)}%`;
+    text += `${r.target_system_id} — failure ${((ctx.failure_rate as number) * 100).toFixed(1)}%`;
     text += `, anomaly ${((ctx.anomaly_rate as number) * 100).toFixed(1)}%`;
-    text += ` across ${ctx.distinct_agent_count} agents\n`;
+    text += `, ${ctx.distinct_agent_count} agents observed\n`;
     if (ctx.median_duration_ms != null) {
       text += `Network median: ${ctx.median_duration_ms}ms`;
       if (ctx.p95_duration_ms != null) text += `, p95: ${ctx.p95_duration_ms}ms`;

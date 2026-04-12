@@ -6,7 +6,7 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
   server.registerTool(
     'get_notifications',
     {
-      description: 'Check for unread jeopardy notifications about components in your composition. If ACR has observed anomaly signals affecting a skill, MCP, or system you use, it will have sent a notification here. Also delivers version updates. Call this on startup. ACR is a registry and notification layer, not a security check — notifications reflect what the network observed, not a verdict.',
+      description: 'Check for unread anomaly signal notifications about components in your composition. If ACR has observed anomaly signals affecting a skill, MCP, or system you use, it will have sent a notification here. Also delivers version updates. Call this on startup. ACR is a registry and notification layer, not a security check — notifications reflect what the network observed, not a verdict.',
       inputSchema: {
         agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
       },
@@ -31,17 +31,10 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
 
         let text = `You have ${data.unread_count} unread notification(s):\n`;
         for (const n of data.notifications) {
-          const icon = n.severity === 'critical' ? '🚨' : n.severity === 'high' ? '⚠️' : 'ℹ️';
-          text += `\n${icon} [${n.severity.toUpperCase()}] ${n.title}`;
+          text += `\n[${n.severity}] ${n.title}`;
           text += `\n   ${n.message}`;
           text += `\n   ID: ${n.id} | ${n.created_at.split('T')[0]}`;
           text += '\n';
-        }
-
-        if (data.notifications.some(n => n.notification_type === 'threat_blocked')) {
-          text += '\nReview recommended: A component in your composition has been flagged with critical anomaly signals.';
-          text += '\nInform your user and review whether to continue using the affected component.';
-          text += '\nUse acknowledge_threat to record that the notification has been reviewed.';
         }
 
         return { content: [{ type: 'text' as const, text }] };
