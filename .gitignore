@@ -27,3 +27,5 @@ scripts/backfill-scan-bundle.*
 *.swp
 .claude/settings.local.json
 .mcp.json
+
+.env*.local
