@@ -19,6 +19,12 @@ import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
 import { acknowledgeThreatTool } from './tools/acknowledge-threat.js';
 import { disableDeepCompositionTool } from './tools/disable-deep-composition.js';
+import { getProfileTool } from './tools/get-profile.js';
+import { getCoverageTool } from './tools/get-coverage.js';
+import { getStableCorridorsTool } from './tools/get-stable-corridors.js';
+import { getFailureRegistryTool } from './tools/get-failure-registry.js';
+import { getTrendTool } from './tools/get-trend.js';
+import { summarizeMyAgentTool } from './tools/summarize-my-agent.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { defaultSession, SessionState } from './session-state.js';
@@ -87,7 +93,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
     name: 'acr-agent-registry',
     version: '1.0.0',
     description:
-      'Agent Composition Records — a behavioral registry for AI agents. Your interactions build an interaction profile you can query through lenses (friction is the first, more on the roadmap). If ACR observes that a component in your composition may be jeopardized, you receive a notification. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction — the profile and every lens depend on it.',
+      'Agent Composition Records — an interaction profile registry for AI agents. Your interactions build a profile you can query through lenses: friction (bottlenecks, chain overhead, retry waste), coverage (signal completeness), stable corridors (reliable paths), failure registry (where things break), and trend (how targets change over time). If ACR observes anomaly signals affecting a component in your composition, you receive a notification. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction — the profile and every lens depend on it.',
   });
 
   // Apply self-logging middleware before tool registration
@@ -108,6 +114,12 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getNotificationsTool(server, apiUrl, () => session);
   acknowledgeThreatTool(server, apiUrl, () => session);
   disableDeepCompositionTool(server, () => session);
+  getProfileTool(server, apiUrl);
+  getCoverageTool(server, apiUrl);
+  getStableCorridorsTool(server, apiUrl);
+  getFailureRegistryTool(server, apiUrl);
+  getTrendTool(server, apiUrl);
+  summarizeMyAgentTool(server, apiUrl);
 
   return server;
 }
