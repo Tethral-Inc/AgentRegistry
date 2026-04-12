@@ -1034,7 +1034,7 @@ If a change is urgent (you're mid-implementation and blocked), amend the plan fi
 
 Tracked separately; do not implement as part of this phase.
 
-- MCP tools that expose the new Layer 2 endpoints (`get_profile`, `get_coverage`, `get_healthy_corridors`, `get_failure_registry`, `get_trend`, and a composite `summarize_my_agent`) — presenter-tool work, separate from this plan
+- MCP tools that expose the new Layer 2 endpoints (`get_profile`, `get_coverage`, `get_stable_corridors`, `get_failure_registry`, `get_trend`, and a composite `summarize_my_agent`) — presenter-tool work, separate from this plan
 - Dashboard exploration
 - Security hardening (receipt auth, per-agent rate limiting, AST analysis)
 - Pro tier endpoint depth (population comparison fields, changepoint detection, degradation matrix, regime fingerprinting)
@@ -1173,6 +1173,33 @@ packages/claude-code-plugin/
 - A paying customer asks for compulsory composition tracking
 - Observability on Phase 1 shows high `composition_stale` rates across the user base
 - Claude Code ships a new hook API that makes it trivially easy to integrate
+
+---
+
+## Known debt — carry into next round
+
+Items observed but not fixed yet. Listed here so they don't fall off.
+
+### Skill-catalog integration tests fail without a DB
+
+**Symptom:** 7 tests in `tests/integration/skill-catalog.test.ts` fail with `COCKROACH_CONNECTION_STRING environment variable is required`. The failures are not caused by the round-2 alignment revert — confirmed by running baseline with the revert stashed.
+
+**Root cause:** There is no test setup file. `vitest.config.ts` has no `setupFiles`. The 15 passing test files only exercise request validation / 400 paths that never touch `shared/db/pool.ts`. The 7 failing skill-catalog tests all call route handlers that hit the pool on line 51 (`getPool`) which throws if the env var is missing.
+
+**Why it matters:**
+- CI can't run these tests — silently losing route-level coverage for the skill-catalog endpoints.
+- The pattern will bite every future route test that touches the DB. Same pain for every new endpoint.
+- The round-2 sweep just reshaped the SELECT columns in those same routes — those changes currently have zero test coverage.
+
+**Options (to discuss, not a decision yet):**
+1. **Add pg-mem or a stub pool adapter in test setup.** Lightweight, in-process, no external infra. Cost: map real SQL onto pg-mem's dialect support, which may not cover CockroachDB-specific syntax.
+2. **Provision a throwaway Postgres/Cockroach in CI.** Most faithful, highest fidelity. Cost: CI runtime, container setup, migrations applied per run.
+3. **Extract a thin `DbClient` interface and inject a stub in tests.** The routes currently import `query`/`queryOne`/`execute` directly from `@acr/shared`. Converting to DI is a broader refactor but makes unit tests trivial. Cost: touches every route file.
+4. **Mark the 7 tests `.skip` guarded by env var presence.** Cheapest, most dishonest. Preserves the appearance of a green suite while hiding the gap.
+
+**Recommendation:** Option 1 or 3. Option 4 is a trap — the reason this debt existed before round 2 is that someone previously picked it. Option 2 is worth it if we're already running containers in CI.
+
+**Scope for the fix:** One dedicated round. Not bundled into an alignment commit.
 
 ---
 

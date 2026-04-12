@@ -366,7 +366,10 @@ app.get('/agent/:agent_id/friction', async (c) => {
   }
 
   // ── Population Drift (pro tier) ──
-  let populationDrift: { targets: Array<{ target_system_id: string; current_median_ms: number; baseline_median_ms: number; drift_percentage: number; direction: string }> } | undefined;
+  // Raw comparison only: current median, baseline median, and the
+  // percentage change. No synthetic direction label — the client sees
+  // the sign of drift_percentage and interprets it.
+  let populationDrift: { targets: Array<{ target_system_id: string; current_median_ms: number; baseline_median_ms: number; drift_percentage: number }> } | undefined;
   if (isPaidTier && baselines.length > 0) {
     const driftTargets = [];
     for (const t of targets) {
@@ -379,7 +382,6 @@ app.get('/agent/:agent_id/friction', async (c) => {
           current_median_ms: currentMedian as number,
           baseline_median_ms: bl.baseline_median_ms,
           drift_percentage: Math.round(driftPct * 10) / 10,
-          direction: driftPct > 10 ? 'degrading' : driftPct < -10 ? 'improving' : 'stable',
         });
       }
     }

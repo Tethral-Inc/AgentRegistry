@@ -180,8 +180,10 @@ app.post('/agent/:agent_id/subscriptions', async (c) => {
   const skillHash = body.skill_hash as string;
   if (!skillHash) return c.json(makeError('INVALID_INPUT', 'skill_hash required'), 400);
 
-  const notifyOn = (body.notify_on as string) ?? 'threat';
-  const minThreatLevel = (body.min_threat_level as string) ?? 'medium';
+  const notifyOn = (body.notify_on as string) ?? null;
+  const minThreatLevel = (body.min_threat_level as string) ?? null;
+  if (!notifyOn) return c.json(makeError('INVALID_INPUT', 'notify_on required'), 400);
+  if (!minThreatLevel) return c.json(makeError('INVALID_INPUT', 'min_threat_level required'), 400);
 
   await execute(
     `INSERT INTO skill_subscriptions (agent_id, skill_hash, notify_on, min_threat_level)

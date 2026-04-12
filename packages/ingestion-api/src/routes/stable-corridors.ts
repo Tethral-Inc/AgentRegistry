@@ -2,17 +2,18 @@ import { Hono } from 'hono';
 import { query, createLogger, FrictionScope, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 
-const log = createLogger({ name: 'healthy-corridors' });
+const log = createLogger({ name: 'stable-corridors' });
 const app = new Hono();
 
 /**
- * GET /agent/{id}/healthy-corridors — Targets passing a specific filter.
+ * GET /agent/{id}/stable-corridors — Targets that match a stability filter.
  *
- * Returns targets that match the filter described in `filter_applied`.
- * The server does not claim these targets ARE "healthy" — the label in
- * the endpoint name is a shorthand for the filter. Clients see the exact
- * filter and the raw per-target stats and decide what the result means
- * for them.
+ * "Stable" here means statistically stable: sufficient sample size,
+ * zero failures and zero anomalies in the window, and a coefficient of
+ * variation below a threshold. It is not a verdict about whether the
+ * target is "good" or "healthy" — it's a description of the measured
+ * variance pattern. The filter is fully described in `filter_applied`
+ * so clients can reproduce or adjust it.
  *
  * Free tier.
  */
@@ -46,7 +47,7 @@ function getScopeWindow(scope: string): { start: Date; end: Date } {
   return { start, end };
 }
 
-app.get('/agent/:agent_id/healthy-corridors', async (c) => {
+app.get('/agent/:agent_id/stable-corridors', async (c) => {
   const identifier = c.req.param('agent_id');
   const scopeParam = c.req.query('scope') ?? 'day';
 
@@ -133,4 +134,4 @@ app.get('/agent/:agent_id/healthy-corridors', async (c) => {
   });
 });
 
-export { app as healthyCorridorsRoute };
+export { app as stableCorridorsRoute };

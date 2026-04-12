@@ -15,9 +15,10 @@ app.get('/skill-catalog/search', async (c) => {
 
   const source = c.req.query('source');
   const category = c.req.query('category');
-  const threatLevel = c.req.query('threat_level');
   const tagsParam = c.req.query('tags');
   const minScanScore = c.req.query('min_scan_score');
+  const minAgents = c.req.query('min_agents');
+  const minAnomalySignals = c.req.query('min_anomaly_signals');
   const status = c.req.query('status') ?? 'active';
   const limit = Math.min(Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)), 100);
   const offset = Math.max(0, parseInt(c.req.query('offset') ?? '0', 10));
@@ -33,10 +34,6 @@ app.get('/skill-catalog/search', async (c) => {
     params.push(category);
     conditions.push(`sc.category = $${params.length}`);
   }
-  if (threatLevel) {
-    params.push(threatLevel);
-    conditions.push(`sh.threat_level = $${params.length}`);
-  }
   if (tagsParam) {
     const tags = tagsParam.split(',').map((t) => t.trim()).filter(Boolean);
     if (tags.length > 0) {
@@ -44,9 +41,20 @@ app.get('/skill-catalog/search', async (c) => {
       conditions.push(`sc.tags && $${params.length}`);
     }
   }
+  // min_scan_score filters by a raw numeric value the content scanner
+  // produced. Not a synthetic label — kept.
   if (minScanScore) {
     params.push(parseInt(minScanScore, 10));
     conditions.push(`sc.scan_score >= $${params.length}`);
+  }
+  // min_agents and min_anomaly_signals filter by raw network counts.
+  if (minAgents) {
+    params.push(parseInt(minAgents, 10));
+    conditions.push(`COALESCE(sh.agent_count, 0) >= $${params.length}`);
+  }
+  if (minAnomalySignals) {
+    params.push(parseInt(minAnomalySignals, 10));
+    conditions.push(`COALESCE(sh.anomaly_signal_count, 0) >= $${params.length}`);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -59,7 +67,7 @@ app.get('/skill-catalog/search', async (c) => {
   params.push(offset);
   const offsetParam = params.length;
 
-  let rows = await query<{
+  type SkillSearchRow = {
     skill_id: string;
     skill_name: string;
     skill_source: string;
@@ -73,15 +81,19 @@ app.get('/skill-catalog/search', async (c) => {
     category: string | null;
     content_snippet: string | null;
     status: string;
-    threat_level: string | null;
     agent_count: number | null;
+    interaction_count: number | null;
+    anomaly_signal_count: number | null;
+    anomaly_signal_rate: number | null;
     last_crawled_at: string | null;
     content_changed_at: string | null;
     quality_score: number | null;
     scan_score: number | null;
     threat_patterns: string[] | null;
     rank: number;
-  }>(
+  };
+
+  let rows = await query<SkillSearchRow>(
     `SELECT sc.skill_id AS "skill_id", sc.skill_name AS "skill_name",
             sc.skill_source AS "skill_source", sc.source_url AS "source_url",
             sc.current_hash AS "current_hash", sc.description AS "description",
@@ -89,7 +101,10 @@ app.get('/skill-catalog/search', async (c) => {
             sc.tags AS "tags", sc.requires AS "requires",
             sc.category AS "category", sc.content_snippet AS "content_snippet",
             sc.status AS "status",
-            sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
+            COALESCE(sh.agent_count, 0)::int AS "agent_count",
+            COALESCE(sh.interaction_count, 0)::int AS "interaction_count",
+            COALESCE(sh.anomaly_signal_count, 0)::int AS "anomaly_signal_count",
+            COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
             sc.quality_score AS "quality_score",
@@ -111,15 +126,7 @@ app.get('/skill-catalog/search', async (c) => {
     // Replace the tsquery param with ILIKE pattern
     params[tsQueryParam - 1] = likePattern;
 
-    rows = await query<{
-      skill_id: string; skill_name: string; skill_source: string; source_url: string;
-      current_hash: string | null; description: string | null; version: string | null;
-      author: string | null; tags: string[]; requires: string[]; category: string | null;
-      content_snippet: string | null; status: string; threat_level: string | null;
-      agent_count: number | null; last_crawled_at: string | null;
-      content_changed_at: string | null; quality_score: number | null;
-      scan_score: number | null; threat_patterns: string[] | null; rank: number;
-    }>(
+    rows = await query<SkillSearchRow>(
       `SELECT sc.skill_id AS "skill_id", sc.skill_name AS "skill_name",
               sc.skill_source AS "skill_source", sc.source_url AS "source_url",
               sc.current_hash AS "current_hash", sc.description AS "description",
@@ -127,7 +134,10 @@ app.get('/skill-catalog/search', async (c) => {
               sc.tags AS "tags", sc.requires AS "requires",
               sc.category AS "category", sc.content_snippet AS "content_snippet",
               sc.status AS "status",
-              sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
+              COALESCE(sh.agent_count, 0)::int AS "agent_count",
+              COALESCE(sh.interaction_count, 0)::int AS "interaction_count",
+              COALESCE(sh.anomaly_signal_count, 0)::int AS "anomaly_signal_count",
+              COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
               sc.last_crawled_at::text AS "last_crawled_at",
               sc.content_changed_at::text AS "content_changed_at",
               sc.quality_score AS "quality_score",
@@ -215,8 +225,10 @@ app.get('/skill-catalog', async (c) => {
     category: string | null;
     content_snippet: string | null;
     status: string;
-    threat_level: string | null;
     agent_count: number | null;
+    interaction_count: number | null;
+    anomaly_signal_count: number | null;
+    anomaly_signal_rate: number | null;
     last_crawled_at: string | null;
     content_changed_at: string | null;
     quality_score: number | null;
@@ -230,7 +242,10 @@ app.get('/skill-catalog', async (c) => {
             sc.tags AS "tags", sc.requires AS "requires",
             sc.category AS "category", sc.content_snippet AS "content_snippet",
             sc.status AS "status",
-            sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
+            COALESCE(sh.agent_count, 0)::int AS "agent_count",
+            COALESCE(sh.interaction_count, 0)::int AS "interaction_count",
+            COALESCE(sh.anomaly_signal_count, 0)::int AS "anomaly_signal_count",
+            COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
             sc.quality_score AS "quality_score",
@@ -342,8 +357,12 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     last_crawled_at: string | null;
     content_changed_at: string | null;
     created_at: string;
-    threat_level: string | null;
     agent_count: number | null;
+    interaction_count: number | null;
+    anomaly_signal_count: number | null;
+    anomaly_signal_rate: number | null;
+    first_seen_at: string | null;
+    last_updated: string | null;
     quality_score: number | null;
     scan_score: number | null;
     threat_patterns: string[] | null;
@@ -359,7 +378,12 @@ app.get('/skill-catalog/:skill_id', async (c) => {
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
             sc.created_at::text AS "created_at",
-            sh.threat_level AS "threat_level", sh.agent_count AS "agent_count",
+            COALESCE(sh.agent_count, 0)::int AS "agent_count",
+            COALESCE(sh.interaction_count, 0)::int AS "interaction_count",
+            COALESCE(sh.anomaly_signal_count, 0)::int AS "anomaly_signal_count",
+            COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
+            sh.first_seen_at::text AS "first_seen_at",
+            sh.last_updated::text AS "last_updated",
             sc.quality_score AS "quality_score",
             sc.scan_score AS "scan_score",
             sc.threat_patterns AS "threat_patterns",
@@ -381,15 +405,15 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     previous_version: string | null;
     change_type: string;
     detected_at: string;
-    threat_level: string | null;
     agent_count: number | null;
+    anomaly_signal_count: number | null;
   }>(
     `SELECT vh.skill_hash AS "skill_hash", vh.version AS "version",
             vh.previous_version AS "previous_version",
             vh.change_type AS "change_type",
             vh.detected_at::text AS "detected_at",
-            sh.threat_level AS "threat_level",
-            sh.agent_count AS "agent_count"
+            sh.agent_count AS "agent_count",
+            sh.anomaly_signal_count AS "anomaly_signal_count"
      FROM skill_version_history vh
      LEFT JOIN skill_hashes sh ON sh.skill_hash = vh.skill_hash
      WHERE vh.skill_id = $1
@@ -411,23 +435,9 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     [skill.skill_name, skillId],
   );
 
-  // CONTENT REDACTION: Only block and redact truly dangerous skills (scan_score < 50).
-  // Skills with minor findings (75+) are flagged but content remains viewable.
-  const scanScore = skill.scan_score ?? 100;
-  const isBlocked = skill.status === 'flagged' && scanScore < 50;
+  // Report-only: expose raw scan_score and threat_patterns. ACR does not gate
+  // content — the client decides what to install based on the data.
   const response: Record<string, unknown> = { ...skill, versions, related_skills: related };
-
-  if (isBlocked) {
-    response.skill_content = null;
-    response.content_snippet = '[REDACTED — This skill has been blocked by ACR content security scanning. Critical threat patterns detected.]';
-    response.blocked = true;
-    response.blocked_reason = 'Content security scan detected critical threat patterns. Skill content is not available for download, copy, or viewing.';
-    response.source_url = null;
-  } else if (skill.status === 'flagged') {
-    // Flagged but not blocked — warn but allow viewing
-    response.warned = true;
-    response.warn_reason = 'Content security scan detected potential issues. Review threat_patterns before installing.';
-  }
 
   return c.json(response);
 });
@@ -454,15 +464,15 @@ app.get('/skill-catalog/:skill_id/versions', async (c) => {
     previous_version: string | null;
     change_type: string;
     detected_at: string;
-    threat_level: string | null;
     agent_count: number | null;
+    anomaly_signal_count: number | null;
   }>(
     `SELECT vh.skill_hash AS "skill_hash", vh.version AS "version",
             vh.previous_version AS "previous_version",
             vh.change_type AS "change_type",
             vh.detected_at::text AS "detected_at",
-            sh.threat_level AS "threat_level",
-            sh.agent_count AS "agent_count"
+            sh.agent_count AS "agent_count",
+            sh.anomaly_signal_count AS "anomaly_signal_count"
      FROM skill_version_history vh
      LEFT JOIN skill_hashes sh ON sh.skill_hash = vh.skill_hash
      WHERE vh.skill_id = $1

@@ -143,8 +143,21 @@ app.post('/receipts', async (c) => {
     }
   }
 
-  // Inline threat check: warn if any targets are known-bad skills
-  let threat_warnings: Array<{ target: string; threat_level: string; skill_name?: string }> = [];
+  // Inline signal attachment: return raw anomaly stats for any skills
+  // referenced in these receipts. No synthetic threat_level label — the
+  // client sees the anomaly_signal_count, anomaly_signal_rate, and
+  // agent_count and decides what to surface.
+  let skill_signals: Array<{
+    target: string;
+    skill_hash: string;
+    skill_name: string | null;
+    anomaly_signal_count: number;
+    anomaly_signal_rate: number;
+    agent_count: number;
+    first_seen_at: string | null;
+    last_updated_at: string | null;
+  }> = [];
+
   const skillTargets = receipts
     .map((r) => normalizeSystemId(r.target.system_id))
     .filter((id) => id.startsWith('skill:'))
@@ -152,26 +165,46 @@ app.post('/receipts', async (c) => {
 
   if (skillTargets.length > 0) {
     try {
-      const threats = await query<{ skill_hash: string; threat_level: string; skill_name: string | null }>(
-        `SELECT skill_hash AS "skill_hash", threat_level AS "threat_level", skill_name AS "skill_name"
+      const signals = await query<{
+        skill_hash: string;
+        skill_name: string | null;
+        anomaly_signal_count: number;
+        anomaly_signal_rate: number;
+        agent_count: number;
+        first_seen_at: string | null;
+        last_updated: string | null;
+      }>(
+        `SELECT skill_hash AS "skill_hash",
+                skill_name AS "skill_name",
+                anomaly_signal_count AS "anomaly_signal_count",
+                anomaly_signal_rate AS "anomaly_signal_rate",
+                agent_count AS "agent_count",
+                first_seen_at::text AS "first_seen_at",
+                last_updated::text AS "last_updated"
          FROM skill_hashes
-         WHERE skill_hash = ANY($1) AND threat_level IN ('medium', 'high', 'critical')`,
+         WHERE skill_hash = ANY($1)
+           AND (anomaly_signal_count > 0 OR agent_count > 0)`,
         [skillTargets],
       );
-      threat_warnings = threats.map((t) => ({
-        target: `skill:${t.skill_hash}`,
-        threat_level: t.threat_level,
-        skill_name: t.skill_name ?? undefined,
+      skill_signals = signals.map((s) => ({
+        target: `skill:${s.skill_hash}`,
+        skill_hash: s.skill_hash,
+        skill_name: s.skill_name,
+        anomaly_signal_count: s.anomaly_signal_count,
+        anomaly_signal_rate: s.anomaly_signal_rate,
+        agent_count: s.agent_count,
+        first_seen_at: s.first_seen_at,
+        last_updated_at: s.last_updated,
       }));
     } catch {
-      // Non-blocking: threat check failure should not block receipt acceptance
+      // Non-blocking: signal attachment failure should not block receipt acceptance
     }
   }
 
   return c.json({
     accepted: receiptIds.length,
     receipt_ids: receiptIds,
-    threat_warnings,
+    skill_signals,
     composition_last_updated_minutes_ago,
   }, 201);
 });

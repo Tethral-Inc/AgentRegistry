@@ -262,7 +262,6 @@ export interface PopulationDrift {
     current_median_ms: number;
     baseline_median_ms: number;
     drift_percentage: number;
-    direction: 'improving' | 'stable' | 'degrading';
   }>;
 }
 

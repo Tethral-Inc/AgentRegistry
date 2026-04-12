@@ -129,9 +129,9 @@ app.get('/agent/:agent_id/trend', async (c) => {
     scope,
     current_period: { start: current.start.toISOString(), end: current.end.toISOString() },
     comparison_period: { start: previous.start.toISOString(), end: previous.end.toISOString() },
-    inclusion_filter: {
-      min_receipts_current_period: 5,
-      min_receipts_previous_period: 5,
+    inclusion_rules: {
+      target_included_if: 'target has >= 5 receipts in the current window with duration_ms set',
+      previous_window: 'previous window stats are returned when the target also has >= 5 receipts in the previous window; otherwise the previous field is null',
       requires_duration_ms: true,
     },
     per_target: perTarget,

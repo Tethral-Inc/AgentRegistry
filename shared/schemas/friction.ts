@@ -75,6 +75,5 @@ export const PopulationDriftSchema = z.object({
     current_median_ms: z.number(),
     baseline_median_ms: z.number(),
     drift_percentage: z.number(),
-    direction: z.enum(['improving', 'stable', 'degrading']),
   })),
 });

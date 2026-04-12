@@ -5,7 +5,7 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
   server.registerTool(
     'check_entity',
     {
-      description: 'Ask the ACR network what it knows about a specific skill hash, agent, or system. Returns any behavioral signals ACR has observed and any jeopardy flags. This is NOT a security check — ACR does not evaluate or test skills. It only records what has been observed. Read-only lookup; no data is sent to ACR.',
+      description: 'Ask the ACR network what it knows about a specific skill hash, agent, or system. Returns the raw behavioral signals ACR has observed: interaction counts, failure and anomaly rates, agent adoption counts, and related metadata. This is NOT a security check — ACR does not evaluate, score, or test. It only records what has been observed and surfaces the raw counts. Read-only lookup; no data is sent to ACR.',
       inputSchema: {
         entity_type: z.enum(['skill', 'agent', 'system']).describe('Type of entity to look up'),
         entity_id: z.string().describe('The entity identifier: skill SHA-256 hash, agent_id, or system_id'),
@@ -57,60 +57,45 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
             };
           }
 
-          // ── FLAGGED SKILL: Critical anomaly signals ──
-          if (data.blocked) {
-            let text = `SKILL FLAGGED BY ACR — REVIEW BEFORE USE\n`;
-            text += `════════════════════════════════════════\n`;
-            if (data.skill_name) text += `Name: ${data.skill_name}\n`;
-            text += `Level: ${(data.threat_level ?? 'unknown').toUpperCase()}\n`;
-            if (data.blocked_reason) text += `\nWhy it was flagged: ${data.blocked_reason}\n`;
-            if (data.threat_patterns && data.threat_patterns.length > 0) {
-              text += `\nSignal categories observed:\n`;
-              for (const p of data.threat_patterns) {
-                text += `  - ${p}\n`;
-              }
-            }
-            text += `\nACR has observed signals suggesting this skill may be compromised. `;
-            text += `ACR is not a security scanner — this is a notification based on observed `;
-            text += `behavior in the network, not a verdict. Review with your operator before `;
-            text += `continuing to use it.\n`;
-            text += `\nIf you currently have this skill installed, consider pausing its use `;
-            text += `and notifying your user.\n`;
-            text += `\nTo dispute the flag, contact security@tethral.com with hash: ${entity_id}`;
+          // Skill signals — raw observed data from the network. No
+          // synthetic threat level label, no "FLAGGED BY ACR" verdict.
+          // The MCP reports what the network has seen; the operator
+          // decides what to do with it.
+          let text = `Skill found: ${data.skill_hash?.slice(0, 16) ?? entity_id.slice(0, 16)}...\n`;
+          if (data.skill_name) text += `Name: ${data.skill_name}\n`;
+          if (data.description) text += `Description: ${data.description}\n`;
+          if (data.version) text += `Version: ${data.version}\n`;
+          if (data.author) text += `Author: ${data.author}\n`;
+          if (data.category) text += `Category: ${data.category}\n`;
+          if (data.tags && data.tags.length > 0) text += `Tags: ${data.tags.join(', ')}\n`;
 
-            return { content: [{ type: 'text' as const, text }] };
+          text += `\n── Network signals ──\n`;
+          if (data.agent_count != null) text += `  Agents observed using this skill: ${data.agent_count}\n`;
+          if (data.interaction_count != null) text += `  Total interactions observed: ${data.interaction_count}\n`;
+          if (data.anomaly_signal_count != null) text += `  Anomaly signals reported: ${data.anomaly_signal_count}\n`;
+          if (data.anomaly_rate != null) text += `  Anomaly rate: ${(data.anomaly_rate * 100).toFixed(1)}%\n`;
+
+          // Signal categories observed — these are descriptive tags of
+          // what kinds of anomaly patterns the network has seen, not
+          // severity labels.
+          if (data.threat_patterns && Array.isArray(data.threat_patterns) && data.threat_patterns.length > 0) {
+            text += `  Anomaly pattern categories: ${data.threat_patterns.join(', ')}\n`;
           }
 
-          // ── Normal skill response ──
-          const level = (data.threat_level ?? 'none').toUpperCase();
-          let text = `Skill found.\n\nThreat Level: ${level}`;
-          if (data.skill_name) text += `\nName: ${data.skill_name}`;
-          if (data.description) text += `\nDescription: ${data.description}`;
-          if (data.version) text += `\nVersion: ${data.version}`;
-          if (data.author) text += `\nAuthor: ${data.author}`;
-          if (data.category) text += `\nCategory: ${data.category}`;
-          if (data.tags && data.tags.length > 0) text += `\nTags: ${data.tags.join(', ')}`;
-          if (data.agent_count != null) text += `\nAgents using: ${data.agent_count}`;
-          if (data.interaction_count != null) text += `\nInteractions: ${data.interaction_count}`;
-          if (data.anomaly_rate != null) text += `\nAnomaly rate: ${(data.anomaly_rate * 100).toFixed(1)}%`;
+          // Scan signals — if the content scanner observed something,
+          // the scanner's raw findings (which patterns it matched) are
+          // reported here. No pass/fail verdict.
+          if (data.scan_score != null) text += `  Content scanner score: ${data.scan_score}\n`;
+          if (data.blocked_reason) text += `  Content scanner notes: ${data.blocked_reason}\n`;
 
-          if (data.threat_patterns && data.threat_patterns.length > 0) {
-            text += `\nSignal categories observed: ${data.threat_patterns.join(', ')}`;
-          }
-
-          // Version freshness check
+          // Version freshness — raw comparison, no advice.
           if (data.is_current_version === false) {
-            text += `\n\nOUTDATED: You are ${data.versions_behind ?? '?'} version(s) behind.`;
-            if (data.current_hash) text += ` Current hash: ${data.current_hash.slice(0, 16)}...`;
-            text += '\nConsider updating to the latest version.';
+            text += `\n── Version ──\n`;
+            text += `  This version is ${data.versions_behind ?? '?'} behind the latest observed version.`;
+            if (data.current_hash) text += ` Latest hash: ${data.current_hash.slice(0, 16)}...`;
+            text += '\n';
           } else if (data.is_current_version === true) {
-            text += '\n\nThis is the latest version.';
-          }
-
-          if (data.threat_level === 'high' || data.threat_level === 'critical') {
-            text += `\n\nACR has observed elevated anomaly signals for this skill. This is not a verdict — review with your operator before continuing to use it.`;
-          } else if (data.threat_level === 'medium') {
-            text += `\n\nACR has observed some elevated anomaly signals for this skill. Consider reviewing with your operator.`;
+            text += `\n── Version ──\n  This is the latest version observed by the network.\n`;
           }
 
           return { content: [{ type: 'text' as const, text }] };
@@ -132,10 +117,21 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
         if (!data.found) {
           return { content: [{ type: 'text' as const, text: `System ${entity_id} not found.` }] };
         }
+        // Raw network signals for the target system. No synthetic
+        // health_status label — client reads the rates and decides.
+        let sysText = `System found: ${entity_id}\n`;
+        sysText += `Type: ${data.system_type}\n\n`;
+        sysText += `── Network signals ──\n`;
+        sysText += `  Total interactions observed: ${data.total_interactions ?? 0}\n`;
+        sysText += `  Distinct agents using this system: ${data.distinct_agents ?? 0}\n`;
+        sysText += `  Failure rate: ${((data.failure_rate ?? 0) * 100).toFixed(1)}%\n`;
+        sysText += `  Anomaly rate: ${((data.anomaly_rate ?? 0) * 100).toFixed(1)}%\n`;
+        if (data.median_duration_ms != null) sysText += `  Median duration: ${data.median_duration_ms}ms\n`;
+        if (data.p95_duration_ms != null) sysText += `  p95 duration: ${data.p95_duration_ms}ms\n`;
         return {
           content: [{
             type: 'text' as const,
-            text: `System found.\n\nHealth: ${data.health_status}\nType: ${data.system_type}\nTotal interactions: ${data.total_interactions}\nDistinct agents: ${data.distinct_agents}\nAnomaly rate: ${((data.anomaly_rate ?? 0) * 100).toFixed(1)}%`,
+            text: sysText,
           }],
         };
       } catch (err) {

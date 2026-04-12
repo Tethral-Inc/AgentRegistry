@@ -9,18 +9,22 @@ const app = new Hono();
  * GET /agent/{id}/coverage — Raw signal coverage over the agent's history.
  *
  * Returns observed counts describing what fields the agent populates on
- * its receipts. No synthetic state labels (warmup / calibrating / ...),
- * no narrative advice. Triggers describe what the server observed and
- * what rule was applied. Clients decide whether a trigger is worth
+ * its receipts. No synthetic state labels, no narrative advice.
+ *
+ * The `rules` array returns every coverage rule the server evaluates,
+ * with the rule's condition as a string, the observed inputs that were
+ * checked, and a triggered flag. Clients see all rules and all inputs
+ * — nothing hidden. Clients decide whether a triggered rule is worth
  * acting on and how to phrase the suggestion in the UI.
  *
  * Free tier.
  */
 
-interface Trigger {
+interface RuleResult {
   signal: string;
   rule: string;
   observed: Record<string, number>;
+  triggered: boolean;
 }
 
 app.get('/agent/:agent_id/coverage', async (c) => {
@@ -76,96 +80,88 @@ app.get('/agent/:agent_id/coverage', async (c) => {
     receipts_with_any_category: 0,
   };
 
-  // Triggers: each trigger states the rule that fired, the observed inputs
-  // it fired on, and the signal field it's about. No prose, no "unlocks"
-  // list, no advice. The MCP presenter composes the suggestion text from
-  // this structured data if it wants to.
-  const triggers: Trigger[] = [];
-
-  if (s.total_receipts === 0) {
-    triggers.push({
+  // Rules: every coverage rule evaluated, with its condition as a
+  // string, the observed inputs, and whether it triggered. Max
+  // transparency: clients see the full rule set and all inputs.
+  // categories.activity_class is a soft rule — the server flags when
+  // no receipts carry it, but the taxonomy itself is non-gating and
+  // any string value is accepted.
+  const rules: RuleResult[] = [
+    {
       signal: 'log_interaction',
       rule: 'total_receipts == 0',
-      observed: { total_receipts: 0 },
-    });
-  }
-
-  if (s.total_receipts > 0 && s.chain_coverage < 0.25) {
-    triggers.push({
+      observed: { total_receipts: s.total_receipts },
+      triggered: s.total_receipts === 0,
+    },
+    {
       signal: 'chain_id',
-      rule: 'chain_coverage < 0.25',
+      rule: 'total_receipts > 0 AND chain_coverage < 0.25',
       observed: {
         total_receipts: s.total_receipts,
         chain_coverage: Math.round(s.chain_coverage * 1000) / 1000,
       },
-    });
-  }
-
-  if (s.total_receipts > 20 && s.distinct_categories < 3) {
-    triggers.push({
+      triggered: s.total_receipts > 0 && s.chain_coverage < 0.25,
+    },
+    {
       signal: 'interaction.category',
-      rule: 'distinct_categories < 3 AND total_receipts > 20',
+      rule: 'total_receipts > 20 AND distinct_categories < 3',
       observed: {
         total_receipts: s.total_receipts,
         distinct_categories: s.distinct_categories,
       },
-    });
-  }
-
-  if (s.total_receipts > 20 && s.receipts_with_queue_wait === 0) {
-    triggers.push({
+      triggered: s.total_receipts > 20 && s.distinct_categories < 3,
+    },
+    {
       signal: 'interaction.queue_wait_ms',
-      rule: 'receipts_with_queue_wait == 0 AND total_receipts > 20',
+      rule: 'total_receipts > 20 AND receipts_with_queue_wait == 0',
       observed: {
         total_receipts: s.total_receipts,
-        receipts_with_queue_wait: 0,
+        receipts_with_queue_wait: s.receipts_with_queue_wait,
       },
-    });
-  }
-
-  if (s.total_receipts > 20 && s.receipts_with_retry_count === 0) {
-    triggers.push({
+      triggered: s.total_receipts > 20 && s.receipts_with_queue_wait === 0,
+    },
+    {
       signal: 'interaction.retry_count',
-      rule: 'receipts_with_retry_count == 0 AND total_receipts > 20',
+      rule: 'total_receipts > 20 AND receipts_with_retry_count == 0',
       observed: {
         total_receipts: s.total_receipts,
-        receipts_with_retry_count: 0,
+        receipts_with_retry_count: s.receipts_with_retry_count,
       },
-    });
-  }
-
-  if (s.total_receipts > 50 && s.distinct_target_types < 2) {
-    triggers.push({
+      triggered: s.total_receipts > 20 && s.receipts_with_retry_count === 0,
+    },
+    {
       signal: 'target.system_type',
-      rule: 'distinct_target_types < 2 AND total_receipts > 50',
+      rule: 'total_receipts > 50 AND distinct_target_types < 2',
       observed: {
         total_receipts: s.total_receipts,
         distinct_target_types: s.distinct_target_types,
       },
-    });
-  }
-
-  if (s.total_receipts > 20 && s.receipts_with_activity_class === 0) {
-    triggers.push({
+      triggered: s.total_receipts > 50 && s.distinct_target_types < 2,
+    },
+    {
+      // Soft rule: any string is accepted for activity_class. The taxonomy
+      // (application, language, math, visuals, creative, deterministic,
+      // sound) is a suggestion, not a gate. This rule fires when the
+      // agent hasn't set the field at all on a meaningful number of
+      // receipts. Not required; purely informative.
       signal: 'categories.activity_class',
-      rule: 'receipts_with_activity_class == 0 AND total_receipts > 20',
+      rule: 'total_receipts > 20 AND receipts_with_activity_class == 0',
       observed: {
         total_receipts: s.total_receipts,
-        receipts_with_activity_class: 0,
+        receipts_with_activity_class: s.receipts_with_activity_class,
       },
-    });
-  }
-
-  if (s.total_receipts > 100 && s.receipts_with_any_category < s.total_receipts / 2) {
-    triggers.push({
+      triggered: s.total_receipts > 20 && s.receipts_with_activity_class === 0,
+    },
+    {
       signal: 'categories.*',
-      rule: 'receipts_with_any_category < total_receipts / 2 AND total_receipts > 100',
+      rule: 'total_receipts > 100 AND receipts_with_any_category * 2 < total_receipts',
       observed: {
         total_receipts: s.total_receipts,
         receipts_with_any_category: s.receipts_with_any_category,
       },
-    });
-  }
+      triggered: s.total_receipts > 100 && s.receipts_with_any_category * 2 < s.total_receipts,
+    },
+  ];
 
   c.header('Cache-Control', 'private, max-age=60');
 
@@ -184,7 +180,7 @@ app.get('/agent/:agent_id/coverage', async (c) => {
       receipts_with_activity_class: s.receipts_with_activity_class,
       receipts_with_any_category: s.receipts_with_any_category,
     },
-    triggers,
+    rules,
     tier: 'free',
   });
 });

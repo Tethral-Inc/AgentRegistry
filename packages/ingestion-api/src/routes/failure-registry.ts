@@ -93,7 +93,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
     error_codes: Record<string, number>;
     categories: Record<string, number>;
     median_duration_when_failed_ms: number | null;
-    total_wasted_ms: number;
+    total_duration_on_failures_ms: number;
   };
 
   const grouped = new Map<string, TargetGroup>();
@@ -110,7 +110,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
         error_codes: {},
         categories: {},
         median_duration_when_failed_ms: r.median_duration_ms,
-        total_wasted_ms: 0,
+        total_duration_on_failures_ms: 0,
       };
       grouped.set(key, g);
     }
@@ -120,7 +120,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
       g.error_codes[r.error_code] = (g.error_codes[r.error_code] ?? 0) + r.count;
     }
     g.categories[r.category] = (g.categories[r.category] ?? 0) + r.count;
-    g.total_wasted_ms += r.total_duration_ms;
+    g.total_duration_on_failures_ms += r.total_duration_ms;
   }
 
   // Sort by count desc.

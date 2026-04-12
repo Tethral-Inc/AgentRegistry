@@ -25,7 +25,7 @@ import { tristRoute } from './routes/trist.js';
 import { observatorySummaryRoute } from './routes/observatory-summary.js';
 import { profileRoute } from './routes/profile.js';
 import { coverageRoute } from './routes/coverage.js';
-import { healthyCorridorsRoute } from './routes/healthy-corridors.js';
+import { stableCorridorsRoute } from './routes/stable-corridors.js';
 import { failureRegistryRoute } from './routes/failure-registry.js';
 import { trendRoute } from './routes/trend.js';
 
@@ -60,7 +60,7 @@ app.route('/api/v1', tristRoute);
 app.route('/api/v1', observatorySummaryRoute);
 app.route('/api/v1', profileRoute);
 app.route('/api/v1', coverageRoute);
-app.route('/api/v1', healthyCorridorsRoute);
+app.route('/api/v1', stableCorridorsRoute);
 app.route('/api/v1', failureRegistryRoute);
 app.route('/api/v1', trendRoute);
 app.route('/api', internalQueryRoute);

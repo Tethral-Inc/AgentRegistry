@@ -110,11 +110,9 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               text += `    statuses: ${statuses}\n`;
             }
 
-            // Baseline comparison (paid tier)
+            // Baseline comparison (paid tier) — raw numbers only.
             if (t.vs_baseline != null) {
-              const dir = t.vs_baseline > 1 ? 'slower' : t.vs_baseline < 1 ? 'faster' : 'same as';
-              const pctDiff = Math.abs(Math.round((t.vs_baseline - 1) * 100));
-              text += `    vs population: ${pctDiff}% ${dir} baseline`;
+              text += `    ratio to population baseline: ${t.vs_baseline.toFixed(2)}`;
               if (t.baseline_median_ms != null) text += ` (baseline median ${t.baseline_median_ms}ms, p95 ${t.baseline_p95_ms}ms)`;
               if (t.volatility != null) text += `, volatility ${t.volatility}`;
               text += `\n`;
@@ -134,12 +132,18 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               text += `    ${t.failure_count} failures\n`;
             }
 
-            // Network health context
-            if (t.network_health_status) {
-              text += `    network: ${(t.network_health_status as string).toUpperCase()}`;
-              text += ` — failure ${((t.network_failure_rate ?? 0) * 100).toFixed(1)}%`;
-              text += `, anomaly ${((t.network_anomaly_rate ?? 0) * 100).toFixed(1)}%`;
-              text += ` across ${t.network_agent_count ?? 0} agents\n`;
+            // Network context — raw rates across the population. No
+            // synthetic health_status label (the inherited column is
+            // ignored here; see inherited-drift note in
+            // proposals/open-items-plan.md).
+            if (
+              t.network_failure_rate != null ||
+              t.network_anomaly_rate != null ||
+              t.network_agent_count != null
+            ) {
+              text += `    population: ${t.network_agent_count ?? 0} agents`;
+              text += `, failure rate ${((t.network_failure_rate ?? 0) * 100).toFixed(1)}%`;
+              text += `, anomaly rate ${((t.network_anomaly_rate ?? 0) * 100).toFixed(1)}%\n`;
             }
           }
         }
@@ -175,12 +179,12 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        // Directional Analysis (pro)
+        // Directional Analysis (pro) — raw amplification factor, no
+        // SLOWS/SPEEDS/~ label. Client reads the factor.
         if (data.directional_pairs && data.directional_pairs.length > 0) {
           text += '\n── Directional Analysis ──\n';
           for (const dp of data.directional_pairs) {
-            const arrow = dp.amplification_factor > 1.1 ? 'SLOWS' : dp.amplification_factor < 0.9 ? 'SPEEDS' : '~';
-            text += `  ${dp.source_target} -> ${dp.destination_target}: ${dp.amplification_factor.toFixed(2)}x`;
+            text += `  ${dp.source_target} -> ${dp.destination_target}: amplification ${dp.amplification_factor.toFixed(2)}x`;
             text += ` (${dp.avg_duration_when_preceded}ms after vs ${dp.avg_duration_standalone}ms standalone)`;
             text += ` [${dp.sample_count} samples]\n`;
           }
@@ -197,12 +201,14 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        // Population Drift (pro)
+        // Population Drift (pro) — raw drift percentage, no
+        // DEGRADING/IMPROVING/stable label.
         if (data.population_drift && data.population_drift.targets.length > 0) {
           text += '\n── Population Drift ──\n';
           for (const t of data.population_drift.targets) {
-            const emoji = t.direction === 'degrading' ? 'DEGRADING' : t.direction === 'improving' ? 'IMPROVING' : 'stable';
-            text += `  ${t.target_system_id}: ${emoji} (${t.drift_percentage > 0 ? '+' : ''}${t.drift_percentage}% vs baseline)\n`;
+            const sign = t.drift_percentage > 0 ? '+' : '';
+            text += `  ${t.target_system_id}: ${sign}${t.drift_percentage}% vs baseline`;
+            text += ` (current ${t.current_median_ms}ms, baseline ${t.baseline_median_ms}ms)\n`;
           }
         }
 

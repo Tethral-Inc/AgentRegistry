@@ -5,16 +5,17 @@ const log = createLogger({ name: 'observatory-summary' });
 const app = new Hono();
 
 /**
- * GET /network/observatory-summary — Public, unauthenticated network counter.
- * Used by the landing page hero. Returns a small JSON object with current
- * scale numbers. Cached aggressively.
+ * GET /network/observatory-summary — Public network counters.
  *
- * Thin client principle: this endpoint is read-only, returns pre-computed
- * counts only. No interpretation. The landing page handles its own
- * fallback (template counter starting at 150) when active_agents_24h is 0.
+ * Used by the landing page hero. Returns raw counts only — no
+ * synthetic verdicts, no inherited label filters. If a client wants
+ * to derive a "healthy" or "jeopardized" count, it does so from the
+ * raw numbers returned here.
+ *
+ * Cached for 5 minutes with 30s stale-while-revalidate.
  */
 app.get('/network/observatory-summary', async (c) => {
-  // Total agents seen in the last 24h.
+  // Active agents — distinct emitters in the last 24h.
   const agentsRows = await query<{ active_agents_24h: number }>(
     `SELECT COUNT(DISTINCT emitter_agent_id)::int AS "active_agents_24h"
      FROM interaction_receipts
@@ -35,31 +36,34 @@ app.get('/network/observatory-summary', async (c) => {
      WHERE created_at >= now() - INTERVAL '24 hours'`,
   ).catch(() => [{ targets_tracked: 0 }]);
 
-  // Healthy corridors — system_health rows where health_status = 'healthy'.
-  const corridorsRows = await query<{ healthy_corridors: number }>(
-    `SELECT COUNT(*)::int AS "healthy_corridors"
+  // Systems observed — total entries in system_health. Raw count,
+  // no filter on health_status (inherited synthetic label).
+  const systemsRows = await query<{ systems_observed: number }>(
+    `SELECT COUNT(*)::int AS "systems_observed"
      FROM system_health
-     WHERE health_status = 'healthy'
-       AND total_interactions > 0`,
-  ).catch(() => [{ healthy_corridors: 0 }]);
+     WHERE total_interactions > 0`,
+  ).catch(() => [{ systems_observed: 0 }]);
 
-  // Active jeopardy flags — skills with elevated threat level.
-  const flagsRows = await query<{ active_jeopardy_flags: number }>(
-    `SELECT COUNT(*)::int AS "active_jeopardy_flags"
+  // Skills with any anomaly signal activity. Raw count, no filter on
+  // threat_level (inherited synthetic label). Clients see the number
+  // of distinct skills for which the network has observed at least
+  // one anomaly signal.
+  const skillsWithSignalsRows = await query<{ skills_with_signals: number }>(
+    `SELECT COUNT(*)::int AS "skills_with_signals"
      FROM skill_hashes
-     WHERE threat_level IN ('low', 'medium', 'high', 'critical')`,
-  ).catch(() => [{ active_jeopardy_flags: 0 }]);
+     WHERE anomaly_signal_count > 0`,
+  ).catch(() => [{ skills_with_signals: 0 }]);
 
   const totals = {
     active_agents_24h: agentsRows[0]?.active_agents_24h ?? 0,
     interactions_24h: interactionsRows[0]?.interactions_24h ?? 0,
     targets_tracked: targetsRows[0]?.targets_tracked ?? 0,
-    healthy_corridors: corridorsRows[0]?.healthy_corridors ?? 0,
-    active_jeopardy_flags: flagsRows[0]?.active_jeopardy_flags ?? 0,
+    systems_observed: systemsRows[0]?.systems_observed ?? 0,
+    skills_with_signals: skillsWithSignalsRows[0]?.skills_with_signals ?? 0,
   };
 
-  // Public endpoint. Aggressive cache so the landing page doesn't hit the DB
-  // on every visit. 5 minute cache, 30 second stale-while-revalidate.
+  // Public endpoint. Aggressive cache so the landing page doesn't hit
+  // the DB on every visit.
   c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=30');
 
   return c.json({

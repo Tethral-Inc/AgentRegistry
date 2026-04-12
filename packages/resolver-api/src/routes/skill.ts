@@ -8,8 +8,8 @@ interface SkillRow {
   skill_source: string | null;
   agent_count: number;
   interaction_count: number;
+  anomaly_signal_count: number;
   anomaly_signal_rate: number;
-  threat_level: string;
   first_seen_at: string;
   last_updated: string;
 }
@@ -21,8 +21,8 @@ interface SkillResponse {
   skill_source?: string;
   agent_count?: number;
   interaction_count?: number;
-  anomaly_rate?: number;
-  threat_level?: string;
+  anomaly_signal_count?: number;
+  anomaly_signal_rate?: number;
   first_seen?: string;
   last_seen?: string;
   // Catalog-enriched fields
@@ -37,8 +37,6 @@ interface SkillResponse {
   skill_status?: string;
   scan_score?: number;
   threat_patterns?: string[];
-  blocked?: boolean;
-  blocked_reason?: string;
 }
 
 export async function handleSkillLookup(
@@ -58,7 +56,7 @@ export async function handleSkillLookup(
     const rows = await dbQuery<SkillRow>(
       env.COCKROACH_CONNECTION_STRING,
       `SELECT skill_hash, skill_name, skill_source, agent_count,
-       interaction_count, anomaly_signal_rate, threat_level,
+       interaction_count, anomaly_signal_count, anomaly_signal_rate,
        first_seen_at::text AS first_seen_at, last_updated::text AS last_updated
        FROM skill_hashes WHERE skill_hash = $1`,
       [hash],
@@ -79,8 +77,8 @@ export async function handleSkillLookup(
       skill_source: row.skill_source ?? undefined,
       agent_count: row.agent_count,
       interaction_count: row.interaction_count,
-      anomaly_rate: row.anomaly_signal_rate,
-      threat_level: row.threat_level,
+      anomaly_signal_count: row.anomaly_signal_count,
+      anomaly_signal_rate: row.anomaly_signal_rate,
       first_seen: row.first_seen_at,
       last_seen: row.last_updated,
     };
@@ -124,25 +122,9 @@ export async function handleSkillLookup(
           response.scan_score = cat.scan_score ?? undefined;
           response.threat_patterns = cat.threat_patterns ?? undefined;
 
-          // Override threat_level from scan results when skill is flagged.
-          // Only BLOCK (prevent install) for truly dangerous skills (score < 50).
-          // Warn for medium-risk (50-79). Don't block low-risk flags (80+).
-          if (cat.status === 'flagged') {
-            const scanScore = cat.scan_score ?? 100;
-            if (scanScore < 50) {
-              // BLOCKED: Critical/high threat patterns, dangerous content
-              response.threat_level = 'critical';
-              response.blocked = true;
-              response.blocked_reason = 'Content security scan detected critical threat patterns. This skill is blocked from installation.';
-            } else if (scanScore < 70) {
-              // WARNING: Elevated risk, not blocked but flagged
-              response.threat_level = 'high';
-              // Not blocked — agents can install but should warn users
-            } else {
-              // LOW RISK: Minor findings (missing metadata, possible false positives)
-              response.threat_level = 'medium';
-            }
-          }
+          // Report-only: expose raw scan_score, threat_patterns, and status.
+          // ACR does not synthesize a threat_level label or block installs —
+          // the client decides based on the raw data.
 
           const isCurrent = row.skill_hash === cat.current_hash;
           response.is_current_version = isCurrent;
