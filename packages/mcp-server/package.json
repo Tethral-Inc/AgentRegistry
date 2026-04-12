@@ -1,7 +1,7 @@
 {
   "name": "@tethral/acr-mcp",
-  "version": "1.0.0",
-  "description": "MCP server for ACR (Agent Composition Records). A behavioral registry for AI agents — log interactions, build an interaction profile, and query it through behavioral lenses. Get notified if ACR observes that a component in your composition may be compromised. Like HIBP for agent infrastructure.",
+  "version": "2.0.0",
+  "description": "MCP server for ACR (Agent Composition Records). An interaction profile registry for AI agents — log interactions, build a profile, and query it through behavioral lenses (friction, coverage, stable corridors, failure registry, trend). 21 tools. Raw data, no synthetic labels.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -28,7 +28,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/theAnthropol/AgentRegistry",
+    "url": "https://github.com/Tethral-Inc/AgentRegistry",
     "directory": "packages/mcp-server"
   },
   "homepage": "https://acr.nfkey.ai",
