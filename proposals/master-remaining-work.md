@@ -1,7 +1,7 @@
 # Master Remaining Work — Single Source of Truth
 
 **Created:** 2026-04-11
-**Last updated:** 2026-04-11
+**Last updated:** 2026-04-12
 **Purpose:** Full system audit and cleanup inventory. If context is lost, start here.
 
 ---
@@ -17,6 +17,11 @@
 | Item 5 — 60s correlation window | `1eba3c1` | Done |
 | Alignment round 1 — synthetic labels, server-side narrative | `97fa135` | Done |
 | Alignment round 2 — inherited label consumers, content gating, resolver synthesis | `797787c` | Done |
+| Round 3a — MCP presenter tools (11 files) | `8f69b99` | Done |
+| Round 3b — Ingestion API + resolver API routes (8 files) | `8a04a57` | Done |
+| Round 3c — Intelligence job producers (4 files) | `3030154` | Done |
+| Round 3d — Dashboard, SDKs, docs (11 files) | `ba90a56` | Done |
+| Round 4 — Test harness fix (144/144 green) | `b35a9c2` | Done |
 
 ---
 
@@ -243,7 +248,27 @@ These routes are already clean — raw data only:
 **What:** Add DB stub/DI for test pool. Options documented in `open-items-plan.md` "Known debt" section.
 **Independent of round 3.**
 
-### Round 5 — Plan Reconciliation
-**Scope:** `proposals/open-items-plan.md`
-**What:** Update acceptance criteria, remove warmup/calibrating if decided (D10), remove threat_warnings from receipt type, update "Inherited synthetic labels" section, remove code samples that show synthetic labels.
-**After rounds 3-4.**
+## Remaining work (as of 2026-04-12)
+
+All synthetic label consumers and producers are cleaned. 144/144 tests green. Three items remain:
+
+### 1. DB migration — drop vestigial columns
+
+`threat_level` on `skill_hashes` and `health_status` on `system_health` are now vestigial — nothing writes them (round 3c), nothing reads them (rounds 3a-3d). Drop via migration. Also drop `quality_score` from `skill_catalog` (replaced by raw metadata fields in round 3c).
+
+### 2. notifications.ts — subscription schema dependency
+
+`skill_subscriptions.min_threat_level` and `threat_acknowledgements.threat_level` are DB columns still referenced in the subscription/acknowledgement routes. Fixing requires:
+1. Migration to rename or drop the columns
+2. Update the routes to accept raw signal thresholds instead
+3. Update SKILL.md subscription instructions
+
+### 3. open-items-plan.md — plan reconciliation
+
+Plan document still contains code samples with synthetic labels (`warmup`/`calibrating`/`stable_candidate` in maturity prefix, `threat_warnings` in receipt response type, `threat_level` enums in attribution schema). Update to reflect raw-data decisions (D10: return `total_receipts`, `distinct_targets`, `days_active` instead of maturity state labels).
+
+---
+
+## Phase 2 (Out of Scope, Tracked)
+
+Claude Code plugin for compulsory composition tracking. Documented in `open-items-plan.md` lines 1058-1175. Not started. Triggers: paying customer request, high `composition_stale` rates, or new Claude Code hook API.
