@@ -157,11 +157,12 @@ export async function handler() {
         await execute(
           `INSERT INTO skill_notifications
            (agent_id, skill_hash, notification_type, severity, title, message, metadata)
-           VALUES ($1, $2, 'anomaly_signal', 'elevated', $3, $4, $5)`,
+           VALUES ($1, $2, 'anomaly_signal', $3, $4, $5, $6)`,
           [sub.agent_id, u.skillHash,
-           'Elevated anomaly signals: ' + u.reporterCount + ' reporters',
-           u.reporterCount + ' agents reported anomalies. Anomaly rate: ' + (u.anomalyRate * 100).toFixed(1) + '%.',
-           JSON.stringify({ reporter_count: u.reporterCount, anomaly_rate: u.anomalyRate })],
+           String(u.reporterCount) + '_reporters_' + (u.anomalyRate * 100).toFixed(0) + 'pct',
+           u.reporterCount + ' reporters, ' + (u.anomalyRate * 100).toFixed(1) + '% anomaly rate',
+           u.reporterCount + ' agents reported anomalies across ' + u.totalCount + ' interactions. Anomaly rate: ' + (u.anomalyRate * 100).toFixed(1) + '%.',
+           JSON.stringify({ reporter_count: u.reporterCount, anomaly_rate: u.anomalyRate, anomaly_count: u.anomalyCount, total_count: u.totalCount })],
         ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
       }
     }

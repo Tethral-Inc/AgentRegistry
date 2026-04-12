@@ -40,21 +40,20 @@ async function backfill() {
       scanned++;
       severityCounts[scanResult.max_severity]!++;
 
-      let newThreatLevel: string | null = null;
-      if (scanResult.max_severity === 'critical') { newThreatLevel = 'critical'; flagged++; }
-      else if (scanResult.max_severity === 'high') { newThreatLevel = 'high'; flagged++; }
+      if (scanResult.max_severity === 'critical' || scanResult.max_severity === 'high') {
+        flagged++;
+      }
 
+      // Store raw scanner output. Status stays as-is — no derived flagging.
       await execute(
         `UPDATE skill_catalog SET
           scan_result = $1, threat_patterns = $2, scan_score = $3,
-          status = CASE WHEN $4 IS NOT NULL THEN 'flagged' ELSE status END,
           updated_at = now()
-         WHERE skill_id = $5`,
+         WHERE skill_id = $4`,
         [
           JSON.stringify(scanResult),
           scanResult.threat_patterns,
           scanResult.scan_score,
-          newThreatLevel,
           skill.skill_id,
         ],
       );

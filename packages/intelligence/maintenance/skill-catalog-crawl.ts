@@ -174,7 +174,7 @@ async function processSkill(
         name, skill.source, skill.sourceUrl, skillHash, content, contentSnippet,
         description, version, author, tags, requires, category,
         JSON.stringify(frontmatter ?? {}),
-        knownBad ? 'flagged' : 'active',
+        'active',
         JSON.stringify(scanResult),
         scanResult.threat_patterns,
         scanResult.scan_score,
@@ -189,19 +189,22 @@ async function processSkill(
         [catalogRow.skill_id, skillHash, version, content],
       );
 
-      // UPSERT into skill_hashes with catalog link — no synthetic threat_level
+      // UPSERT into skill_hashes with catalog link
       await execute(
-        `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, catalog_skill_id)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO skill_hashes (skill_hash, skill_name, skill_source, catalog_skill_id, known_bad_source)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (skill_hash) DO UPDATE SET
            skill_name = COALESCE(EXCLUDED.skill_name, skill_hashes.skill_name),
            skill_source = COALESCE(EXCLUDED.skill_source, skill_hashes.skill_source),
            catalog_skill_id = COALESCE(EXCLUDED.catalog_skill_id, skill_hashes.catalog_skill_id),
+           known_bad_source = COALESCE(EXCLUDED.known_bad_source, skill_hashes.known_bad_source),
            last_updated = now()`,
-        [skillHash, name, skill.source, catalogRow.skill_id],
+        [skillHash, name, skill.source, catalogRow.skill_id, knownBad ? name : null],
       );
 
-      // Notify subscribed agents if scanner found patterns
+      // Notify subscribed agents if scanner found patterns.
+      // Pass through scanner's max_severity as-is — it's the scanner's
+      // classification, not ACR's. Raw findings in metadata.
       if (scanResult.threat_patterns.length > 0) {
         const subscribers = await query<{ agent_id: string }>(
           `SELECT agent_id AS "agent_id" FROM skill_subscriptions
@@ -213,11 +216,11 @@ async function processSkill(
           await execute(
             `INSERT INTO skill_notifications
              (agent_id, skill_hash, notification_type, severity, title, message, metadata)
-             VALUES ($1, $2, 'scanner_finding', 'info', $3, $4, $5)`,
-            [sub.agent_id, skillHash,
-             'Scanner findings for ' + name,
-             'External scanner detected ' + scanResult.threat_patterns.length + ' pattern(s): ' + scanResult.threat_patterns.join(', '),
-             JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
+             VALUES ($1, $2, 'scanner_finding', $3, $4, $5, $6)`,
+            [sub.agent_id, skillHash, scanResult.max_severity,
+             'Scanner findings for ' + name + ' (' + scanResult.max_severity + ')',
+             scanResult.findings.length + ' finding(s), ' + scanResult.threat_patterns.length + ' pattern(s): ' + scanResult.threat_patterns.join(', '),
+             JSON.stringify({ scan_score: scanResult.scan_score, max_severity: scanResult.max_severity, threat_patterns: scanResult.threat_patterns, finding_count: scanResult.findings.length })],
           ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
         }
       }
@@ -253,15 +256,13 @@ async function processSkill(
         description = $5, version = $6, author = $7, tags = $8, requires = $9,
         category = $10, frontmatter_raw = $11,
         last_crawled_at = now(), last_crawl_error = NULL, content_changed_at = now(),
-        status = CASE WHEN $12 THEN 'flagged' ELSE 'active' END,
-        scan_result = $13, threat_patterns = $14, scan_score = $15,
+        scan_result = $12, threat_patterns = $13, scan_score = $14,
         updated_at = now()
-       WHERE skill_id = $16`,
+       WHERE skill_id = $15`,
       [
         skillHash, existing.current_hash, content, contentSnippet,
         description, version, author, tags, requires,
         category, JSON.stringify(frontmatter ?? {}),
-        knownBad,
         JSON.stringify(scanResult), scanResult.threat_patterns, scanResult.scan_score,
         existing.skill_id,
       ],
@@ -308,11 +309,11 @@ async function processSkill(
         await execute(
           `INSERT INTO skill_notifications
            (agent_id, skill_hash, notification_type, severity, title, message, metadata)
-           VALUES ($1, $2, 'scanner_finding', 'info', $3, $4, $5)`,
-          [sub.agent_id, skillHash,
-           'Scanner findings for updated ' + name,
-           'External scanner detected ' + scanResult.threat_patterns.length + ' pattern(s): ' + scanResult.threat_patterns.join(', '),
-           JSON.stringify({ scan_score: scanResult.scan_score, threat_patterns: scanResult.threat_patterns })],
+           VALUES ($1, $2, 'scanner_finding', $3, $4, $5, $6)`,
+          [sub.agent_id, skillHash, scanResult.max_severity,
+           'Scanner findings for updated ' + name + ' (' + scanResult.max_severity + ')',
+           scanResult.findings.length + ' finding(s), ' + scanResult.threat_patterns.length + ' pattern(s): ' + scanResult.threat_patterns.join(', '),
+           JSON.stringify({ scan_score: scanResult.scan_score, max_severity: scanResult.max_severity, threat_patterns: scanResult.threat_patterns, finding_count: scanResult.findings.length })],
         ).catch((err) => { log.debug({ err }, 'Failed to create agent notification'); });
       }
     }
