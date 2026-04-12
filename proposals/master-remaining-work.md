@@ -248,16 +248,114 @@ These routes are already clean — raw data only:
 **What:** Add DB stub/DI for test pool. Options documented in `open-items-plan.md` "Known debt" section.
 **Independent of round 3.**
 
-## Remaining work (as of 2026-04-12)
+## Completed (as of 2026-04-12)
 
-**All items complete.** No remaining synthetic label debt.
+**Alignment revert complete.** No remaining synthetic label debt.
 
-- Migration 000013 drops `threat_level`, `health_status`, `quality_score` columns. Renames `min_threat_level` to `min_anomaly_signals` (INT). Renames `threat_acknowledgements.threat_level` to `severity`.
-- notifications.ts updated to use new column names and raw signal thresholds.
-- open-items-plan.md reconciled: maturity labels replaced with raw counts, threat_warnings removed, inherited-labels section marked RESOLVED.
+- Migration 000013 executed against live CockroachDB. Columns dropped.
+- notifications.ts updated to use `min_anomaly_signals` (INT) and `severity`.
+- open-items-plan.md reconciled.
+- Live API verified: zero synthetic labels in any response.
 
 ---
 
-## Phase 2 (Out of Scope, Tracked)
+## Next: Build roadmap
 
-Claude Code plugin for compulsory composition tracking. Documented in `open-items-plan.md` lines 1058-1175. Not started. Triggers: paying customer request, high `composition_stale` rates, or new Claude Code hook API.
+Priority-ordered. Each item is independent unless noted.
+
+### P0 — Layer 2 MCP presenter tools (biggest gap)
+
+The ingestion API has 5 endpoints that agents cannot reach because no MCP tools exist for them. These are the lenses that make ACR useful as an interaction profile registry. Without them, the only lens is friction.
+
+| MCP tool to build | Endpoint it wraps | What it shows the agent |
+|-------------------|-------------------|------------------------|
+| `get_profile` | `GET /agent/:id/profile` | Full agent profile: identity, composition summary, composition delta (MCP-observed vs agent-reported), receipt counts, target counts, days active |
+| `get_coverage` | `GET /agent/:id/coverage` | Signal coverage: which fields the agent populates on receipts, transparent rules with conditions/inputs/triggered booleans |
+| `get_stable_corridors` | `GET /agent/:id/stable-corridors` | Reliable interaction paths: targets with zero failures, low variance, high sample count. Transparent filter thresholds disclosed in response |
+| `get_failure_registry` | `GET /agent/:id/failure-registry` | Failure breakdown: per-target failure counts, status codes, error codes, categories, median duration when failed |
+| `get_trend` | `GET /agent/:id/trend` | Per-target latency and failure rate deltas over time: current vs previous period, raw percentage change |
+| `summarize_my_agent` | Composite: profile + friction + coverage | Single-read overview of the agent's interaction profile across all available lenses |
+
+**Files to create:**
+- `packages/mcp-server/src/tools/get-profile.ts`
+- `packages/mcp-server/src/tools/get-coverage.ts`
+- `packages/mcp-server/src/tools/get-stable-corridors.ts`
+- `packages/mcp-server/src/tools/get-failure-registry.ts`
+- `packages/mcp-server/src/tools/get-trend.ts`
+- `packages/mcp-server/src/tools/summarize-my-agent.ts`
+- `packages/mcp-server/src/server.ts` — register the new tools
+
+**Pattern:** Each tool follows the same structure as `get-friction-report.ts`: resolve agent ID, fetch the endpoint, format the response as plain text, return. No computation, no labels, no advice — render raw data.
+
+### P1 — Publish MCP + SDKs
+
+The MCP server has been heavily modified (alignment revert removed all synthetic labels, renamed methods) but hasn't been published. Agents installing `@tethral/acr-mcp` from npm get the old version.
+
+**Tasks:**
+- Bump version in `packages/mcp-server/package.json`
+- `npm publish` for `@tethral/acr-mcp`
+- Bump + publish `@tethral/acr-sdk` (ts-sdk) — `getActiveThreats()` renamed to `getActiveSignals()`, `ThreatLevel` type removed
+- Bump + publish `tethral-acr` (python-sdk) — `get_active_threats()` renamed to `get_active_signals()`
+- Update installation docs
+
+### P2 — Deploy resolver API to Cloudflare Workers
+
+`packages/resolver-api/src/routes/skill.ts` and `threats.ts` were updated in rounds 2 and 3b. The resolver runs on Cloudflare Workers — separate from Vercel. Needs `wrangler deploy`.
+
+**Tasks:**
+- Verify `wrangler.toml` is configured
+- `npx wrangler deploy` from `packages/resolver-api/`
+- Verify resolver endpoints return clean data (no `threat_level`)
+
+### P3 — Phase 2: Claude Code plugin
+
+Compulsory composition tracking via file watching. Full design in `open-items-plan.md` lines 1058-1175.
+
+**Package:** `packages/claude-code-plugin/`
+**What it does:** Watches `~/.claude/settings.json` and `~/.claude/skills/**/*.md` for changes, POSTs composition updates directly to the ingestion API. Separate from the MCP — both talk to the server independently.
+**Estimated scope:** 7-10 days focused work.
+**Triggers to start:** Paying customer request, high `composition_stale` rates, or new Claude Code hook API.
+
+### P4 — Monetization infrastructure
+
+The friction endpoint has tier gating (`isPaidTier` check in `friction.ts`) but no actual payment flow.
+
+**Tasks:**
+- Stripe integration for API key provisioning
+- Paid tier unlocks: full top-target list (10 vs 3), baseline comparisons, population drift, directional pairs, retry overhead
+- API key management UI (currently just the `/api-keys` route)
+- Landing page pricing section
+
+### P5 — Dashboard expansion
+
+The dashboard currently only has the skill catalog browser and an internal metrics page.
+
+**Future pages:**
+- Agent profile viewer (wraps `/agent/:id/profile`)
+- Friction dashboard (wraps `/agent/:id/friction`)
+- Network observatory (wraps `/network/status` and `/network/observatory-summary`)
+
+---
+
+## Infrastructure notes
+
+| Component | Hosting | Deploy method |
+|-----------|---------|---------------|
+| Ingestion API | Vercel (Hono serverless) | `vercel deploy --prod` or git push (git integration may need reconnecting) |
+| Resolver API | Cloudflare Workers | `wrangler deploy` from `packages/resolver-api/` |
+| Database | CockroachDB Serverless | Connection string in Vercel production env vars |
+| DNS | Cloudflare | `acr.nfkey.ai` proxied through Cloudflare to Vercel |
+| MCP Server | npm (`@tethral/acr-mcp`) | `npm publish` from `packages/mcp-server/` |
+| TS SDK | npm (`@tethral/acr-sdk`) | `npm publish` from `packages/ts-sdk/` |
+| Python SDK | PyPI (`tethral-acr`) | `python -m build && twine upload` from `packages/python-sdk/` |
+| Intelligence jobs | TBD (Lambda / Vercel cron) | Not currently deployed on a schedule |
+| Dashboard | Vercel (Next.js) | Separate Vercel project or same with path routing |
+
+## Env vars (Vercel production)
+
+| Var | Status | Purpose |
+|-----|--------|---------|
+| `COCKROACH_CONNECTION_STRING` | Active | DB connection |
+| `INTERNAL_QUERY_SECRET` | Active (optional) | Resolver proxy auth, falls back to conn string prefix |
+| `SLACK_WEBHOOK_URL` | Placeholder (`YOUR_SECRET_VALUE_GOES_HERE`) | Intelligence job alerts — set a real URL or delete |
+| `TETHRAL_SIGNING_KEY_SEED` | Active (optional) | Deterministic JWT signing — set for stable keys across deploys |
