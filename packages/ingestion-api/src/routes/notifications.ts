@@ -123,10 +123,10 @@ app.post('/agent/:agent_id/notifications/:id/acknowledge', async (c) => {
   // Record the acknowledgement
   const threatPatterns = (notif.metadata as Record<string, unknown>).threat_patterns as string[] ?? [];
   await execute(
-    `INSERT INTO threat_acknowledgements (agent_id, skill_hash, threat_level, threat_patterns, reason, expires_at)
+    `INSERT INTO threat_acknowledgements (agent_id, skill_hash, severity, threat_patterns, reason, expires_at)
      VALUES ($1, $2, $3, $4, $5, now() + INTERVAL '30 days')
      ON CONFLICT (agent_id, skill_hash) DO UPDATE SET
-       threat_level = EXCLUDED.threat_level,
+       severity = EXCLUDED.severity,
        threat_patterns = EXCLUDED.threat_patterns,
        reason = EXCLUDED.reason,
        acknowledged_at = now(),
@@ -134,7 +134,7 @@ app.post('/agent/:agent_id/notifications/:id/acknowledge', async (c) => {
     [agentId, notif.skill_hash, notif.severity, threatPatterns, reason],
   );
 
-  log.info({ agentId, skillHash: notif.skill_hash, severity: notif.severity }, 'Threat acknowledged');
+  log.info({ agentId, skillHash: notif.skill_hash, severity: notif.severity }, 'Notification acknowledged');
 
   return c.json({ success: true, expires_in_days: 30 });
 });
@@ -149,14 +149,14 @@ app.get('/agent/:agent_id/subscriptions', async (c) => {
     id: string;
     skill_hash: string;
     notify_on: string;
-    min_threat_level: string;
+    min_anomaly_signals: number;
     active: boolean;
     created_at: string;
     skill_name: string | null;
     skill_source: string | null;
   }>(
     `SELECT s.id AS "id", s.skill_hash AS "skill_hash",
-            s.notify_on AS "notify_on", s.min_threat_level AS "min_threat_level",
+            s.notify_on AS "notify_on", s.min_anomaly_signals AS "min_anomaly_signals",
             s.active AS "active", s.created_at::text AS "created_at",
             sc.skill_name AS "skill_name", sc.skill_source AS "skill_source"
      FROM skill_subscriptions s
@@ -181,18 +181,17 @@ app.post('/agent/:agent_id/subscriptions', async (c) => {
   if (!skillHash) return c.json(makeError('INVALID_INPUT', 'skill_hash required'), 400);
 
   const notifyOn = (body.notify_on as string) ?? null;
-  const minThreatLevel = (body.min_threat_level as string) ?? null;
+  const minAnomalySignals = body.min_anomaly_signals != null ? parseInt(String(body.min_anomaly_signals), 10) : 0;
   if (!notifyOn) return c.json(makeError('INVALID_INPUT', 'notify_on required'), 400);
-  if (!minThreatLevel) return c.json(makeError('INVALID_INPUT', 'min_threat_level required'), 400);
 
   await execute(
-    `INSERT INTO skill_subscriptions (agent_id, skill_hash, notify_on, min_threat_level)
+    `INSERT INTO skill_subscriptions (agent_id, skill_hash, notify_on, min_anomaly_signals)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (agent_id, skill_hash) DO UPDATE SET
        notify_on = EXCLUDED.notify_on,
-       min_threat_level = EXCLUDED.min_threat_level,
+       min_anomaly_signals = EXCLUDED.min_anomaly_signals,
        active = true`,
-    [agentId, skillHash, notifyOn, minThreatLevel],
+    [agentId, skillHash, notifyOn, minAnomalySignals],
   );
 
   return c.json({ success: true }, 201);

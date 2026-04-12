@@ -250,22 +250,11 @@ These routes are already clean — raw data only:
 
 ## Remaining work (as of 2026-04-12)
 
-All synthetic label consumers and producers are cleaned. 144/144 tests green. Three items remain:
+**All items complete.** No remaining synthetic label debt.
 
-### 1. DB migration — drop vestigial columns
-
-`threat_level` on `skill_hashes` and `health_status` on `system_health` are now vestigial — nothing writes them (round 3c), nothing reads them (rounds 3a-3d). Drop via migration. Also drop `quality_score` from `skill_catalog` (replaced by raw metadata fields in round 3c).
-
-### 2. notifications.ts — subscription schema dependency
-
-`skill_subscriptions.min_threat_level` and `threat_acknowledgements.threat_level` are DB columns still referenced in the subscription/acknowledgement routes. Fixing requires:
-1. Migration to rename or drop the columns
-2. Update the routes to accept raw signal thresholds instead
-3. Update SKILL.md subscription instructions
-
-### 3. open-items-plan.md — plan reconciliation
-
-Plan document still contains code samples with synthetic labels (`warmup`/`calibrating`/`stable_candidate` in maturity prefix, `threat_warnings` in receipt response type, `threat_level` enums in attribution schema). Update to reflect raw-data decisions (D10: return `total_receipts`, `distinct_targets`, `days_active` instead of maturity state labels).
+- Migration 000013 drops `threat_level`, `health_status`, `quality_score` columns. Renames `min_threat_level` to `min_anomaly_signals` (INT). Renames `threat_acknowledgements.threat_level` to `severity`.
+- notifications.ts updated to use new column names and raw signal thresholds.
+- open-items-plan.md reconciled: maturity labels replaced with raw counts, threat_warnings removed, inherited-labels section marked RESOLVED.
 
 ---
 

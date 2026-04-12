@@ -140,7 +140,7 @@ When a user-facing change lands on the MCP, it should also land on the TypeScrip
 
 ### Maturity surfacing in every presenter tool
 
-`profile_state.maturity_state` (`warmup` / `calibrating` / `stable_candidate`) should appear at the top of every presenter tool's output, not just in `get_friction_report`. If you're writing or updating any presenter tool in this phase, include the `renderMaturityPrefix(profile)` helper (landing as part of Item 4) as the first line of the response. This is the "progression, not a gate" pattern made visible — users see the meter fill up as their profile matures.
+**UPDATED (alignment revert):** Maturity state labels (`warmup`/`calibrating`/`stable_candidate`) have been replaced with raw numbers: `total_receipts`, `distinct_targets`, `days_active`. Presenter tools render these counts directly — the client decides what a "mature" profile means.
 
 Applies to: `get_friction_report`, `get_interaction_log`, `get_network_status`, `get_skill_tracker`, any future presenter tool.
 
@@ -505,7 +505,7 @@ An earlier draft of this plan said the MCP would hold `lastComposedHash` as addi
 interface ReceiptAcceptedResponse {
   accepted: number;
   receipt_ids: string[];
-  threat_warnings?: ThreatWarning[];
+  // threat_warnings removed — alignment revert: no synthetic labels in receipt response
   composition_stale?: boolean;  // NEW
   composition_stale_since_minutes?: number;  // NEW, diagnostic
 }
@@ -585,7 +585,7 @@ Operator-facing text that explains where cost came from using a rhetorical invar
 - [ ] MCP has a template library at `packages/mcp-server/src/presenter/attribution-templates.ts` mapping labels to English sentences
 - [ ] All template strings use "your interaction profile" or "your composition" as the subject of attribution sentences. Never "you", "your side", "your fault"
 - [ ] A linting test verifies no forbidden substrings exist in the template library
-- [ ] Every presenter tool response includes a maturity prefix computed from `/profile` (warmup / calibrating / stable_candidate)
+- [ ] Every presenter tool response includes profile data counts (total_receipts, distinct_targets, days_active) — no synthetic maturity labels
 - [ ] The `get_friction_report` tool uses the template library and maturity prefix in its output
 - [ ] Actionable recommendations only appear when the server-supplied `attribution.recommended_action` field is non-null
 - [ ] The MCP never invents an attribution label, a magnitude, or a recommendation
@@ -686,12 +686,8 @@ const TEMPLATES: Record<AttributionCostSide, Record<AttributionMagnitude, string
 export function renderMaturityPrefix(profile: ProfileResponse): string {
   const s = profile.profile_state;
   switch (s.maturity_state) {
-    case 'warmup':
-      return `Your profile is still warming up — ${s.total_receipts} receipts across ${s.distinct_targets} targets. Findings below will firm up once you reach roughly 50 receipts and 3 targets.\n\n`;
-    case 'calibrating':
-      return `Your profile is calibrating — ${s.total_receipts} receipts across ${s.distinct_targets} targets over ${s.days_active} day(s). These are early signals; take them with appropriate uncertainty.\n\n`;
-    case 'stable_candidate':
-      return `Your profile is stable — ${s.total_receipts} receipts across ${s.distinct_targets} targets over ${s.days_active} day(s). Findings below are based on enough data to be reliable.\n\n`;
+    // UPDATED: return raw counts, no synthetic maturity label
+    return `Profile: ${s.total_receipts} receipts across ${s.distinct_targets} targets over ${s.days_active} day(s).\n\n`;
   }
 }
 ```
@@ -968,8 +964,8 @@ Phase 1 is complete when all of these are true:
   - [ ] Any marketplace listing text that mentions composition or state handling
 - [ ] SDK parity: TypeScript and Python SDKs accept the new category parameters (if they need them for the MCP/SDK users) and are published to npm and PyPI
 - [ ] A staging smoke test succeeds, covering:
-  - [ ] Fresh agent registers → profile returns `maturity_state: warmup`
-  - [ ] After ~50 receipts → profile returns `maturity_state: calibrating`
+  - [ ] Fresh agent registers → profile returns raw counts (total_receipts: 0, distinct_targets: 0, days_active: 0)
+  - [ ] After ~50 receipts → profile returns updated counts
   - [ ] Posting a receipt with `categories.activity_class = 'math'` → `/friction` shows a math breakdown
   - [ ] Two receipts <60s apart on the same `chain_id` → second receipt has `preceded_by` set
   - [ ] Agent that hasn't updated composition for >30 min → receipt response has `composition_stale: true`
@@ -988,7 +984,7 @@ These are baselines to watch post-deploy so we know whether the phase did what w
 - % of agents reporting two-source composition (both MCP observation and agent self-report)
 
 **Quality**
-- % of agents progressing through maturity states (`warmup` → `calibrating` → `stable_candidate`) within their first week
+- % of agents reaching 50+ receipts and 3+ targets within their first week (profile data depth)
 - % of profiles where the two-source composition delta is non-empty (how often does observation disagree with self-report?)
 - Rate of `composition_stale: true` flags set per agent per day (how often is drift being caught?)
 
@@ -1041,17 +1037,16 @@ Tracked separately; do not implement as part of this phase.
 - Enterprise tier / Friction Observer-operated runs
 - Longitudinal corpus analysis pipelines beyond what friction.ts already has
 
-### Inherited synthetic labels — documented drift, not in scope to fix now
+### Inherited synthetic labels — RESOLVED
 
-ACR predates the alignment discipline described in this plan. Several pre-existing synthetic labels live in the database and routes that Phase 1 code consumes but did not create. They're listed here so nothing new gets built on top of them without an explicit decision, and so they're tracked for later cleanup.
+All inherited synthetic labels have been cleaned up across alignment revert rounds 1-2 and rounds 3a-3d:
 
-- **`system_health.health_status`** — pre-existing column with values `healthy / degraded / unhealthy / flagged`. Used by `network-status.ts`, `observatory-summary.ts`, and the friction target enrichment. The label is a synthetic verdict derived from hidden thresholds that aren't returned to clients. Should eventually be replaced with raw rates (`failure_rate`, `anomaly_rate`, `sample_count`) and let clients shape them.
-- **`skill_hashes.threat_level`** — pre-existing column with values `none / low / medium / high / critical`. Used by `check-entity.ts`, `threat-feed.ts`, `network-status.ts`, and the MCP `check_entity` tool. Synthetic verdict; the derivation is opaque to the client. Same cleanup pattern applies: return the underlying signals and let the client decide.
-- **`check-entity` MCP tool output strings** — the tool still prints `FLAGGED BY ACR — REVIEW BEFORE USE` and compares `threat_level === 'high' || 'critical'` to decide which warning to show. Softer than `BLOCKED — DO NOT INSTALL` but still uses inherited labels and hidden comparisons.
-
-None of these are being changed in this pass. They're called out so:
-1. No new Phase 1 code builds on top of them without first asking whether the inherited label is the right thing to consume.
-2. A future alignment pass knows where to start.
+- **`system_health.health_status`** — Column dropped (migration 000013). All consumers replaced with raw `failure_rate`, `anomaly_rate`. The `computeHealthStatus()` function and its hidden thresholds have been deleted.
+- **`skill_hashes.threat_level`** — Column dropped (migration 000013). All consumers replaced with raw `anomaly_signal_count`, `anomaly_signal_rate`, `agent_count`. The `computeThreatLevel()` function and its hidden threshold matrix have been deleted.
+- **`skill_catalog.quality_score`** — Column dropped (migration 000013). The `computeQualityScore()` function and its hidden weights have been deleted. Clients see raw metadata presence instead.
+- **`check-entity` MCP tool** — No longer prints verdicts or advice. Renders raw signal counts.
+- **`skill_subscriptions.min_threat_level`** — Replaced with `min_anomaly_signals` (INT). Raw signal count threshold, not a label.
+- **`threat_acknowledgements.threat_level`** — Renamed to `severity` (stores the notification's severity value, which is a raw field).
 
 ---
 
