@@ -87,7 +87,6 @@ app.get('/skill-catalog/search', async (c) => {
     anomaly_signal_rate: number | null;
     last_crawled_at: string | null;
     content_changed_at: string | null;
-    quality_score: number | null;
     scan_score: number | null;
     threat_patterns: string[] | null;
     rank: number;
@@ -107,7 +106,6 @@ app.get('/skill-catalog/search', async (c) => {
             COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
-            sc.quality_score AS "quality_score",
             sc.scan_score AS "scan_score",
             sc.threat_patterns AS "threat_patterns",
             ts_rank(sc.search_vector, plainto_tsquery('english', $${tsQueryParam})) AS "rank"
@@ -140,7 +138,6 @@ app.get('/skill-catalog/search', async (c) => {
               COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
               sc.last_crawled_at::text AS "last_crawled_at",
               sc.content_changed_at::text AS "content_changed_at",
-              sc.quality_score AS "quality_score",
               sc.scan_score AS "scan_score",
               sc.threat_patterns AS "threat_patterns",
               0 AS "rank"
@@ -188,7 +185,7 @@ app.get('/skill-catalog', async (c) => {
     skill_name: 'sc.skill_name',
     content_changed_at: 'sc.content_changed_at',
     agent_count: 'sh.agent_count',
-    quality_score: 'sc.quality_score',
+    scan_score: 'sc.scan_score',
   };
   const sortExpr = validSorts[sortKey] ?? 'sc.updated_at';
 
@@ -231,7 +228,6 @@ app.get('/skill-catalog', async (c) => {
     anomaly_signal_rate: number | null;
     last_crawled_at: string | null;
     content_changed_at: string | null;
-    quality_score: number | null;
     scan_score: number | null;
     threat_patterns: string[] | null;
   }>(
@@ -248,7 +244,6 @@ app.get('/skill-catalog', async (c) => {
             COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
             sc.last_crawled_at::text AS "last_crawled_at",
             sc.content_changed_at::text AS "content_changed_at",
-            sc.quality_score AS "quality_score",
             sc.scan_score AS "scan_score",
             sc.threat_patterns AS "threat_patterns"
      FROM skill_catalog sc
@@ -363,7 +358,6 @@ app.get('/skill-catalog/:skill_id', async (c) => {
     anomaly_signal_rate: number | null;
     first_seen_at: string | null;
     last_updated: string | null;
-    quality_score: number | null;
     scan_score: number | null;
     threat_patterns: string[] | null;
     scan_result: Record<string, unknown> | null;
@@ -384,7 +378,6 @@ app.get('/skill-catalog/:skill_id', async (c) => {
             COALESCE(sh.anomaly_signal_rate, 0) AS "anomaly_signal_rate",
             sh.first_seen_at::text AS "first_seen_at",
             sh.last_updated::text AS "last_updated",
-            sc.quality_score AS "quality_score",
             sc.scan_score AS "scan_score",
             sc.threat_patterns AS "threat_patterns",
             sc.scan_result AS "scan_result"
