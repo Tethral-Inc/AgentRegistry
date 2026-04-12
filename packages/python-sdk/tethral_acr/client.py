@@ -175,11 +175,11 @@ class ACRClient:
         return self._get(f"/v1/agent/{agent_id}", use_resolver=True)
 
     def get_system_health(self, system_id: str) -> dict[str, Any]:
-        """Get health status for a target system."""
+        """Get raw signal rates for a target system."""
         return self._get(f"/v1/system/{system_id}/health", use_resolver=True)
 
-    def get_active_threats(self) -> list[dict[str, Any]]:
-        """Get currently active threat alerts."""
+    def get_active_signals(self) -> list[dict[str, Any]]:
+        """Get skills with elevated anomaly signals."""
         return self._get("/v1/threats/active", use_resolver=True)
 
     def get_friction_report(
@@ -197,7 +197,6 @@ class ACRClient:
         query: str,
         source: str | None = None,
         category: str | None = None,
-        threat_level: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -207,8 +206,6 @@ class ACRClient:
             params["source"] = source
         if category:
             params["category"] = category
-        if threat_level:
-            params["threat_level"] = threat_level
         return self._get(f"/api/v1/skill-catalog/search?{urlencode(params)}")
 
     def get_skill_catalog(self, skill_id: str) -> dict[str, Any]:

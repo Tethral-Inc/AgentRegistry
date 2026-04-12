@@ -22,7 +22,7 @@ export interface DashboardStats {
   activeAgents: number;
   totalReceipts24h: number;
   activeThreats: number;
-  topSystems: Array<{ system_id: string; interaction_count: number; health_status: string }>;
+  topSystems: Array<{ system_id: string; interaction_count: number; failure_rate: number; anomaly_rate: number }>;
 }
 
 // Skill Catalog types & helpers
@@ -41,9 +41,10 @@ export interface SkillCatalogEntry {
   category: string | null;
   content_snippet: string | null;
   status: string;
-  threat_level: string | null;
   agent_count: number | null;
-  quality_score: number | null;
+  anomaly_signal_count: number | null;
+  anomaly_signal_rate: number | null;
+  scan_score: number | null;
   last_crawled_at: string | null;
   content_changed_at: string | null;
   skill_content?: string | null;
@@ -57,7 +58,7 @@ export interface SkillVersionEntry {
   previous_version: string | null;
   change_type: string;
   detected_at: string;
-  threat_level: string | null;
+  anomaly_signal_count: number | null;
   agent_count: number | null;
 }
 
@@ -69,13 +70,12 @@ export interface SkillSearchResult {
 }
 
 export async function searchSkills(query: string, options?: {
-  source?: string; category?: string; threat_level?: string;
+  source?: string; category?: string;
   limit?: number; offset?: number; sort?: string;
 }): Promise<SkillSearchResult> {
   const params = new URLSearchParams({ q: query });
   if (options?.source) params.set('source', options.source);
   if (options?.category) params.set('category', options.category);
-  if (options?.threat_level) params.set('threat_level', options.threat_level);
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.offset) params.set('offset', String(options.offset));
   return fetchAPI(`/api/v1/skill-catalog/search?${params}`);

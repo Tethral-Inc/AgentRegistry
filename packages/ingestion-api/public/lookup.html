@@ -78,21 +78,20 @@
         const data = await res.json();
 
         if (!data.found) {
-          resultDiv.innerHTML = `<div class="result-card"><p class="not-found">This skill hash is unknown to the ACR network.<br/>It has not been seen before. Exercise caution.</p></div>`;
+          resultDiv.innerHTML = `<div class="result-card"><p class="not-found">This skill hash has not been observed by the ACR network.</p></div>`;
           return;
         }
 
-        const threatClass = 'threat-' + (data.threat_level || 'none');
         resultDiv.innerHTML = `
           <div class="result-card">
             <h3>Skill Found</h3>
             <div class="field"><span class="field-label">Hash</span><span class="field-value">${data.skill_hash.substring(0, 16)}...</span></div>
             ${data.skill_name ? `<div class="field"><span class="field-label">Name</span><span class="field-value">${data.skill_name}</span></div>` : ''}
             ${data.skill_source ? `<div class="field"><span class="field-label">Source</span><span class="field-value">${data.skill_source}</span></div>` : ''}
-            <div class="field"><span class="field-label">Threat Level</span><span class="field-value ${threatClass}">${(data.threat_level || 'none').toUpperCase()}</span></div>
             <div class="field"><span class="field-label">Agents Using</span><span class="field-value">${data.agent_count ?? 0}</span></div>
             <div class="field"><span class="field-label">Interactions</span><span class="field-value">${data.interaction_count ?? 0}</span></div>
-            <div class="field"><span class="field-label">Anomaly Rate</span><span class="field-value">${data.anomaly_rate != null ? (data.anomaly_rate * 100).toFixed(1) + '%' : 'N/A'}</span></div>
+            <div class="field"><span class="field-label">Anomaly Signals</span><span class="field-value">${data.anomaly_signal_count ?? 0}</span></div>
+            <div class="field"><span class="field-label">Anomaly Rate</span><span class="field-value">${data.anomaly_signal_rate != null ? (data.anomaly_signal_rate * 100).toFixed(1) + '%' : 'N/A'}</span></div>
             <div class="field"><span class="field-label">First Seen</span><span class="field-value">${data.first_seen ? new Date(data.first_seen).toLocaleDateString() : 'N/A'}</span></div>
           </div>`;
       } catch (err) {

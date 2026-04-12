@@ -6,43 +6,32 @@ import { searchSkills, browseSkills, type SkillCatalogEntry } from '../../lib/ap
 const SOURCES = ['all', 'npm', 'github', 'clawhub'];
 const SORTS = [
   { value: 'updated_at', label: 'Recently Updated' },
-  { value: 'quality_score', label: 'Quality Score' },
+  { value: 'scan_score', label: 'Scan Score' },
   { value: 'agent_count', label: 'Most Used' },
   { value: 'skill_name', label: 'Name' },
 ];
 
-function ThreatBadge({ level }: { level: string | null }) {
-  if (!level || level === 'none') return null;
-  const colors: Record<string, string> = {
-    low: '#facc15',
-    medium: '#f97316',
-    high: '#ef4444',
-    critical: '#dc2626',
-  };
+function SignalIndicator({ count, rate }: { count: number | null; rate: number | null }) {
+  if (!count || count === 0) return null;
   return (
     <span style={{
-      background: colors[level] ?? '#666',
-      color: '#fff',
+      background: '#333',
+      color: '#f97316',
       padding: '2px 8px',
       borderRadius: 4,
       fontSize: 11,
       fontWeight: 600,
-      textTransform: 'uppercase',
     }}>
-      {level}
+      {count} signals ({((rate ?? 0) * 100).toFixed(1)}%)
     </span>
   );
 }
 
-function QualityBar({ score }: { score: number | null }) {
-  const s = score ?? 0;
-  const color = s >= 70 ? '#22c55e' : s >= 40 ? '#facc15' : '#ef4444';
+function ScanScore({ score }: { score: number | null }) {
+  if (score == null) return null;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <div style={{ width: 60, height: 6, background: '#333', borderRadius: 3 }}>
-        <div style={{ width: `${s}%`, height: '100%', background: color, borderRadius: 3 }} />
-      </div>
-      <span style={{ fontSize: 11, color: '#888' }}>{s}</span>
+      <span style={{ fontSize: 11, color: '#888' }}>scan: {score}</span>
     </div>
   );
 }
@@ -73,8 +62,8 @@ function SkillCard({ skill }: { skill: SkillCatalogEntry }) {
           <span style={{ fontSize: 12, color: '#666' }}>{skill.skill_source}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <ThreatBadge level={skill.threat_level} />
-          <QualityBar score={skill.quality_score} />
+          <SignalIndicator count={skill.anomaly_signal_count} rate={skill.anomaly_signal_rate} />
+          <ScanScore score={skill.scan_score} />
         </div>
       </div>
       {skill.description && (

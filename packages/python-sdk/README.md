@@ -47,7 +47,7 @@ with ACRClient() as acr:
 | `check_skill(skill_hash)` | Check a skill before installing |
 | `check_agent(agent_id)` | Look up an agent |
 | `get_system_health(system_id)` | Get system health |
-| `get_active_threats()` | Get current threats |
+| `get_active_signals()` | Get skills with elevated anomaly signals |
 | `get_friction_report(agent_id, scope)` | Friction analysis |
 | `health()` | API health check |
 

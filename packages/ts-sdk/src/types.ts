@@ -23,7 +23,7 @@ export type AnomalyCategory =
   | 'unexpected_behavior' | 'data_exfiltration' | 'prompt_injection'
   | 'malformed_output' | 'excessive_latency' | 'unauthorized_access' | 'other';
 
-export type ThreatLevel = 'none' | 'low' | 'medium' | 'high' | 'critical';
+
 
 // --- Registration ---
 
@@ -48,15 +48,17 @@ export interface RegistrationResponse {
     connected_systems: Array<{
       name: string;
       type: string;
-      health_status: string;
-      anomaly_count: number;
+      failure_rate: number;
+      anomaly_rate: number;
+      anomaly_signal_count: number;
       agent_population: number;
     }>;
-    active_threats: Array<{
-      threat_level: string;
-      component_hash: string;
-      description: string;
-      first_reported: string;
+    skill_signals: Array<{
+      skill_hash: string;
+      skill_name?: string;
+      anomaly_signal_count: number;
+      agent_count: number;
+      first_seen: string;
     }>;
   };
 }
@@ -119,8 +121,8 @@ export interface SkillCheckResponse {
   skill_source?: string;
   agent_count?: number;
   interaction_count?: number;
-  anomaly_rate?: number;
-  threat_level?: ThreatLevel;
+  anomaly_signal_count?: number;
+  anomaly_signal_rate?: number;
   first_seen?: string;
   last_seen?: string;
   // Catalog-enriched fields
@@ -152,11 +154,11 @@ export interface SkillCatalogEntry {
   category: string | null;
   content_snippet: string | null;
   status: string;
-  threat_level?: ThreatLevel;
   agent_count?: number;
+  anomaly_signal_count?: number;
+  anomaly_signal_rate?: number;
   last_crawled_at: string | null;
   content_changed_at: string | null;
-  quality_score?: number;
   threat_patterns?: string[];
   scan_score?: number;
   versions?: SkillVersionEntry[];
@@ -168,7 +170,7 @@ export interface SkillVersionEntry {
   previous_version: string | null;
   change_type: string;
   detected_at: string;
-  threat_level?: ThreatLevel;
+  anomaly_signal_count?: number;
   agent_count?: number;
 }
 

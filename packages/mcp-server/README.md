@@ -34,7 +34,7 @@ ACR is an **interaction profile registry** — not a security product, not a ski
 2. **Agent logs interactions** — every external tool call, API request, or MCP interaction
 3. **Signals compile into an interaction profile** — timing, chain position, retries, anomaly flags, and more
 4. **Lenses interpret the profile** — friction is the first and most developed lens (bottlenecks, chain overhead, retry waste, population baselines)
-5. **Jeopardy notifications** — if ACR observes anomalies affecting a component in your composition, you get a notification. We're not a security check — we register and propagate signals, like HIBP or contact tracing.
+5. **Anomaly signal notifications** — if ACR observes anomaly signals affecting a component in your composition, you get a notification. We're not a security check — we register and propagate signals, like HIBP or contact tracing.
 
 ## Tools (14)
 
@@ -56,17 +56,17 @@ ACR is an **interaction profile registry** — not a security product, not a ski
 | `register_agent` | Explicit registration (auto-registration is the default on first call). |
 | `update_composition` | Update your composition without re-registering. Preserves agent identity. |
 
-### Jeopardy notifications
+### Anomaly signal notifications
 | Tool | Purpose |
 |------|---------|
-| `check_environment` | Active compromise flags and network health. Call on startup. |
-| `get_notifications` | Unread jeopardy notifications about components in your composition. |
+| `check_environment` | Active anomaly signals and network observations. Call on startup. |
+| `get_notifications` | Unread anomaly signal notifications about components in your composition. |
 | `acknowledge_threat` | Acknowledge a notification after reviewing with your operator. Expires in 30 days. |
 
 ### Network observation
 | Tool | Purpose |
 |------|---------|
-| `get_network_status` | The COVID-tracker / HIBP view for agent infrastructure — agent/system totals, health, active flags, escalations. |
+| `get_network_status` | Network-wide observation dashboard — agent/system totals, signal rates, skill anomalies, escalations. |
 | `get_skill_tracker` | Adoption and anomaly signals for skills observed by the network. |
 
 ### Lookups
@@ -78,7 +78,7 @@ ACR is an **interaction profile registry** — not a security product, not a ski
 
 ## About the Skill Registry
 
-ACR maintains an observation layer on skills that exist in public registries (npm, GitHub, etc.). We update it continuously. **We are not a security check.** If we observe that an agent using a particular skill may be in some way jeopardized, we will make an effort to notify the agent itself. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
+ACR maintains an observation layer on skills that exist in public registries (npm, GitHub, etc.). We update it continuously. **We are not a security check.** If we observe anomaly signals affecting a component in an agent's composition, we propagate that observation as a notification. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
 
 Agents don't get skills from ACR — we observe skills that already exist in the ecosystem and keep track of behavioral signals tied to them.
 

@@ -4,32 +4,13 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getSkillDetail, type SkillCatalogEntry, type SkillVersionEntry } from '../../../lib/api';
 
-function ThreatBadge({ level }: { level: string | null }) {
-  if (!level || level === 'none') return <span style={{ color: '#22c55e', fontSize: 13 }}>None</span>;
-  const colors: Record<string, string> = {
-    low: '#facc15', medium: '#f97316', high: '#ef4444', critical: '#dc2626',
-  };
+function SignalIndicator({ count, rate }: { count: number | null; rate: number | null }) {
+  if (!count || count === 0) return <span style={{ color: '#22c55e', fontSize: 13 }}>No signals</span>;
   return (
     <span style={{
-      background: colors[level] ?? '#666', color: '#fff',
-      padding: '2px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
-    }}>{level}</span>
-  );
-}
-
-function QualityBreakdown({ score }: { score: number | null }) {
-  const s = score ?? 0;
-  const color = s >= 70 ? '#22c55e' : s >= 40 ? '#facc15' : '#ef4444';
-  const label = s >= 70 ? 'Good' : s >= 40 ? 'Fair' : 'Low';
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <div style={{ width: 120, height: 8, background: '#333', borderRadius: 4 }}>
-          <div style={{ width: `${s}%`, height: '100%', background: color, borderRadius: 4 }} />
-        </div>
-        <span style={{ fontSize: 14, fontWeight: 600, color }}>{s}/100 ({label})</span>
-      </div>
-    </div>
+      background: '#333', color: '#f97316',
+      padding: '2px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600,
+    }}>{count} signals ({((rate ?? 0) * 100).toFixed(1)}%)</span>
   );
 }
 
@@ -50,7 +31,9 @@ function VersionTimeline({ versions }: { versions: SkillVersionEntry[] }) {
             {v.version ? `v${v.version}` : v.skill_hash.slice(0, 12)}
           </span>
           <span style={{ color: '#666' }}>{v.change_type}</span>
-          <ThreatBadge level={v.threat_level} />
+          {v.anomaly_signal_count != null && v.anomaly_signal_count > 0 && (
+            <span style={{ color: '#f97316', fontSize: 12 }}>{v.anomaly_signal_count} signals</span>
+          )}
         </div>
       ))}
     </div>
@@ -99,7 +82,7 @@ export default function SkillDetailPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           <h1 style={{ margin: 0, fontSize: 28 }}>{skill.skill_name}</h1>
           {skill.version && <span style={{ color: '#666', fontSize: 18 }}>v{skill.version}</span>}
-          <ThreatBadge level={skill.threat_level} />
+          <SignalIndicator count={skill.anomaly_signal_count} rate={skill.anomaly_signal_rate} />
         </div>
         {skill.description && (
           <p style={{ color: '#999', fontSize: 15, lineHeight: 1.6, marginTop: 8 }}>{skill.description}</p>
@@ -118,10 +101,9 @@ export default function SkillDetailPage() {
         <MetaRow label="Current Hash" value={skill.current_hash?.slice(0, 24) + '...'} />
         <MetaRow label="Last Crawled" value={skill.last_crawled_at?.split('T')[0]} />
         <MetaRow label="Last Changed" value={skill.content_changed_at?.split('T')[0]} />
-        <div style={{ marginTop: 12 }}>
-          <span style={{ color: '#666', fontSize: 13, marginRight: 12 }}>Quality Score</span>
-          <QualityBreakdown score={skill.quality_score} />
-        </div>
+        {skill.scan_score != null && (
+          <MetaRow label="Scanner Score" value={`${skill.scan_score} (external scanner)`} />
+        )}
       </div>
 
       {/* Related Skills (cross-source) */}
@@ -189,8 +171,8 @@ export default function SkillDetailPage() {
           Agents using this skill will receive automatic notifications when:
         </p>
         <ul style={{ color: '#666', fontSize: 13, lineHeight: 1.8, paddingLeft: 20 }}>
-          <li>Security threats are detected in the skill content</li>
-          <li>The skill is blocked by the content security scanner</li>
+          <li>Anomaly signals are observed for the skill</li>
+          <li>External scanner findings are detected in the skill content</li>
           <li>A new version of the skill is available</li>
         </ul>
         <p style={{ color: '#555', fontSize: 12, fontStyle: 'italic' }}>

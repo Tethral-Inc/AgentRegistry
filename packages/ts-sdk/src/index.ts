@@ -13,7 +13,7 @@ import type {
 export type {
   RegistrationRequest, RegistrationResponse, InteractionReceipt,
   SkillCheckResponse, FrictionReport, ProviderClass, TargetSystemType,
-  InteractionCategory, InteractionStatus, AnomalyCategory, ThreatLevel,
+  InteractionCategory, InteractionStatus, AnomalyCategory,
   FrictionSummary, TargetFriction,
   SkillCatalogEntry, SkillVersionEntry, SkillVersionHistory, SkillSearchResult,
   SkillNotification,
@@ -80,11 +80,11 @@ export class ACRClient {
     return this.get(`/v1/agent/${agentId}`, true);
   }
 
-  async getSystemHealth(systemId: string): Promise<{ found: boolean; system_id: string; health_status?: string }> {
+  async getSystemHealth(systemId: string): Promise<{ found: boolean; system_id: string; failure_rate?: number; anomaly_rate?: number }> {
     return this.get(`/v1/system/${encodeURIComponent(systemId)}/health`, true);
   }
 
-  async getActiveThreats(): Promise<Array<{ threat_level: string; skill_hash: string; skill_name?: string }>> {
+  async getActiveSignals(): Promise<Array<{ skill_hash: string; skill_name?: string; anomaly_signal_count: number; anomaly_signal_rate: number; agent_count: number }>> {
     return this.get('/v1/threats/active', true);
   }
 
@@ -101,14 +101,12 @@ export class ACRClient {
   async searchSkills(searchQuery: string, options?: {
     source?: string;
     category?: string;
-    threat_level?: string;
     limit?: number;
     offset?: number;
   }): Promise<SkillSearchResult> {
     const params = new URLSearchParams({ q: searchQuery });
     if (options?.source) params.set('source', options.source);
     if (options?.category) params.set('category', options.category);
-    if (options?.threat_level) params.set('threat_level', options.threat_level);
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
     return this.get(`/api/v1/skill-catalog/search?${params}`);

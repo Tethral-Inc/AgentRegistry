@@ -5,11 +5,12 @@ import { useState, useEffect } from 'react';
 const API_URL = process.env.NEXT_PUBLIC_ACR_API_URL ?? 'https://acr.tethral.ai';
 const RESOLVER_URL = process.env.NEXT_PUBLIC_ACR_RESOLVER_URL ?? API_URL;
 
-interface Threat {
-  threat_level: string;
+interface SkillSignal {
   skill_hash: string;
   skill_name?: string;
   anomaly_signal_count: number;
+  anomaly_signal_rate: number;
+  agent_count: number;
   first_seen: string;
 }
 
@@ -21,7 +22,7 @@ interface HealthStatus {
 
 export default function InternalMetrics() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [threats, setThreats] = useState<Threat[]>([]);
+  const [threats, setThreats] = useState<SkillSignal[]>([]);
   const [lastRefresh, setLastRefresh] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -66,25 +67,25 @@ export default function InternalMetrics() {
         )}
       </section>
 
-      {/* Active Threats */}
+      {/* Skills with Anomaly Signals */}
       <section style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '1.1rem', color: '#888', marginBottom: '0.75rem' }}>
-          Active Threats ({threats.length})
+          Skills with Anomaly Signals ({threats.length})
         </h2>
         {threats.length === 0 ? (
-          <p style={{ color: '#4ade80' }}>No active threats.</p>
+          <p style={{ color: '#4ade80' }}>No elevated anomaly signals.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {threats.map((t) => (
               <div key={t.skill_hash} style={{
                 background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, padding: '1rem',
-                borderLeft: `3px solid ${t.threat_level === 'critical' ? '#ef4444' : '#f97316'}`,
+                borderLeft: '3px solid #f97316',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                  <span style={{ fontWeight: 600, color: t.threat_level === 'critical' ? '#ef4444' : '#f97316' }}>
-                    {t.threat_level.toUpperCase()}
+                  <span style={{ fontWeight: 600, color: '#f97316' }}>
+                    {t.anomaly_signal_count} signals ({(t.anomaly_signal_rate * 100).toFixed(1)}%)
                   </span>
-                  <span style={{ color: '#666', fontSize: '0.8rem' }}>{t.anomaly_signal_count} signals</span>
+                  <span style={{ color: '#666', fontSize: '0.8rem' }}>{t.agent_count} reporters</span>
                 </div>
                 <div style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
                   {t.skill_name || t.skill_hash.substring(0, 24) + '...'}
