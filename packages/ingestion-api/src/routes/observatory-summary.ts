@@ -9,7 +9,7 @@ const app = new Hono();
  *
  * Used by the landing page hero. Returns raw counts only — no
  * synthetic verdicts, no inherited label filters. If a client wants
- * to derive a "healthy" or "jeopardized" count, it does so from the
+ * to derive signal-based counts, it does so from the
  * raw numbers returned here.
  *
  * Cached for 5 minutes with 30s stale-while-revalidate.
