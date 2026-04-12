@@ -133,26 +133,32 @@ app.post('/register', async (c) => {
   const systems = await query<{
     system_id: string;
     system_type: string;
-    health_status: string;
+    failure_rate: number;
+    anomaly_rate: number;
     anomaly_signal_count: number;
     distinct_agent_count: number;
   }>(
     `SELECT system_id AS "system_id", system_type AS "system_type",
-     health_status AS "health_status", anomaly_signal_count AS "anomaly_signal_count",
+     failure_rate AS "failure_rate", anomaly_rate AS "anomaly_rate",
+     anomaly_signal_count AS "anomaly_signal_count",
      distinct_agent_count AS "distinct_agent_count"
      FROM system_health ORDER BY total_interactions DESC LIMIT 10`,
   );
 
-  const threats = await query<{
-    threat_level: string;
+  const skillSignals = await query<{
     skill_hash: string;
     skill_name: string;
+    anomaly_signal_count: number;
+    agent_count: number;
     first_seen_at: string;
   }>(
-    `SELECT threat_level AS "threat_level", skill_hash AS "skill_hash",
-     COALESCE(skill_name, '') AS "skill_name", first_seen_at::text AS "first_seen_at"
-     FROM skill_hashes WHERE threat_level IN ('high', 'critical')
-     ORDER BY first_seen_at DESC LIMIT 10`,
+    `SELECT skill_hash AS "skill_hash",
+     COALESCE(skill_name, '') AS "skill_name",
+     anomaly_signal_count AS "anomaly_signal_count",
+     agent_count AS "agent_count",
+     first_seen_at::text AS "first_seen_at"
+     FROM skill_hashes WHERE anomaly_signal_count > 0
+     ORDER BY anomaly_signal_count DESC LIMIT 10`,
   );
 
   log.info({ agentId, name: agentName, provider: data.provider_class }, 'Agent registered');
@@ -166,15 +172,17 @@ app.post('/register', async (c) => {
       connected_systems: systems.map((s) => ({
         name: s.system_id,
         type: s.system_type,
-        health_status: s.health_status,
-        anomaly_count: s.anomaly_signal_count,
+        failure_rate: s.failure_rate,
+        anomaly_rate: s.anomaly_rate,
+        anomaly_signal_count: s.anomaly_signal_count,
         agent_population: s.distinct_agent_count,
       })),
-      active_threats: threats.map((t) => ({
-        threat_level: t.threat_level,
-        component_hash: t.skill_hash,
-        description: t.skill_name ? `Flagged skill: ${t.skill_name}` : 'Flagged skill hash',
-        first_reported: t.first_seen_at,
+      skill_signals: skillSignals.map((s) => ({
+        skill_hash: s.skill_hash,
+        skill_name: s.skill_name || undefined,
+        anomaly_signal_count: s.anomaly_signal_count,
+        agent_count: s.agent_count,
+        first_seen: s.first_seen_at,
       })),
     },
   }, 201);

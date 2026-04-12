@@ -67,15 +67,13 @@ app.get('/agent/:identifier/receipts', async (c) => {
 
     // Fetch network context for this target (sequential — pool max:1)
     const healthRows = await query<{
-      health_status: string;
       failure_rate: number;
       anomaly_rate: number;
       distinct_agent_count: number;
       median_duration_ms: number | null;
       p95_duration_ms: number | null;
     }>(
-      `SELECT health_status AS "health_status",
-              failure_rate AS "failure_rate",
+      `SELECT failure_rate AS "failure_rate",
               anomaly_rate AS "anomaly_rate",
               distinct_agent_count AS "distinct_agent_count",
               median_duration_ms AS "median_duration_ms",

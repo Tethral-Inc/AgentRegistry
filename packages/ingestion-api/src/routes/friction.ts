@@ -302,13 +302,11 @@ app.get('/agent/:agent_id/friction', async (c) => {
   const healthRows = targetIds.length > 0
     ? await query<{
         system_id: string;
-        health_status: string;
         failure_rate: number;
         anomaly_rate: number;
         distinct_agent_count: number;
       }>(
         `SELECT system_id AS "system_id",
-                health_status AS "health_status",
                 failure_rate AS "failure_rate",
                 anomaly_rate AS "anomaly_rate",
                 distinct_agent_count AS "distinct_agent_count"
@@ -322,7 +320,6 @@ app.get('/agent/:agent_id/friction', async (c) => {
   for (const t of targets) {
     const h = healthMap.get(t.target_system_id as string);
     if (h) {
-      t.network_health_status = h.health_status;
       t.network_failure_rate = h.failure_rate;
       t.network_anomaly_rate = h.anomaly_rate;
       t.network_agent_count = h.distinct_agent_count;

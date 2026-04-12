@@ -8,16 +8,14 @@ const VALID_SORT_FIELDS: Record<string, string> = {
   agent_count: 'agent_count',
   interaction_count: 'interaction_count',
   anomaly_signal_rate: 'anomaly_signal_rate',
-  threat_level: `CASE threat_level
-    WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2
-    WHEN 'low' THEN 3 ELSE 4 END`,
+  anomaly_signal_count: 'anomaly_signal_count',
 };
 
 /**
  * GET /network/skills — Skill adoption list (cursor-based).
  */
 app.get('/network/skills', async (c) => {
-  const threatLevel = c.req.query('threat_level');
+  const minAnomalySignals = c.req.query('min_anomaly_signals');
   const sortKey = c.req.query('sort') ?? 'agent_count';
   const limitParam = parseInt(c.req.query('limit') ?? '50', 10);
   const limit = Math.min(Math.max(1, limitParam), 200);
@@ -28,9 +26,9 @@ app.get('/network/skills', async (c) => {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
-  if (threatLevel) {
-    params.push(threatLevel);
-    conditions.push(`threat_level = $${params.length}`);
+  if (minAnomalySignals) {
+    params.push(parseInt(minAnomalySignals, 10));
+    conditions.push(`anomaly_signal_count >= $${params.length}`);
   }
   if (cursor) {
     params.push(cursor);
@@ -47,7 +45,6 @@ app.get('/network/skills', async (c) => {
     interaction_count: number;
     anomaly_signal_count: number;
     anomaly_signal_rate: number;
-    threat_level: string;
     first_seen: string;
     last_updated: string;
   }>(
@@ -57,7 +54,6 @@ app.get('/network/skills', async (c) => {
             interaction_count AS "interaction_count",
             anomaly_signal_count AS "anomaly_signal_count",
             anomaly_signal_rate AS "anomaly_signal_rate",
-            threat_level AS "threat_level",
             first_seen_at::text AS "first_seen",
             last_updated::text AS "last_updated"
      FROM skill_hashes
@@ -97,7 +93,6 @@ app.get('/network/skills/:hash', async (c) => {
     interaction_count: number;
     anomaly_signal_count: number;
     anomaly_signal_rate: number;
-    threat_level: string;
     first_seen: string;
     last_updated: string;
   }>(
@@ -107,7 +102,6 @@ app.get('/network/skills/:hash', async (c) => {
             interaction_count AS "interaction_count",
             anomaly_signal_count AS "anomaly_signal_count",
             anomaly_signal_rate AS "anomaly_signal_rate",
-            threat_level AS "threat_level",
             first_seen_at::text AS "first_seen",
             last_updated::text AS "last_updated"
      FROM skill_hashes
@@ -156,7 +150,6 @@ app.get('/network/skills/:hash', async (c) => {
     ...skill,
     provider_breakdown: providerBreakdown,
     cross_provider_anomalies: providersWithAnomalies,
-    cross_provider_correlation: providersWithAnomalies.length >= 2,
   });
 });
 

@@ -35,7 +35,6 @@ app.get('/network/status', async (c) => {
   const systems = await query<{
     system_id: string;
     system_type: string;
-    health_status: string;
     total_interactions: number;
     agent_count: number;
     failure_rate: number;
@@ -46,7 +45,6 @@ app.get('/network/status', async (c) => {
   }>(
     `SELECT system_id AS "system_id",
             system_type AS "system_type",
-            health_status AS "health_status",
             total_interactions AS "total_interactions",
             distinct_agent_count AS "agent_count",
             failure_rate AS "failure_rate",
@@ -56,13 +54,8 @@ app.get('/network/status', async (c) => {
             last_seen_at::text AS "last_seen_at"
      FROM system_health
      ORDER BY
-       CASE health_status
-         WHEN 'flagged' THEN 0
-         WHEN 'unhealthy' THEN 1
-         WHEN 'degraded' THEN 2
-         WHEN 'healthy' THEN 3
-         ELSE 4
-       END,
+       failure_rate DESC,
+       anomaly_rate DESC,
        total_interactions DESC
      LIMIT 50`,
   ).catch(() => []);
@@ -73,11 +66,10 @@ app.get('/network/status', async (c) => {
     ? (Date.now() - new Date(latestSeen).getTime()) > TWO_HOURS_MS
     : true;
 
-  // 3. Active threats
+  // 3. Skills with anomaly signals
   const threats = await query<{
     skill_hash: string;
     skill_name: string | null;
-    threat_level: string;
     anomaly_signal_count: number;
     anomaly_signal_rate: number;
     agent_count: number;
@@ -86,22 +78,14 @@ app.get('/network/status', async (c) => {
   }>(
     `SELECT skill_hash AS "skill_hash",
             skill_name AS "skill_name",
-            threat_level AS "threat_level",
             anomaly_signal_count AS "anomaly_signal_count",
             anomaly_signal_rate AS "anomaly_signal_rate",
             agent_count AS "agent_count",
             first_seen_at::text AS "first_seen",
             last_updated::text AS "last_updated"
      FROM skill_hashes
-     WHERE threat_level != 'none'
-     ORDER BY
-       CASE threat_level
-         WHEN 'critical' THEN 0
-         WHEN 'high' THEN 1
-         WHEN 'medium' THEN 2
-         WHEN 'low' THEN 3
-       END,
-       anomaly_signal_count DESC
+     WHERE anomaly_signal_count > 0
+     ORDER BY anomaly_signal_count DESC, anomaly_signal_rate DESC
      LIMIT 20`,
   ).catch(() => []);
 

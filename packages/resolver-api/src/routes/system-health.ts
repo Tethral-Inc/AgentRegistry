@@ -7,9 +7,9 @@ interface HealthRow {
   system_type: string;
   total_interactions: number;
   distinct_agent_count: number;
+  failure_rate: number;
   anomaly_rate: number;
   median_duration_ms: number | null;
-  health_status: string;
 }
 
 interface SystemHealthResponse {
@@ -18,9 +18,9 @@ interface SystemHealthResponse {
   system_type?: string;
   total_interactions?: number;
   distinct_agents?: number;
+  failure_rate?: number;
   anomaly_rate?: number;
   median_duration_ms?: number;
-  health_status?: string;
 }
 
 export async function handleSystemHealth(
@@ -38,7 +38,7 @@ export async function handleSystemHealth(
     const rows = await dbQuery<HealthRow>(
       env.COCKROACH_CONNECTION_STRING,
       `SELECT system_id, system_type, total_interactions,
-       distinct_agent_count, anomaly_rate, median_duration_ms, health_status
+       distinct_agent_count, failure_rate, anomaly_rate, median_duration_ms
        FROM system_health WHERE system_id = $1`,
       [systemId],
     );
@@ -55,9 +55,9 @@ export async function handleSystemHealth(
       system_type: row.system_type,
       total_interactions: row.total_interactions,
       distinct_agents: row.distinct_agent_count,
+      failure_rate: row.failure_rate,
       anomaly_rate: row.anomaly_rate,
       median_duration_ms: row.median_duration_ms ?? undefined,
-      health_status: row.health_status,
     };
 
     await setCache(env.SYSTEM_HEALTH, cacheKey, response);

@@ -4,8 +4,8 @@ import { query, makeError } from '@acr/shared';
 const app = new Hono();
 
 /**
- * Threat feed polling endpoint.
- * Returns recent threat events in chronological order.
+ * Anomaly signal feed polling endpoint.
+ * Returns skills with anomaly signals in chronological order.
  * Clients poll this on an interval (e.g., every 60 seconds).
  *
  * Query params:
@@ -20,7 +20,6 @@ app.get('/threats/feed', async (c) => {
   const events = await query<{
     skill_hash: string;
     skill_name: string | null;
-    threat_level: string;
     anomaly_signal_count: number;
     anomaly_signal_rate: number;
     agent_count: number;
@@ -29,14 +28,13 @@ app.get('/threats/feed', async (c) => {
   }>(
     `SELECT skill_hash AS "skill_hash",
             skill_name AS "skill_name",
-            threat_level AS "threat_level",
             anomaly_signal_count AS "anomaly_signal_count",
             anomaly_signal_rate AS "anomaly_signal_rate",
             agent_count AS "agent_count",
             first_seen_at::text AS "first_seen_at",
             last_updated::text AS "last_updated"
      FROM skill_hashes
-     WHERE threat_level != 'none'
+     WHERE anomaly_signal_count > 0
        AND last_updated > $1
      ORDER BY last_updated DESC
      LIMIT $2`,
@@ -47,9 +45,8 @@ app.get('/threats/feed', async (c) => {
     events: events.map((e) => ({
       skill_hash: e.skill_hash,
       skill_name: e.skill_name,
-      threat_level: e.threat_level,
       anomaly_signal_count: e.anomaly_signal_count,
-      anomaly_rate: e.anomaly_signal_rate,
+      anomaly_signal_rate: e.anomaly_signal_rate,
       agent_count: e.agent_count,
       first_seen: e.first_seen_at,
       updated_at: e.last_updated,
