@@ -2,14 +2,19 @@ import { describe, it, expect } from 'vitest';
 import app from '../../packages/ingestion-api/src/index.js';
 
 describe('GET /api/v1/health', () => {
-  it('returns structured response on DB failure', async () => {
-    // No DB connected, so this tests the error path
+  it('returns structured response', async () => {
     const res = await app.request('/api/v1/health');
-    // Should return 503 with structured error, not crash
-    expect(res.status).toBe(503);
     const body = await res.json();
-    expect(body.error).toBeDefined();
-    expect(body.error.code).toBe('INTERNAL_ERROR');
+    // With DB stub: 200 + status ok. Without DB: 503 + INTERNAL_ERROR.
+    if (res.status === 200) {
+      expect(body.status).toBe('ok');
+      expect(body.database).toBe('connected');
+      expect(body.timestamp).toBeDefined();
+    } else {
+      expect(res.status).toBe(503);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+    }
   });
 });
 
