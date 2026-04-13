@@ -6,8 +6,8 @@ import {
   RegistrationResponseSchema,
   CompositionUpdateSchema,
   EnvironmentBriefingSchema,
-  SystemStatusSchema,
-  ThreatNoticeSchema,
+  ConnectedSystemSchema,
+  SkillSignalSchema,
 } from '../schemas/agent.js';
 
 export type Agent = z.infer<typeof AgentSchema>;
@@ -16,5 +16,5 @@ export type RegistrationRequest = z.infer<typeof RegistrationRequestSchema>;
 export type RegistrationResponse = z.infer<typeof RegistrationResponseSchema>;
 export type CompositionUpdate = z.infer<typeof CompositionUpdateSchema>;
 export type EnvironmentBriefing = z.infer<typeof EnvironmentBriefingSchema>;
-export type SystemStatus = z.infer<typeof SystemStatusSchema>;
-export type ThreatNotice = z.infer<typeof ThreatNoticeSchema>;
+export type ConnectedSystem = z.infer<typeof ConnectedSystemSchema>;
+export type SkillSignal = z.infer<typeof SkillSignalSchema>;

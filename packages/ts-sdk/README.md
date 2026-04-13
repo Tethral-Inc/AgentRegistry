@@ -47,13 +47,13 @@ const report = await acr.getFrictionReport(agent_id, 'day');
 | `checkSkill(hash)` | Check a skill hash before installing |
 | `checkAgent(agentId)` | Look up an agent |
 | `getSystemHealth(systemId)` | Get system health status |
-| `getActiveThreats()` | Get current threat alerts |
+| `getActiveSignals()` | Get skills with elevated anomaly signals |
 | `getFrictionReport(agentId, scope)` | Friction analysis report |
 | `getHealth()` | API health check |
 
 ## Exported Types
 
-`RegistrationRequest`, `RegistrationResponse`, `InteractionReceipt`, `SkillCheckResponse`, `FrictionReport`, `ProviderClass`, `TargetSystemType`, `InteractionCategory`, `InteractionStatus`, `AnomalyCategory`, `ThreatLevel`, `FrictionSummary`, `TargetFriction`
+`RegistrationRequest`, `RegistrationResponse`, `InteractionReceipt`, `SkillCheckResponse`, `FrictionReport`, `ProviderClass`, `TargetSystemType`, `InteractionCategory`, `InteractionStatus`, `AnomalyCategory`, `FrictionSummary`, `TargetFriction`, `SkillCatalogEntry`, `SkillVersionEntry`, `SkillNotification`, `ChainAnalysis`, `DirectionalPair`, `RetryOverhead`, `PopulationDrift`
 
 ## Data Collection
 

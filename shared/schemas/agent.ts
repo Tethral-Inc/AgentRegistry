@@ -98,24 +98,26 @@ export const RegistrationRequestSchema = z.object({
   environment: EnvironmentContextSchema.optional(),
 });
 
-export const SystemStatusSchema = z.object({
+export const ConnectedSystemSchema = z.object({
   name: z.string(),
   type: z.string(),
-  health_status: z.string(),
-  anomaly_count: z.number(),
+  failure_rate: z.number(),
+  anomaly_rate: z.number(),
+  anomaly_signal_count: z.number(),
   agent_population: z.number(),
 });
 
-export const ThreatNoticeSchema = z.object({
-  threat_level: z.string(),
-  component_hash: z.string(),
-  description: z.string(),
-  first_reported: z.string(),
+export const SkillSignalSchema = z.object({
+  skill_hash: z.string(),
+  skill_name: z.string().optional(),
+  anomaly_signal_count: z.number(),
+  agent_count: z.number(),
+  first_seen: z.string(),
 });
 
 export const EnvironmentBriefingSchema = z.object({
-  connected_systems: z.array(SystemStatusSchema),
-  active_threats: z.array(ThreatNoticeSchema),
+  connected_systems: z.array(ConnectedSystemSchema),
+  skill_signals: z.array(SkillSignalSchema),
 });
 
 export const RegistrationResponseSchema = z.object({

@@ -28,13 +28,12 @@ export {
   McpComponentSchema,
   ApiComponentSchema,
   ToolComponentSchema,
-  SystemStatusSchema,
-  ThreatNoticeSchema,
+  ConnectedSystemSchema,
+  SkillSignalSchema,
   EnvironmentBriefingSchema,
 } from './agent.js';
 
 export {
-  ThreatLevel,
   SkillHashSchema,
   SkillCheckResponseSchema,
   SkillStatusEnum,

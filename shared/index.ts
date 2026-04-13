@@ -8,7 +8,7 @@ export type {
 export type {
   Agent, RegistrationRequest, RegistrationResponse,
   CompositionUpdate, EnvironmentBriefing, EnvironmentContext,
-  SystemStatus, ThreatNotice,
+  ConnectedSystem, SkillSignal,
 } from './types/agent.js';
 export type {
   SkillHash, SkillCheckResponse,

@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-export const ThreatLevel = z.enum(['none', 'low', 'medium', 'high', 'critical']);
-
 export const SkillHashSchema = z.object({
   skill_hash: z.string(),
   skill_name: z.string().optional(),
@@ -11,7 +9,6 @@ export const SkillHashSchema = z.object({
   interaction_count: z.number(),
   anomaly_signal_count: z.number(),
   anomaly_signal_rate: z.number(),
-  threat_level: ThreatLevel,
   last_updated: z.string(),
 });
 
@@ -22,8 +19,8 @@ export const SkillCheckResponseSchema = z.object({
   skill_source: z.string().optional(),
   agent_count: z.number().optional(),
   interaction_count: z.number().optional(),
-  anomaly_rate: z.number().optional(),
-  threat_level: ThreatLevel.optional(),
+  anomaly_signal_count: z.number().optional(),
+  anomaly_signal_rate: z.number().optional(),
   first_seen: z.string().optional(),
   last_seen: z.string().optional(),
   // Catalog-enriched fields (when catalog data is available)
@@ -58,11 +55,10 @@ export const SkillCatalogSchema = z.object({
   category: z.string().nullable(),
   content_snippet: z.string().nullable(),
   status: SkillStatusEnum,
-  threat_level: ThreatLevel.optional(),
   agent_count: z.number().optional(),
   last_crawled_at: z.string().nullable(),
   content_changed_at: z.string().nullable(),
-  quality_score: z.number().optional(),
+  // External scanner passthrough (ACR didn't produce these)
   threat_patterns: z.array(z.string()).optional(),
   scan_score: z.number().optional(),
 });
@@ -71,7 +67,6 @@ export const SkillSearchRequestSchema = z.object({
   query: z.string().min(1).max(200),
   source: z.string().optional(),
   category: z.string().optional(),
-  threat_level: ThreatLevel.optional(),
   tags: z.array(z.string()).optional(),
   status: SkillStatusEnum.optional().default('active'),
   limit: z.number().min(1).max(100).default(20),
@@ -91,7 +86,7 @@ export const SkillVersionEntrySchema = z.object({
   previous_version: z.string().nullable(),
   change_type: z.string(),
   detected_at: z.string(),
-  threat_level: ThreatLevel.optional(),
+  anomaly_signal_count: z.number().optional(),
   agent_count: z.number().optional(),
 });
 

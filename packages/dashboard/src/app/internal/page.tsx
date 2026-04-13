@@ -14,14 +14,14 @@ interface SkillSignal {
   first_seen: string;
 }
 
-interface HealthStatus {
+interface HealthCheckResponse {
   status: string;
   database: string;
   timestamp: string;
 }
 
 export default function InternalMetrics() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [threats, setThreats] = useState<SkillSignal[]>([]);
   const [lastRefresh, setLastRefresh] = useState('');
   const [loading, setLoading] = useState(true);
