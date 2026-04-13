@@ -12,11 +12,7 @@ export function writeAcrStateFile(agentId: string, apiUrl: string): void {
     mkdirSync(stateDir, { recursive: true });
     writeFileSync(
       join(stateDir, '.acr-state.json'),
-      JSON.stringify({
-        agent_id: agentId,
-        api_url: apiUrl,
-        registered_at: new Date().toISOString(),
-      }),
+      JSON.stringify({ agent_id: agentId, api_url: apiUrl }),
     );
   } catch { /* fire-and-forget */ }
 }

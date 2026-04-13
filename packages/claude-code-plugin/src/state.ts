@@ -10,7 +10,6 @@ import { homedir } from 'node:os';
 export interface AcrState {
   agent_id: string;
   api_url: string;
-  registered_at: string;
   last_composition_hash?: string;
   last_sync_ts?: number;
 }

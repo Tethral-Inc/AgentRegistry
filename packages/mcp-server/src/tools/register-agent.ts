@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { setAgentId, setAgentName } from '../state.js';
 import { defaultSession } from '../session-state.js';
 import { writeAcrStateFile } from '../acr-state-file.js';
+import { stripSubComponents } from '../strip-sub-components.js';
 
 const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate anomaly signal notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
 
@@ -49,25 +50,14 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
       skill_components, mcp_components, api_components, tool_components,
     }) => {
       try {
-        // Respect the operator opt-out for deep composition capture.
-        // When deep_composition is off, strip sub_components from any
-        // rich component arrays before sending to the server.
-        const stripSubComponents = <T extends { sub_components?: unknown }>(arr: T[] | undefined): T[] | undefined => {
-          if (!arr) return arr;
-          if (defaultSession.deepComposition) return arr;
-          return arr.map((c) => {
-            const { sub_components: _, ...rest } = c;
-            return rest as T;
-          });
-        };
-
+        const deep = defaultSession.deepComposition;
         const composition = {
           skills,
           skill_hashes,
-          skill_components: stripSubComponents(skill_components),
-          mcp_components: stripSubComponents(mcp_components),
-          api_components: stripSubComponents(api_components),
-          tool_components: stripSubComponents(tool_components),
+          skill_components: stripSubComponents(skill_components, deep),
+          mcp_components: stripSubComponents(mcp_components, deep),
+          api_components: stripSubComponents(api_components, deep),
+          tool_components: stripSubComponents(tool_components, deep),
         };
 
         const hasComposition = !!(

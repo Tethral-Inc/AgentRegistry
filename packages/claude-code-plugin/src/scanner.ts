@@ -30,22 +30,26 @@ function readJsonSafe(path: string): Record<string, unknown> | null {
   }
 }
 
+const MAX_WALK_DEPTH = 5;
+
 /**
  * Recursively find all .md files under a directory.
  * Uses withFileTypes to avoid per-entry statSync calls.
+ * Depth-limited to guard against symlink cycles.
  */
 function findMarkdownFiles(dir: string): string[] {
   const results: string[] = [];
-  const walk = (d: string): void => {
+  const walk = (d: string, depth: number): void => {
+    if (depth > MAX_WALK_DEPTH) return;
     let entries: import('node:fs').Dirent[];
     try { entries = readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
       const full = join(d, entry.name);
-      if (entry.isDirectory()) walk(full);
+      if (entry.isDirectory()) walk(full, depth + 1);
       else if (entry.name.endsWith('.md')) results.push(full);
     }
   };
-  walk(dir);
+  walk(dir, 0);
   return results;
 }
 

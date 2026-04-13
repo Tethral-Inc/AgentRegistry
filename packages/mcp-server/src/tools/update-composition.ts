@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { SessionState } from '../session-state.js';
+import { stripSubComponents } from '../strip-sub-components.js';
 
 // Component schema — matches shared/schemas/agent.ts CompositionSchema.
 // Kept local so we don't need to cross package boundaries for the Zod type.
@@ -43,25 +44,14 @@ export function updateCompositionTool(server: McpServer, apiUrl: string, getSess
       try {
         const resolvedAgentId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
 
-        // Respect operator opt-out for deep composition. When disabled,
-        // strip sub_components from any rich component arrays before
-        // sending to the server.
         const session = getSession();
-        const stripSubComponents = <T extends { sub_components?: unknown }>(arr: T[] | undefined): T[] | undefined => {
-          if (!arr) return arr;
-          if (session.deepComposition) return arr;
-          return arr.map((c) => {
-            const { sub_components: _, ...rest } = c;
-            return rest as T;
-          });
-        };
-
+        const deep = session.deepComposition;
         const effectiveComposition = {
           ...composition,
-          skill_components: stripSubComponents(composition.skill_components),
-          mcp_components: stripSubComponents(composition.mcp_components),
-          api_components: stripSubComponents(composition.api_components),
-          tool_components: stripSubComponents(composition.tool_components),
+          skill_components: stripSubComponents(composition.skill_components, deep),
+          mcp_components: stripSubComponents(composition.mcp_components, deep),
+          api_components: stripSubComponents(composition.api_components, deep),
+          tool_components: stripSubComponents(composition.tool_components, deep),
         };
 
         const res = await fetch(`${apiUrl}/api/v1/composition/update`, {
