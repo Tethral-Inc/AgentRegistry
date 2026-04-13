@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
 
 async function resolveId(nameOrId: string): Promise<string> {
   if (nameOrId.startsWith('acr_') || nameOrId.startsWith('pseudo_')) return nameOrId;
@@ -30,7 +30,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/coverage`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/coverage`, { headers: getAuthHeaders() });
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Coverage error: ${errText}` }] };

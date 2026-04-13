@@ -1,11 +1,23 @@
 const API_URL = process.env.NEXT_PUBLIC_ACR_API_URL ?? 'https://acr.nfkey.ai';
 const RESOLVER_URL = process.env.NEXT_PUBLIC_ACR_RESOLVER_URL ?? API_URL;
 
+function getStoredApiKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  try { return sessionStorage.getItem('acr_api_key'); } catch { return null; }
+}
+
 export async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
+  const authHeaders: Record<string, string> = {};
+  if (path.startsWith('/api/v1/agent/')) {
+    const key = getStoredApiKey();
+    if (key) authHeaders['Authorization'] = `Bearer ${key}`;
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options?.headers,
     },
   });

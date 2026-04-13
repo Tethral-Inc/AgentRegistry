@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { randomBytes } from 'node:crypto';
 import {
   RegistrationRequestSchema,
   generateAgentId,
@@ -6,6 +7,7 @@ import {
   computeCompositionHash,
   getSigningKeyPair,
   issueCredential,
+  sha256,
   execute,
   query,
   makeError,
@@ -129,6 +131,17 @@ app.post('/register', async (c) => {
     );
   }
 
+  // Auto-issue API key for per-agent endpoint access
+  const rawApiKey = `acr_${randomBytes(24).toString('hex')}`;
+  const apiKeyHash = sha256(rawApiKey);
+  await execute(
+    `INSERT INTO api_keys (key_hash, operator_id, name, tier, rate_limit_per_hour)
+     VALUES ($1, $2, 'auto', 'free', 100)`,
+    [apiKeyHash, agentId],
+  ).catch((err) => {
+    log.warn({ err }, 'api_keys insert failed');
+  });
+
   // Build environment briefing
   const systems = await query<{
     system_id: string;
@@ -167,6 +180,7 @@ app.post('/register', async (c) => {
     agent_id: agentId,
     name: agentName,
     credential,
+    api_key: rawApiKey,
     composition_hash: compositionHash,
     environment_briefing: {
       connected_systems: systems.map((s) => ({

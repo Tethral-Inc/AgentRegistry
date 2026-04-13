@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { setAgentId, setAgentName } from '../state.js';
+import { setAgentId, setAgentName, setApiKey } from '../state.js';
 import { defaultSession } from '../session-state.js';
 import { writeAcrStateFile } from '../acr-state-file.js';
 import { stripSubComponents } from '../strip-sub-components.js';
@@ -89,10 +89,10 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
 
         const data = await res.json();
 
-        // Store agent_id and name for auto-use in other tools
         setAgentId(data.agent_id);
         if (data.name) setAgentName(data.name);
-        writeAcrStateFile(data.agent_id, apiUrl);
+        if (data.api_key) setApiKey(data.api_key);
+        writeAcrStateFile(data.agent_id, apiUrl, data.api_key);
 
         const briefing = data.environment_briefing;
         let text = `Registered successfully.\n\nName: ${data.name}\nAgent ID: ${data.agent_id}\nComposition Hash: ${data.composition_hash}\n`;

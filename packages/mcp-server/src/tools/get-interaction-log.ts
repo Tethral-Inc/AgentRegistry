@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
 
 const STATUS_TRANSLATIONS: Record<string, string> = {
   success: 'success',
@@ -63,7 +63,7 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
         if (anomaly_only) params.set('anomaly', 'true');
         if (since) params.set('since', since);
 
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/receipts?${params}`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/receipts?${params}`, { headers: getAuthHeaders() });
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Error: ${errText}` }] };

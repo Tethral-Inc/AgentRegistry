@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getAuthHeaders } from '../state.js';
 
 async function resolveId(nameOrId: string): Promise<string> {
   if (nameOrId.startsWith('acr_') || nameOrId.startsWith('pseudo_')) return nameOrId;
@@ -11,7 +11,7 @@ async function resolveId(nameOrId: string): Promise<string> {
 
 async function fetchJSON(url: string): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: getAuthHeaders() });
     if (!res.ok) return null;
     return await res.json() as Record<string, unknown>;
   } catch {

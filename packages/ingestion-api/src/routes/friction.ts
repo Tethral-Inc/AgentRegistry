@@ -12,21 +12,6 @@ import { resolveAgentId } from '../helpers/resolve-agent.js';
 const log = createLogger({ name: 'friction' });
 const app = new Hono();
 
-async function checkPaidTier(apiKey: string): Promise<boolean> {
-  try {
-    const keyHash = sha256(apiKey);
-    const row = await query<{ tier: string; revoked: boolean }>(
-      `SELECT tier AS "tier", revoked AS "revoked"
-       FROM api_keys WHERE key_hash = $1`,
-      [keyHash],
-    );
-    if (row.length === 0 || row[0]!.revoked) return false;
-    return row[0]!.tier !== 'free';
-  } catch {
-    return false;
-  }
-}
-
 function getScopeWindow(scope: string): { start: Date; end: Date } {
   const end = new Date();
   const start = new Date();
@@ -326,9 +311,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
     }
   }
 
-  // Sprint 4: Check API key tier for full vs limited response
-  const apiKey = c.req.header('x-api-key');
-  const isPaidTier = apiKey ? await checkPaidTier(apiKey) : false;
+  const isPaidTier = (c.req.header('X-ACR-Auth-Tier') ?? 'free') !== 'free';
 
   // ── Retry Overhead (pro tier) ──
   let retryOverhead: { total_retries: number; total_wasted_ms: number; top_retry_targets: Array<{ target_system_id: string; retry_count: number; avg_duration_ms: number; wasted_ms: number }> } | undefined;

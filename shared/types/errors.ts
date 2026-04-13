@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'RATE_LIMITED'
   | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
   | 'INTERNAL_ERROR'
   | 'AGENT_NOT_FOUND'
   | 'SKILL_NOT_FOUND';

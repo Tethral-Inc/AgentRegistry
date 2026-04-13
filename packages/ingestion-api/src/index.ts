@@ -29,6 +29,7 @@ import { stableCorridorsRoute } from './routes/stable-corridors.js';
 import { failureRegistryRoute } from './routes/failure-registry.js';
 import { trendRoute } from './routes/trend.js';
 import { cronRoute } from './routes/cron.js';
+import { agentAuth } from './middleware/agent-auth.js';
 import { leaderboardRoute } from './routes/leaderboard.js';
 
 export const app = new Hono().basePath('/');
@@ -42,6 +43,17 @@ app.use('/api/*', rateLimiter());
 
 // Error handler
 app.onError(errorHandler);
+
+// Per-agent endpoint auth — requires API key, verifies owner matches :id
+app.use('/api/v1/agent/:identifier/profile', agentAuth);
+app.use('/api/v1/agent/:identifier/friction', agentAuth);
+app.use('/api/v1/agent/:identifier/receipts', agentAuth);
+app.use('/api/v1/agent/:identifier/coverage', agentAuth);
+app.use('/api/v1/agent/:identifier/stable-corridors', agentAuth);
+app.use('/api/v1/agent/:identifier/failure-registry', agentAuth);
+app.use('/api/v1/agent/:identifier/trend', agentAuth);
+app.use('/api/v1/agent/:identifier/notifications', agentAuth);
+app.use('/api/v1/agent/:identifier/notifications/*', agentAuth);
 
 // API routes
 app.route('/api/v1', registerRoute);

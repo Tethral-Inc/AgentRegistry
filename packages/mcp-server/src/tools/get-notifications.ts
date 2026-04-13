@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { getAuthHeaders } from '../state.js';
 import { z } from 'zod';
 import type { SessionState } from '../session-state.js';
 
@@ -16,7 +17,7 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
     async ({ agent_id }) => {
       try {
         const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
-        const res = await fetch(`${apiUrl}/api/v1/agent/${resolvedId}/notifications?read=false`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${resolvedId}/notifications?read=false`, { headers: getAuthHeaders() });
         const data = await res.json() as {
           notifications: Array<{
             id: string; skill_hash: string; notification_type: string;

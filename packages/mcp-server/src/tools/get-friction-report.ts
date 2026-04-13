@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
 
 /**
  * Resolve an agent name to an agent_id via the lookup endpoint.
@@ -45,7 +45,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=${scope}`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=${scope}`, { headers: getAuthHeaders() });
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Friction report error: ${errText}` }] };

@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { getAuthHeaders } from '../state.js';
 import { z } from 'zod';
 import type { SessionState } from '../session-state.js';
 
@@ -20,7 +21,7 @@ export function acknowledgeThreatTool(server: McpServer, apiUrl: string, getSess
         const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
         const res = await fetch(`${apiUrl}/api/v1/agent/${resolvedId}/notifications/${notification_id}/acknowledge`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({ reason }),
         });
 
