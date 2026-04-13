@@ -1,26 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { getAgentProfile, type AgentProfileResponse } from '../../../lib/api';
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #222', borderRadius: '8px', padding: '1rem' }}>
-      <div style={{ color: '#888', fontSize: '0.8rem', marginBottom: '0.25rem' }}>{label}</div>
-      <div style={{ color: '#fff', fontSize: '1.4rem', fontWeight: 600 }}>{value}</div>
-    </div>
-  );
-}
-
-function MetaRow({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div style={{ display: 'flex', padding: '0.5rem 0', borderBottom: '1px solid #1a1a1a' }}>
-      <span style={{ color: '#888', width: 180, flexShrink: 0, fontSize: '0.85rem' }}>{label}</span>
-      <span style={{ color: '#e0e0e0', fontSize: '0.85rem', wordBreak: 'break-all' }}>{value || '—'}</span>
-    </div>
-  );
-}
+import { Stat } from '../../../components/Stat';
+import { MetaRow } from '../../../components/MetaRow';
+import { PageError } from '../../../components/PageError';
+import { formatTimestamp } from '../../../lib/format';
 
 export default function AgentProfile() {
   const params = useParams();
@@ -29,29 +15,28 @@ export default function AgentProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await getAgentProfile(id);
-        if ((data as unknown as { error?: { message: string } }).error) {
-          throw new Error((data as unknown as { error: { message: string } }).error.message);
-        }
-        setProfile(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load profile');
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setProfile(await getAgentProfile(id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
+  useEffect(() => { loadProfile(); }, [loadProfile]);
+
   if (loading) return <p style={{ color: '#888', textAlign: 'center', marginTop: '4rem' }}>Loading...</p>;
-  if (error) return <p style={{ color: '#ef4444', textAlign: 'center', marginTop: '4rem' }}>{error}</p>;
+  if (error) return <PageError message={error} onRetry={loadProfile} />;
   if (!profile) return null;
 
-  const c = profile.counts;
+  const counts = profile.counts;
   const comp = profile.composition_summary;
   const delta = profile.composition_delta;
+  const hashDisplay = profile.composition_hash ? profile.composition_hash.substring(0, 24) + '...' : null;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -69,35 +54,31 @@ export default function AgentProfile() {
         </span>
       </div>
 
-      {/* Identity */}
       <div style={{ background: '#141414', border: '1px solid #252525', borderRadius: '8px', padding: '1rem 1.5rem', marginBottom: '1.5rem' }}>
         <MetaRow label="Agent ID" value={profile.agent_id} />
         <MetaRow label="Provider" value={profile.provider_class} />
         <MetaRow label="Domain" value={profile.operational_domain} />
-        <MetaRow label="Composition Hash" value={profile.composition_hash?.substring(0, 24) + '...'} />
-        <MetaRow label="Registered" value={profile.registered_at} />
-        <MetaRow label="Last Active" value={profile.last_active_at} />
+        <MetaRow label="Composition Hash" value={hashDisplay} />
+        <MetaRow label="Registered" value={formatTimestamp(profile.registered_at)} />
+        <MetaRow label="Last Active" value={formatTimestamp(profile.last_active_at)} />
       </div>
 
-      {/* Counts */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
-        <Stat label="Total Receipts" value={c.total_receipts} />
-        <Stat label="Last 24h" value={c.receipts_last_24h} />
-        <Stat label="Distinct Targets" value={c.distinct_targets} />
-        <Stat label="Categories" value={c.distinct_categories} />
-        <Stat label="Chains" value={c.distinct_chains} />
-        <Stat label="Days Active" value={c.days_active} />
+        <Stat label="Total Receipts" value={counts.total_receipts} />
+        <Stat label="Last 24h" value={counts.receipts_last_24h} />
+        <Stat label="Distinct Targets" value={counts.distinct_targets} />
+        <Stat label="Categories" value={counts.distinct_categories} />
+        <Stat label="Chains" value={counts.distinct_chains} />
+        <Stat label="Days Active" value={counts.days_active} />
       </div>
 
-      {/* Composition */}
       <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Composition</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
         <Stat label="Skills" value={comp.skill_count} />
         <Stat label="MCPs" value={comp.mcp_count} />
         <Stat label="Tools" value={comp.tool_count} />
       </div>
 
-      {/* Composition delta */}
       {delta && (delta.mcp_only.length > 0 || delta.agent_only.length > 0) && (
         <>
           <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Composition Delta</h2>
@@ -126,7 +107,6 @@ export default function AgentProfile() {
         </>
       )}
 
-      {/* Link to friction */}
       <a href={`/agents/${id}/friction`} style={{
         display: 'inline-block', padding: '0.75rem 1.5rem', background: '#1a1a1a', border: '1px solid #333',
         borderRadius: '8px', color: '#4a9eff', textDecoration: 'none', fontWeight: 500,

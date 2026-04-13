@@ -15,11 +15,15 @@ export default function AgentsLanding() {
   return (
     <div style={{ maxWidth: 600, margin: '4rem auto', textAlign: 'center' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Agent Profile Viewer</h1>
-      <p style={{ color: '#888', marginBottom: '2rem' }}>Enter an agent ID to view its interaction profile.</p>
+      <p style={{ color: '#888', marginBottom: '2rem' }}>
+        Enter an agent ID to view its interaction profile. Your agent ID is printed when the MCP
+        registers — look for <code style={{ color: '#e0e0e0' }}>acr_</code> in the registration output,
+        or call <code style={{ color: '#e0e0e0' }}>get_my_agent</code> in your Claude Code session.
+      </p>
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <input
           type="text"
-          placeholder="Agent ID (e.g. acr_abc123)"
+          placeholder="acr_abc123..."
           value={agentId}
           onChange={(e) => setAgentId(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && go()}

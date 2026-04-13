@@ -9,12 +9,20 @@ export async function fetchAPI<T>(path: string, options?: RequestInit): Promise<
       ...options?.headers,
     },
   });
-  return res.json() as Promise<T>;
+  const body = await res.json();
+  if (!res.ok || body?.error) {
+    throw new Error(body?.error?.message ?? `API error ${res.status}`);
+  }
+  return body as T;
 }
 
 export async function fetchResolver<T>(path: string): Promise<T> {
   const res = await fetch(`${RESOLVER_URL}${path}`);
-  return res.json() as Promise<T>;
+  const body = await res.json();
+  if (!res.ok || body?.error) {
+    throw new Error(body?.error?.message ?? `API error ${res.status}`);
+  }
+  return body as T;
 }
 
 export interface DashboardStats {

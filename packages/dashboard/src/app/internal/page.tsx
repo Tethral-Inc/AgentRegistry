@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-const API_URL = process.env.NEXT_PUBLIC_ACR_API_URL ?? 'https://acr.tethral.ai';
-const RESOLVER_URL = process.env.NEXT_PUBLIC_ACR_RESOLVER_URL ?? API_URL;
+import { fetchAPI, fetchResolver } from '../../lib/api';
+import { formatTimestamp } from '../../lib/format';
 
 interface SkillSignal {
   skill_hash: string;
@@ -30,8 +29,8 @@ export default function InternalMetrics() {
     setLoading(true);
     try {
       const [healthRes, threatsRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/health`).then((r) => r.json()),
-        fetch(`${RESOLVER_URL}/v1/threats/active`).then((r) => r.json()),
+        fetchAPI<HealthCheckResponse>('/api/v1/health'),
+        fetchResolver<SkillSignal[]>('/v1/threats/active').catch(() => []),
       ]);
       setHealth(healthRes);
       setThreats(Array.isArray(threatsRes) ? threatsRes : []);
@@ -56,7 +55,6 @@ export default function InternalMetrics() {
         {lastRefresh && <span style={{ color: '#555', fontSize: '0.8rem' }}>Last: {lastRefresh}</span>}
       </div>
 
-      {/* System Health */}
       <section style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '1.1rem', color: '#888', marginBottom: '0.75rem' }}>System Health</h2>
         {health && (
@@ -67,7 +65,6 @@ export default function InternalMetrics() {
         )}
       </section>
 
-      {/* Skills with Anomaly Signals */}
       <section style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '1.1rem', color: '#888', marginBottom: '0.75rem' }}>
           Skills with Anomaly Signals ({threats.length})
@@ -76,22 +73,22 @@ export default function InternalMetrics() {
           <p style={{ color: '#4ade80' }}>No elevated anomaly signals.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {threats.map((t) => (
-              <div key={t.skill_hash} style={{
+            {threats.map((threat) => (
+              <div key={threat.skill_hash} style={{
                 background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, padding: '1rem',
                 borderLeft: '3px solid #f97316',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                   <span style={{ fontWeight: 600, color: '#f97316' }}>
-                    {t.anomaly_signal_count} signals ({(t.anomaly_signal_rate * 100).toFixed(1)}%)
+                    {threat.anomaly_signal_count} signals ({(threat.anomaly_signal_rate * 100).toFixed(1)}%)
                   </span>
-                  <span style={{ color: '#666', fontSize: '0.8rem' }}>{t.agent_count} reporters</span>
+                  <span style={{ color: '#666', fontSize: '0.8rem' }}>{threat.agent_count} reporters</span>
                 </div>
                 <div style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                  {t.skill_name || t.skill_hash.substring(0, 24) + '...'}
+                  {threat.skill_name || threat.skill_hash.substring(0, 24) + '...'}
                 </div>
                 <div style={{ color: '#555', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  First seen: {new Date(t.first_seen).toLocaleDateString()}
+                  First seen: {formatTimestamp(threat.first_seen)}
                 </div>
               </div>
             ))}
