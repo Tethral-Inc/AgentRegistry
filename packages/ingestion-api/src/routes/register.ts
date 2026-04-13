@@ -123,8 +123,8 @@ app.post('/register', async (c) => {
   // Auto-subscribe agent to threat notifications for their installed skills
   for (const hash of componentHashes) {
     await execute(
-      `INSERT INTO skill_subscriptions (agent_id, skill_hash)
-       VALUES ($1, $2) ON CONFLICT (agent_id, skill_hash) DO NOTHING`,
+      `INSERT INTO skill_subscriptions (agent_id, skill_hash, notify_on)
+       VALUES ($1, $2, 'anomaly_signal') ON CONFLICT (agent_id, skill_hash) DO NOTHING`,
       [agentId, hash],
     );
   }

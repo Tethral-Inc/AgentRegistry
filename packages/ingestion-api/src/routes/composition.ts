@@ -69,8 +69,8 @@ app.post('/composition/update', async (c) => {
     );
     for (const hash of componentHashes) {
       await execute(
-        `INSERT INTO skill_subscriptions (agent_id, skill_hash, active)
-         VALUES ($1, $2, true)
+        `INSERT INTO skill_subscriptions (agent_id, skill_hash, active, notify_on)
+         VALUES ($1, $2, true, 'anomaly_signal')
          ON CONFLICT (agent_id, skill_hash) DO UPDATE SET active = true`,
         [agent_id, hash],
       );
