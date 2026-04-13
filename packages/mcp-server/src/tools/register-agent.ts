@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { setAgentId, setAgentName } from '../state.js';
 import { defaultSession } from '../session-state.js';
+import { writeAcrStateFile } from '../acr-state-file.js';
 
 const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate anomaly signal notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
 
@@ -101,6 +102,7 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
         // Store agent_id and name for auto-use in other tools
         setAgentId(data.agent_id);
         if (data.name) setAgentName(data.name);
+        writeAcrStateFile(data.agent_id, apiUrl);
 
         const briefing = data.environment_briefing;
         let text = `Registered successfully.\n\nName: ${data.name}\nAgent ID: ${data.agent_id}\nComposition Hash: ${data.composition_hash}\n`;

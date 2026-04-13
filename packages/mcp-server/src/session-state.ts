@@ -4,6 +4,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { detectEnvironment } from './env-detect.js';
+import { writeAcrStateFile } from './acr-state-file.js';
 
 export class SessionState {
   private _agentId: string | null = null;
@@ -88,6 +89,7 @@ export class SessionState {
         const data = await res.json() as { agent_id: string; name: string };
         this._agentId = data.agent_id;
         this._agentName = data.name;
+        writeAcrStateFile(this._agentId, apiUrl);
         return this._agentId;
       }
 

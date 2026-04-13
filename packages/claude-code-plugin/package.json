@@ -1,0 +1,33 @@
+{
+  "name": "@tethral/acr-claude-code-plugin",
+  "version": "1.0.0",
+  "description": "Claude Code hook plugin for ACR composition tracking. Scans settings.json and skills to keep your agent's composition current in the ACR registry.",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "acr-claude-code-plugin": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "acr",
+    "claude-code",
+    "agent",
+    "composition",
+    "mcp"
+  ],
+  "author": "Tethral",
+  "license": "MIT"
+}
