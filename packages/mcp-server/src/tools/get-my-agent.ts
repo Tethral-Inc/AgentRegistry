@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getApiKey, getAuthHeaders } from '../state.js';
 
-const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard-john-lunsfords-projects.vercel.app';
+const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
 
 export function getMyAgentTool(server: McpServer) {
   server.registerTool(
