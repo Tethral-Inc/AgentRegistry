@@ -29,6 +29,7 @@ import { stableCorridorsRoute } from './routes/stable-corridors.js';
 import { failureRegistryRoute } from './routes/failure-registry.js';
 import { trendRoute } from './routes/trend.js';
 import { cronRoute } from './routes/cron.js';
+import { leaderboardRoute } from './routes/leaderboard.js';
 
 export const app = new Hono().basePath('/');
 
@@ -66,6 +67,7 @@ app.route('/api/v1', failureRegistryRoute);
 app.route('/api/v1', trendRoute);
 app.route('/api', internalQueryRoute);
 app.route('/api', cronRoute);
+app.route('/api/v1/network', leaderboardRoute);
 
 // Vercel serverless handler
 export const GET = handle(app);

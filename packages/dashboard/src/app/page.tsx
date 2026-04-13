@@ -16,6 +16,7 @@ export default function Home() {
         <a href="/operator" style={linkStyle}>Operator Portal</a>
         <a href="/skills" style={linkStyle}>Skill Catalog</a>
         <a href="/internal" style={linkStyle}>Internal Metrics</a>
+        <a href="/leaderboard" style={linkStyle}>Leaderboard</a>
       </div>
     </div>
   );

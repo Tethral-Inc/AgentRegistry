@@ -18,7 +18,7 @@ import {
 const log = createLogger({ name: 'cron' });
 const app = new Hono();
 
-app.use('*', cronAuth);
+app.use('/cron/*', cronAuth);
 
 type JobHandler = () => Promise<{ statusCode: number; body: string }>;
 

@@ -247,3 +247,37 @@ export interface FrictionResponse {
 export async function getAgentFriction(id: string, scope: string): Promise<FrictionResponse> {
   return fetchAPI(`/api/v1/agent/${id}/friction?scope=${scope}`);
 }
+
+// Public Leaderboard
+
+export interface LeaderboardResponse {
+  generated_at: string;
+  period: string;
+  totals: {
+    total_agents: number;
+    total_interactions: number;
+    total_systems: number;
+    total_skills: number;
+  };
+  systems: Array<{
+    system_id: string;
+    system_type: string;
+    agent_count: number;
+    total_interactions: number;
+    failure_rate: number;
+    anomaly_rate: number;
+    median_duration_ms: number | null;
+  }>;
+  skills: Array<{
+    skill_name: string | null;
+    skill_source: string | null;
+    agent_count: number;
+    interaction_count: number;
+    anomaly_signal_count: number;
+    anomaly_signal_rate: number;
+  }>;
+}
+
+export async function getLeaderboard(): Promise<LeaderboardResponse> {
+  return fetchAPI('/api/v1/network/leaderboard');
+}
