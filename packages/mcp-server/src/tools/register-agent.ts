@@ -105,13 +105,15 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
         const briefing = data.environment_briefing;
         let text = `Registered successfully.\n\nName: ${data.name}\nAgent ID: ${data.agent_id}\nComposition Hash: ${data.composition_hash}\n`;
 
-        if (briefing.connected_systems.length > 0) {
-          text += `\nConnected Systems: ${briefing.connected_systems.length}`;
+        const systems = briefing?.connected_systems ?? [];
+        if (systems.length > 0) {
+          text += `\nConnected Systems: ${systems.length}`;
         }
-        if (briefing.active_threats.length > 0) {
-          text += `\n\nSkills with anomaly signals: ${briefing.active_threats.length}`;
-          for (const t of briefing.active_threats) {
-            text += `\n- ${t.description} — ${t.anomaly_signal_count ?? 0} signals, ${t.agent_count ?? 0} reporters`;
+        const signals = briefing?.skill_signals ?? [];
+        if (signals.length > 0) {
+          text += `\n\nSkills with anomaly signals: ${signals.length}`;
+          for (const s of signals) {
+            text += `\n- ${s.skill_name || s.skill_hash?.substring(0, 16) + '...'} — ${s.anomaly_signal_count ?? 0} signals, ${s.agent_count ?? 0} reporters`;
           }
         }
 

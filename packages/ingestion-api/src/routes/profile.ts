@@ -35,7 +35,7 @@ app.get('/agent/:agent_id/profile', async (c) => {
     `SELECT agent_id AS "agent_id",
             name AS "name",
             provider_class AS "provider_class",
-            composition_hash AS "composition_hash",
+            current_composition_hash AS "composition_hash",
             operational_domain AS "operational_domain",
             created_at::text AS "created_at",
             last_active_at::text AS "last_active_at"
@@ -84,16 +84,24 @@ app.get('/agent/:agent_id/profile', async (c) => {
   };
 
   // Composition view — what skills / mcps / tools are tracked for this agent.
+  // Composition data lives in agent_composition_sources (not the agents table).
+  // Prefer agent_reported source; fall back to mcp_observed.
   const composition = await queryOne<{
     skill_count: number;
     mcp_count: number;
     tool_count: number;
   }>(
     `SELECT
-       COALESCE(jsonb_array_length(composition->'skills'), 0)::int AS "skill_count",
-       COALESCE(jsonb_array_length(composition->'mcps'), 0)::int AS "mcp_count",
-       COALESCE(jsonb_array_length(composition->'tools'), 0)::int AS "tool_count"
-     FROM agents WHERE agent_id = $1 LIMIT 1`,
+       COALESCE(jsonb_array_length(composition->'skills'), 0)
+         + COALESCE(jsonb_array_length(composition->'skill_components'), 0) AS "skill_count",
+       COALESCE(jsonb_array_length(composition->'mcps'), 0)
+         + COALESCE(jsonb_array_length(composition->'mcp_components'), 0) AS "mcp_count",
+       COALESCE(jsonb_array_length(composition->'tools'), 0)
+         + COALESCE(jsonb_array_length(composition->'tool_components'), 0) AS "tool_count"
+     FROM agent_composition_sources
+     WHERE agent_id = $1
+     ORDER BY CASE source WHEN 'agent_reported' THEN 0 ELSE 1 END
+     LIMIT 1`,
     [agentId],
   ).catch(() => null);
 
