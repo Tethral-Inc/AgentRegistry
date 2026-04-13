@@ -26,7 +26,7 @@ export async function handler() {
          COUNT(DISTINCT emitter_agent_id)::text AS "distinct_agents",
          COUNT(*) FILTER (WHERE anomaly_flagged = true)::text AS "anomaly_count",
          COUNT(*) FILTER (WHERE status != 'success')::text AS "failure_count",
-         percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration"
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration"
        FROM interaction_receipts
        WHERE created_at >= now() - INTERVAL '24 hours'
        GROUP BY target_system_id, target_system_type`,
@@ -84,7 +84,8 @@ export async function handler() {
       body: JSON.stringify({ updated }),
     };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
     log.error({ err }, 'System health aggregation failed');
-    return { statusCode: 500, body: 'Internal error' };
+    return { statusCode: 500, body: JSON.stringify({ error: msg }) };
   }
 }

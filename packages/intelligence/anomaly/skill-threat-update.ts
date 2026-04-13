@@ -175,6 +175,6 @@ export async function handler() {
     };
   } catch (err) {
     log.error({ err }, 'Skill signal update failed');
-    return { statusCode: 500, body: 'Internal error' };
+    const msg = err instanceof Error ? err.message : 'Unknown error'; return { statusCode: 500, body: JSON.stringify({ error: msg }) };
   }
 }

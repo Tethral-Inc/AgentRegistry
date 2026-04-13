@@ -1,4 +1,4 @@
-import { query, execute, createLogger } from '@acr/shared';
+import { query, execute, createLogger, sha256 } from '@acr/shared';
 
 const log = createLogger({ name: 'chain-analysis' });
 
@@ -65,14 +65,14 @@ export async function handler() {
         `INSERT INTO directional_pairs (
            source_target, destination_target,
            avg_duration_when_preceded, avg_duration_standalone,
-           amplification_factor, sample_count, analysis_window, last_computed
+           amplification_factor, sample_count, analysis_window, computed_at
          ) VALUES ($1, $2, $3, $4, $5, $6, 'week', now())
          ON CONFLICT (source_target, destination_target, analysis_window) DO UPDATE SET
            avg_duration_when_preceded = $3,
            avg_duration_standalone = $4,
            amplification_factor = $5,
            sample_count = $6,
-           last_computed = now()`,
+           computed_at = now()`,
         [
           row.preceded_by,
           row.target_system_id,
@@ -121,18 +121,20 @@ export async function handler() {
     for (const [agentId, patterns] of agentPatterns) {
       for (const [patternKey, data] of patterns) {
         const chainPattern = JSON.parse(patternKey) as string[];
+        const patternHash = sha256(patternKey);
         const avgOverhead = data.frequency > 0 ? Math.round(data.totalMs / data.frequency) : 0;
 
         await execute(
           `INSERT INTO chain_analysis (
-             agent_id, chain_pattern, frequency, avg_overhead_ms,
-             analysis_window, last_computed
-           ) VALUES ($1, $2, $3, $4, 'day', now())
-           ON CONFLICT (agent_id, chain_pattern, analysis_window) DO UPDATE SET
-             frequency = $3,
-             avg_overhead_ms = $4,
-             last_computed = now()`,
-          [agentId, chainPattern, data.frequency, avgOverhead],
+             agent_id, chain_pattern, pattern_hash, frequency, avg_overhead_ms,
+             analysis_window, computed_at
+           ) VALUES ($1, $2, $3, $4, $5, 'day', now())
+           ON CONFLICT (agent_id, pattern_hash, analysis_window) DO UPDATE SET
+             chain_pattern = $2,
+             frequency = $4,
+             avg_overhead_ms = $5,
+             computed_at = now()`,
+          [agentId, chainPattern, patternHash, data.frequency, avgOverhead],
         );
         patternsUpserted++;
       }
@@ -146,6 +148,6 @@ export async function handler() {
     };
   } catch (err) {
     log.error({ err }, 'Chain analysis computation failed');
-    return { statusCode: 500, body: 'Internal error' };
+    const msg = err instanceof Error ? err.message : 'Unknown error'; return { statusCode: 500, body: JSON.stringify({ error: msg }) };
   }
 }

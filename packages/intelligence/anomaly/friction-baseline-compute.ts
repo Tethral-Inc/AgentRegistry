@@ -20,13 +20,13 @@ export async function handler() {
     const rows = await query<BaselineRow>(
       `SELECT
          target_system_id AS "target_class",
-         percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_ms",
-         percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)::int AS "p95_ms",
-         percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms)::int AS "p99_ms",
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_ms",
+         percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p95_ms",
+         percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p99_ms",
          COUNT(*)::text AS "sample_count",
-         stddev(duration_ms)::float AS "stddev_ms",
-         avg(duration_ms)::float AS "mean_ms",
-         (COUNT(*) FILTER (WHERE status != 'success'))::float / NULLIF(COUNT(*), 0) AS "failure_rate"
+         stddev(duration_ms::FLOAT)::float AS "stddev_ms",
+         avg(duration_ms::FLOAT)::float AS "mean_ms",
+         (COUNT(*) FILTER (WHERE status != 'success'))::float / NULLIF(COUNT(*)::float, 0) AS "failure_rate"
        FROM interaction_receipts
        WHERE created_at >= now() - INTERVAL '7 days'
          AND duration_ms IS NOT NULL
@@ -80,6 +80,6 @@ export async function handler() {
     };
   } catch (err) {
     log.error({ err }, 'Friction baseline computation failed');
-    return { statusCode: 500, body: 'Internal error' };
+    const msg = err instanceof Error ? err.message : 'Unknown error'; return { statusCode: 500, body: JSON.stringify({ error: msg }) };
   }
 }

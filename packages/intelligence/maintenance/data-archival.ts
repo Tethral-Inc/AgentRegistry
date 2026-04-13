@@ -34,7 +34,7 @@ export async function handler() {
         emitter_agent_id AS entity_id,
         COUNT(*) AS total_interactions,
         COUNT(*) FILTER (WHERE anomaly_flagged = true) AS anomaly_count,
-        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS median_duration_ms,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS median_duration_ms,
         COUNT(*) FILTER (WHERE status != 'success') AS failure_count,
         COUNT(DISTINCT target_system_id) AS distinct_counterparts
       FROM interaction_receipts
@@ -62,7 +62,7 @@ export async function handler() {
         target_system_id AS entity_id,
         COUNT(*) AS total_interactions,
         COUNT(*) FILTER (WHERE anomaly_flagged = true) AS anomaly_count,
-        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS median_duration_ms,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS median_duration_ms,
         COUNT(*) FILTER (WHERE status != 'success') AS failure_count,
         COUNT(DISTINCT emitter_agent_id) AS distinct_counterparts
       FROM interaction_receipts
@@ -122,6 +122,6 @@ export async function handler() {
     };
   } catch (err) {
     log.error({ err }, 'Data archival failed');
-    return { statusCode: 500, body: 'Internal error' };
+    const msg = err instanceof Error ? err.message : 'Unknown error'; return { statusCode: 500, body: JSON.stringify({ error: msg }) };
   }
 }

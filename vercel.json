@@ -1,8 +1,21 @@
 {
   "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @acr/shared build",
+  "buildCommand": "pnpm --filter @acr/shared build && pnpm --filter @acr/intelligence build",
   "outputDirectory": "public",
   "framework": null,
+  "functions": {
+    "api/[[...route]].ts": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    { "path": "/api/cron/system-health-aggregate", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/chain-analysis", "schedule": "3,18,33,48 * * * *" },
+    { "path": "/api/cron/skill-threat-update", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/friction-baseline-compute", "schedule": "15 2 * * *" },
+    { "path": "/api/cron/agent-expiration", "schedule": "30 3 * * *" },
+    { "path": "/api/cron/data-archival", "schedule": "45 4 * * *" }
+  ],
   "rewrites": [
     { "source": "/lookup", "destination": "/lookup.html" },
     { "source": "/terms", "destination": "/terms.html" },
