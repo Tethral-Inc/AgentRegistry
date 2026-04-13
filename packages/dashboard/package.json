@@ -12,11 +12,10 @@
     "next": "^14",
     "react": "^18",
     "react-dom": "^18",
-    "@acr/shared": "workspace:*"
-  },
-  "devDependencies": {
+    "typescript": "^5",
     "@types/react": "^18",
-    "@types/react-dom": "^18"
+    "@types/react-dom": "^18",
+    "@types/node": "^20"
   },
   "license": "MIT",
   "engines": { "node": ">=18.0.0" }

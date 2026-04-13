@@ -25,11 +25,10 @@ importers:
         specifier: ^1.6
         version: 1.6.1(@types/node@20.19.37)
 
+  packages/claude-code-plugin: {}
+
   packages/dashboard:
     dependencies:
-      '@acr/shared':
-        specifier: workspace:*
-        version: link:../../shared
       next:
         specifier: ^14
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -49,6 +48,9 @@ importers:
 
   packages/ingestion-api:
     dependencies:
+      '@acr/intelligence':
+        specifier: workspace:*
+        version: link:../intelligence
       '@acr/shared':
         specifier: workspace:*
         version: link:../../shared
