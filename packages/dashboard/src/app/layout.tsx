@@ -26,6 +26,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <a href="/skills" style={{ color: '#888', textDecoration: 'none' }}>Skills</a>
           <a href="/operator" style={{ color: '#888', textDecoration: 'none' }}>Operator</a>
           <a href="/internal" style={{ color: '#888', textDecoration: 'none' }}>Internal</a>
+          <a href="/observatory" style={{ color: '#888', textDecoration: 'none' }}>Observatory</a>
+          <a href="/agents" style={{ color: '#888', textDecoration: 'none' }}>Agents</a>
         </nav>
         <main style={{ padding: '2rem' }}>{children}</main>
       </body>

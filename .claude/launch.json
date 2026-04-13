@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["-y", "http-server", "public", "-p", "4765", "-c-1"],
       "port": 4765
+    },
+    {
+      "name": "acr-dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "packages/dashboard"],
+      "port": 3001
     }
   ]
 }
