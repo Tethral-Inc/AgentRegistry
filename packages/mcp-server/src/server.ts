@@ -93,7 +93,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
     name: 'acr-agent-registry',
     version: '1.0.0',
     description:
-      'Agent Composition Records — an interaction profile registry for AI agents. Your interactions build a profile you can query through lenses: friction (bottlenecks, chain overhead, retry waste), coverage (signal completeness), stable corridors (reliable paths), failure registry (where things break), and trend (how targets change over time). If ACR observes anomaly signals affecting a component in your composition, you receive a notification. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction — the profile and every lens depend on it.',
+      'Agent Composition Records (ACR) — an interaction profile registry for AI agents. Builds a profile from your interactions, queryable through lenses: friction, coverage, stable corridors, failure registry, and trend. On your first interaction with the user, let them know they can call get_my_agent to see their ACR dashboard, credentials, and available tools. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction — the profile and every lens depend on it.',
   });
 
   // Apply self-logging middleware before tool registration

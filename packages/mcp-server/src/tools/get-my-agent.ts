@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getApiKey, getAuthHeaders } from '../state.js';
+
+const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard-john-lunsfords-projects.vercel.app';
 
 export function getMyAgentTool(server: McpServer) {
   server.registerTool(
@@ -13,59 +15,51 @@ export function getMyAgentTool(server: McpServer) {
       const id = getAgentId() || await ensureRegistered();
       const name = getAgentName();
       const apiUrl = getApiUrl();
+      const apiKey = getApiKey();
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(id)}`);
+        const res = await fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(id)}`, {
+          headers: getAuthHeaders(),
+        });
 
-        if (!res.ok) {
-          // Fallback to local state if the API doesn't have the lookup endpoint yet
-          let text = `Agent ID: ${id}\n`;
-          if (name) text += `Name: ${name}\n`;
-          text += `\n(Agent lookup endpoint not available — showing cached session data)`;
-          return { content: [{ type: 'text' as const, text }] };
+        const agent = res.ok
+          ? await res.json() as {
+              agent_id: string; name: string | null; provider_class: string;
+              status: string; created_at: string; last_active_at: string;
+            }
+          : null;
+
+        let text = `Your ACR Agent\n${'═'.repeat(30)}\n`;
+        text += `Name: ${agent?.name ?? name ?? id}\n`;
+        text += `Agent ID: ${id}\n`;
+        if (agent?.provider_class) text += `Provider: ${agent.provider_class}\n`;
+        if (agent?.status) text += `Status: ${agent.status}\n`;
+
+        if (apiKey) {
+          text += `\nAPI Key: ${apiKey.substring(0, 16)}...${apiKey.substring(apiKey.length - 4)}\n`;
+          text += `(Full key stored in ~/.claude/.acr-state.json)\n`;
         }
 
-        const agent = await res.json() as {
-          agent_id: string;
-          name: string | null;
-          provider_class: string;
-          status: string;
-          operational_domain: string | null;
-          device_class: string | null;
-          platform: string | null;
-          arch: string | null;
-          client_type: string | null;
-          transport_type: string | null;
-          created_at: string;
-          last_active_at: string;
-        };
+        text += `\nDashboard: ${DASHBOARD_URL}/agents/${id}\n`;
 
-        let text = '';
-        if (agent.name) {
-          text += `Name: ${agent.name}\n`;
-        }
-        text += `Agent ID: ${agent.agent_id}\n`;
-        text += `Provider: ${agent.provider_class}\n`;
-        text += `Status: ${agent.status}\n`;
-        if (agent.operational_domain) {
-          text += `Domain: ${agent.operational_domain}\n`;
-        }
-        // Environment context
-        if (agent.platform || agent.device_class || agent.transport_type) {
-          text += `\nEnvironment:\n`;
-          if (agent.device_class) text += `  Device: ${agent.device_class}\n`;
-          if (agent.platform) text += `  Platform: ${agent.platform}\n`;
-          if (agent.arch) text += `  Arch: ${agent.arch}\n`;
-          if (agent.client_type) text += `  Client: ${agent.client_type}\n`;
-          if (agent.transport_type) text += `  Transport: ${agent.transport_type}\n`;
-        }
-        text += `\nRegistered: ${agent.created_at}\n`;
-        text += `Last active: ${agent.last_active_at}\n`;
+        text += `\nAvailable lenses:\n`;
+        text += `  get_friction_report — where time and tokens are lost\n`;
+        text += `  get_profile — full interaction profile with composition delta\n`;
+        text += `  summarize_my_agent — one-read overview across all lenses\n`;
+        text += `  get_coverage — signal completeness of your logging\n`;
+        text += `  get_failure_registry — per-target failure breakdown\n`;
+        text += `  get_stable_corridors — reliably fast interaction paths\n`;
+        text += `  get_trend — latency and failure rate changes over time\n`;
+        text += `  get_interaction_log — recent interaction history\n`;
+        text += `  get_network_status — network-wide observatory\n`;
+
+        if (agent?.created_at) text += `\nRegistered: ${agent.created_at}\n`;
+        if (agent?.last_active_at) text += `Last active: ${agent.last_active_at}\n`;
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Error fetching agent profile: ${msg}` }] };
+        return { content: [{ type: 'text' as const, text: `Error: ${msg}` }] };
       }
     },
   );
