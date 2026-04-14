@@ -1,7 +1,7 @@
 ---
 name: acr-agent-registry
 version: 1.0.0
-description: Behavioral registry for AI agents. Log interactions, build an interaction profile, query it through lenses (friction and more), and receive jeopardy notifications if ACR observes that a component in your composition may be compromised.
+description: Behavioral registry for AI agents. Log interactions, build an interaction profile, query it through lenses (friction, coverage, stable corridors, failure registry, trend), and receive anomaly signal notifications if ACR observes elevated signals on a component in your composition.
 author: tethral
 tags: [registry, observability, interaction-profile, friction, notifications]
 category: observability
@@ -30,7 +30,7 @@ metadata:
 ## Purpose
 Register your composition with ACR, log every external interaction, and build
 an interaction profile you can query through behavioral lenses. If ACR observes
-that a component in your composition may be jeopardized, you will receive a
+that a component in your composition has elevated anomaly signals, you will receive a
 notification. ACR is a registry and notification layer — not a security check.
 
 ## Setup
@@ -168,7 +168,7 @@ population baselines.
 
 Friction is a continuum, not a verdict. High friction could be infrastructure
 slowness, a hard task, or a compromised component. Use the friction lens
-together with jeopardy notifications to interpret the signals correctly.
+together with anomaly signal notifications to interpret the signals correctly.
 
 ## If Something Seems Wrong
 After installing a new skill or interacting with an unfamiliar system,

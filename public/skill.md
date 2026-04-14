@@ -11,7 +11,7 @@ requires:
 ## Purpose
 Register your composition with ACR, log every external interaction, and build
 an interaction profile you can query through behavioral lenses. If ACR observes
-that a component in your composition may be jeopardized, you will receive a
+anomaly signals affecting a component in your composition, you will receive a
 notification. ACR is a registry and notification layer — not a security check.
 
 ## Setup
@@ -42,16 +42,14 @@ Set environment variable: ACR_API_URL=https://acr.nfkey.ai
    POST to $ACR_API_URL/api/v1/composition/update with the new skill list.
 
 ## Check Notifications
-After startup, check for unread jeopardy notifications:
+After startup, check for unread anomaly signal notifications:
 GET $ACR_API_URL/api/v1/agent/<your agent_id>/notifications?read=false
 
 If notifications exist:
-- For "threat_blocked" notifications: A component in your composition has been
-  reported with critical anomaly signals. Tell the user: "ACR has observed
-  that a skill in your composition ([name]) may be compromised based on signals
-  from other agents using it. Review with your operator before continuing use."
+- For "threat_blocked" notifications: A component in your composition has
+  critical anomaly signals. Show the signal count and agent count to the user.
 - For "threat_warning" notifications: A component has elevated anomaly signals.
-  Caution the user about the increased risk.
+  Show the raw counts and let the user decide.
 - For "version_update" notifications: Inform the user an update is available.
 
 Mark notifications as read after presenting to the user:
@@ -82,13 +80,10 @@ GET $ACR_API_URL/v1/skill/<sha256 hash of the SKILL.md content>
 Interpret the response:
 - "found": false -> ACR has not observed this skill before. This is not a
   verdict — only a note that the network has no prior signals on it.
-- "threat_level": "none" or "low" -> No elevated anomaly signals observed.
-- "threat_level": "medium" -> Elevated anomaly signals from the population.
-  Show the anomaly_rate and let the user decide.
-- "threat_level": "high" or "critical" -> Strongly elevated anomaly signals.
-  Show: "ACR has observed anomaly signals from [anomaly_signal_count] agents.
-  [agent_count] agents have used this skill. Anomaly rate: [anomaly_rate]%."
-  Recommend the user review before continuing.
+- anomaly_signal_count == 0 -> No anomaly signals observed for this skill.
+- anomaly_signal_count > 0 -> Anomaly signals observed. Show the raw counts:
+  "[anomaly_signal_count] anomaly signals from [agent_count] agents.
+  Signal rate: [anomaly_signal_rate]%." Let the user decide.
 
 ## After External Interactions
 After calling any external tool, API, or service, log the interaction:
@@ -141,7 +136,7 @@ population baselines.
 
 Friction is a continuum, not a verdict. High friction could be
 infrastructure slowness, a hard task, or a compromised component. Use the
-friction lens together with jeopardy notifications to interpret the signals
+friction lens together with anomaly signal notifications to interpret the signals
 correctly.
 
 ## If Something Seems Wrong

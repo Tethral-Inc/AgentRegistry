@@ -1,6 +1,6 @@
 # ACR — Agent Composition Records
 
-**A behavioral registry and observation network for AI agents.** Agents register their composition, log their interactions, and query behavioral profiles through lenses. If we observe that an agent may be jeopardized, we notify the agent.
+**A behavioral registry and observation network for AI agents.** Agents register their composition, log their interactions, and query behavioral profiles through lenses. If we observe anomaly signals affecting an agent's composition, we notify the agent.
 
 [![npm](https://img.shields.io/npm/v/@tethral/acr-mcp)](https://www.npmjs.com/package/@tethral/acr-mcp)
 [![npm](https://img.shields.io/npm/v/@tethral/acr-sdk)](https://www.npmjs.com/package/@tethral/acr-sdk)
@@ -11,7 +11,7 @@ ACR is an **interaction profile registry**. Agents log what they do (external to
 
 The **friction lens** is the first one shipped: bottleneck detection, chain overhead analysis, retry waste, population baselines, directional friction between targets. More lenses (reliability, quality) are on the roadmap.
 
-ACR is **not a security product**. We don't evaluate skills, test for compromise, or block anything. We're closer to HIBP or contact tracing: we register events and propagate notifications. If we observe that an agent may be jeopardized in some way, we make an effort to notify the agent itself. We don't track the agent's owner, so we have no mechanism to notify them beyond the agent's activities.
+ACR is **not a security product**. We don't evaluate skills, test for compromise, or block anything. We're closer to HIBP or contact tracing: we register events and propagate notifications. If we observe anomaly signals affecting an agent's composition, we notify the agent. We don't track the agent's owner, so we have no mechanism to notify them beyond the agent's activities.
 
 ## What ACR Does
 
@@ -19,11 +19,11 @@ ACR is **not a security product**. We don't evaluate skills, test for compromise
 - **Logs interactions** — every external tool call an agent makes, with timing, status, chain position, anomaly signals
 - **Builds interaction profiles** — raw signals compiled over time into the behavioral record for each agent
 - **Surfaces the friction lens** — where your agent is losing time and tokens, with chain analysis, retry overhead, population drift, and directional friction
-- **Notifies on jeopardy** — if ACR observes anomalies affecting a component in an agent's composition, we notify that agent
+- **Anomaly signal notifications** — if ACR observes anomalies affecting a component in an agent's composition, we notify that agent
 
 ## The Skill Registry
 
-We maintain a registry of agent skills that we update continuously. **We are not a security check.** If we observe that an agent using a particular skill may be in some way jeopardized, we will make an effort to notify the agent itself. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
+We maintain a registry of agent skills that we update continuously. **We are not a security check.** If we observe anomaly signals affecting a skill in an agent's composition, we notify the agent. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
 
 Agents don't get skills from ACR — we observe skills that already exist in the ecosystem (via public registries like npm and GitHub) and keep track of behavioral signals tied to them.
 
@@ -74,7 +74,7 @@ await acr.logInteraction({
 // Query the friction lens of your profile
 const friction = await acr.getFrictionReport(reg.agent_id, { scope: 'day' });
 
-// Check for jeopardy notifications
+// Check for anomaly signal notifications
 const notifs = await acr.getNotifications(reg.agent_id);
 ```
 
@@ -117,7 +117,7 @@ You have 1 unread notification:
 | `get_network_status` | The COVID-tracker / HIBP view for agent infrastructure |
 | `get_my_agent` | Your agent identity and registration state |
 | `check_environment` | Active compromise flags and network health on startup |
-| `get_notifications` | Unread jeopardy notifications for your composition |
+| `get_notifications` | Unread anomaly signal notifications for your composition |
 | `acknowledge_threat` | Acknowledge a notification after reviewing it |
 | `update_composition` | Update your composition without re-registering |
 | `register_agent` | Explicit registration (auto-registration is default) |
