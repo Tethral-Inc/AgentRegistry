@@ -3,13 +3,27 @@
  * Supports both stdio (single session) and HTTP (concurrent sessions).
  */
 import { randomBytes } from 'node:crypto';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { detectEnvironment } from './env-detect.js';
 import { writeAcrStateFile } from './acr-state-file.js';
+
+const CLIENT_TO_PROVIDER: Record<string, string> = {
+  'claude-code': 'anthropic',
+  'claude-desktop': 'anthropic',
+  'claude': 'anthropic',
+  'cursor': 'custom',
+  'continue': 'custom',
+  'zed': 'custom',
+  'windsurf': 'custom',
+  'cline': 'custom',
+  'copilot': 'openai',
+};
 
 export class SessionState {
   private _agentId: string | null = null;
   private _agentName: string | null = null;
   private _apiKey: string | null = null;
+  private _mcpServer: McpServer | null = null;
   private _registering = false;
   private _transportType: 'stdio' | 'streamable-http';
   private _clientType: string | null = null;
@@ -32,6 +46,14 @@ export class SessionState {
   setAgentName(name: string): void { this._agentName = name; }
   setApiKey(key: string): void { this._apiKey = key; }
   setClientType(type: string): void { this._clientType = type; }
+  setMcpServer(server: McpServer): void { this._mcpServer = server; }
+
+  /** Infer provider_class from the MCP client name (e.g. "claude-code" → "anthropic"). */
+  private inferProviderClass(): string {
+    const clientName = this._mcpServer?.server?.getClientVersion?.()?.name?.toLowerCase();
+    if (!clientName) return 'unknown';
+    return CLIENT_TO_PROVIDER[clientName] ?? 'custom';
+  }
 
   async ensureRegistered(apiUrl: string): Promise<string> {
     if (this._agentId) return this._agentId;
@@ -51,7 +73,7 @@ export class SessionState {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           public_key: pseudoKey,
-          provider_class: 'unknown',
+          provider_class: this.inferProviderClass(),
           environment: env,
         }),
       });
