@@ -1,7 +1,7 @@
 {
   "name": "@tethral/acr-sdk",
   "version": "0.3.0",
-  "description": "Zero-dependency TypeScript SDK for the ACR (Agent Composition Records) network.",
+  "description": "Zero-dependency TypeScript SDK for the ACR (Agent Composition Records) network. Register agents, log interactions, query friction reports, check skills, and monitor system health.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -16,12 +16,16 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build"
   },
-  "keywords": ["acr", "agent", "composition", "registry", "tethral", "sdk", "friction", "threat"],
+  "keywords": ["acr", "agent", "composition", "registry", "tethral", "sdk", "friction", "mcp", "interaction-profile", "observability"],
+  "author": "Tethral, Inc.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/theAnthropol/AgentRegistry",
+    "url": "https://github.com/Tethral-Inc/AgentRegistry",
     "directory": "packages/ts-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/Tethral-Inc/AgentRegistry/issues"
   },
   "homepage": "https://acr.nfkey.ai",
   "engines": { "node": ">=18.0.0" },

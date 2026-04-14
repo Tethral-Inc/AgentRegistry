@@ -31,6 +31,10 @@
     "url": "https://github.com/Tethral-Inc/AgentRegistry",
     "directory": "packages/mcp-server"
   },
+  "bugs": {
+    "url": "https://github.com/Tethral-Inc/AgentRegistry/issues"
+  },
+  "author": "Tethral, Inc.",
   "homepage": "https://acr.nfkey.ai",
   "engines": { "node": ">=20.0.0" },
   "files": ["dist", "README.md", "LICENSE"],

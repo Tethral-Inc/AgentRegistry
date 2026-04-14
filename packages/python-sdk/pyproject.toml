@@ -23,9 +23,9 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://acr.nfkey.ai"
-Repository = "https://github.com/theAnthropol/AgentRegistry"
-Documentation = "https://acr.nfkey.ai/docs"
-Issues = "https://github.com/theAnthropol/AgentRegistry/issues"
+Repository = "https://github.com/Tethral-Inc/AgentRegistry"
+Documentation = "https://acr.nfkey.ai"
+Issues = "https://github.com/Tethral-Inc/AgentRegistry/issues"
 
 [tool.setuptools.packages.find]
 include = ["tethral_acr*"]
