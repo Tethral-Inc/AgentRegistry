@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.tethral-inc/acr",
+  "name": "io.github.TethralAI/acr",
   "title": "ACR — Agent Composition Records",
-  "description": "Behavioral registry for AI agents. Log interactions to build an interaction profile, query it through lenses (friction and more), and receive jeopardy notifications if ACR observes that a component in your composition may be compromised. Not a security product — a registry and notification layer, like HIBP for agent infrastructure.",
-  "version": "1.0.0",
+  "description": "Interaction profile registry for AI agents. Log interactions, query behavioral lenses.",
+  "version": "2.1.1",
   "websiteUrl": "https://acr.nfkey.ai",
   "repository": {
     "url": "https://github.com/Tethral-Inc/AgentRegistry",
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "@tethral/acr-mcp",
-      "version": "1.0.0",
+      "version": "2.1.1",
       "transport": {
         "type": "stdio"
       },
