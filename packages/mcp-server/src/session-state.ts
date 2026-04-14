@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { detectEnvironment } from './env-detect.js';
-import { writeAcrStateFile } from './acr-state-file.js';
+import { writeAcrStateFile, readAcrStateFile } from './acr-state-file.js';
 
 const CLIENT_TO_PROVIDER: Record<string, string> = {
   'claude-code': 'anthropic',
@@ -56,6 +56,16 @@ export class SessionState {
   }
 
   async ensureRegistered(apiUrl: string): Promise<string> {
+    // Hydrate from persisted state file to avoid re-registering every session
+    if (!this._agentId) {
+      const saved = readAcrStateFile();
+      if (saved?.agent_id) {
+        this._agentId = saved.agent_id;
+        if (saved.api_key) this._apiKey = saved.api_key;
+        return this._agentId;
+      }
+    }
+
     if (this._agentId) return this._agentId;
     if (this._registering) {
       await new Promise((r) => setTimeout(r, 1000));
