@@ -1,28 +1,37 @@
 {
   "name": "@tethral/acr-mcp",
-  "version": "2.0.5",
+  "version": "2.1.0",
   "description": "MCP server for ACR (Agent Composition Records). An interaction profile registry for AI agents — log interactions, build a profile, and query it through behavioral lenses (friction, coverage, stable corridors, failure registry, trend). 21 tools. Raw data, no synthetic labels.",
   "type": "module",
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/index.mjs",
   "bin": {
-    "acr-mcp": "dist/src/index.js",
-    "acr-mcp-http": "dist/src/http.js"
+    "acr-mcp": "dist/index.mjs",
+    "acr-mcp-http": "dist/http.mjs"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node esbuild.config.mjs",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "pnpm build"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^3.23.0"
+    "prepublishOnly": "pnpm typecheck && pnpm build"
   },
   "devDependencies": {
-    "tsx": "^4.11.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.11.0",
+    "zod": "^3.23.0"
   },
-  "keywords": ["mcp", "agent", "acr", "composition", "registry", "tethral", "interaction-profile", "observability", "friction", "behavioral-analytics"],
+  "keywords": [
+    "mcp",
+    "agent",
+    "acr",
+    "composition",
+    "registry",
+    "tethral",
+    "interaction-profile",
+    "observability",
+    "friction",
+    "behavioral-analytics"
+  ],
   "privacy_policy": "https://acr.nfkey.ai/terms",
   "mcpName": "io.github.tethral-inc/acr",
   "license": "MIT",
@@ -36,8 +45,14 @@
   },
   "author": "Tethral, Inc.",
   "homepage": "https://acr.nfkey.ai",
-  "engines": { "node": ">=20.0.0" },
-  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public",
     "provenance": false
