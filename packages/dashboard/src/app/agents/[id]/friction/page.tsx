@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { getAgentFriction, type FrictionResponse } from '../../../../lib/api';
 import { Stat } from '../../../../components/Stat';
 import { PageError } from '../../../../components/PageError';
+import { ApiKeyInput } from '../../../../components/ApiKeyInput';
 import { formatMs } from '../../../../lib/format';
 
 const SCOPE_LABELS = { session: 'Last Session', day: 'Last 24h', week: 'Last 7d' } as const;
@@ -40,15 +41,28 @@ export default function FrictionDashboard() {
     });
   };
 
-  if (loading && !data) return <p style={{ color: '#888', textAlign: 'center', marginTop: '4rem' }}>Loading...</p>;
-  if (error) return <PageError message={error} onRetry={() => loadFriction(scope)} />;
-  if (!data) return null;
+  if ((loading && !data) || error || !data) {
+    return (
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <a href={`/agents/${id}`} style={{ color: '#888', textDecoration: 'none', fontSize: '0.85rem' }}>&larr; Back to profile</a>
+        <div style={{ marginTop: '1rem' }}>
+          <ApiKeyInput onChange={() => loadFriction(scope)} />
+        </div>
+        {loading && !data && <p style={{ color: '#888', textAlign: 'center', marginTop: '4rem' }}>Loading...</p>}
+        {error && !loading && <PageError message={error} onRetry={() => loadFriction(scope)} />}
+      </div>
+    );
+  }
 
   const summary = data.summary;
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto' }}>
       <a href={`/agents/${id}`} style={{ color: '#888', textDecoration: 'none', fontSize: '0.85rem' }}>&larr; Back to profile</a>
+
+      <div style={{ marginTop: '1rem' }}>
+        <ApiKeyInput onChange={() => loadFriction(scope)} />
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1rem 0 1.5rem' }}>
         <div>

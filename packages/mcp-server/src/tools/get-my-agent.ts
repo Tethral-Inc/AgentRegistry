@@ -34,7 +34,7 @@ export function getMyAgentTool(server: McpServer) {
 
         let text = `${displayName} (${provider})\n`;
         text += `ID: ${id}\n`;
-        if (apiKey) text += `Key: ${apiKey.substring(0, 16)}...${apiKey.substring(apiKey.length - 4)} (full key in ~/.claude/.acr-state.json)\n`;
+        if (apiKey) text += `Key: ${apiKey}\n`;
         text += `Dashboard: ${DASHBOARD_URL}/agents/${id}\n`;
         text += `\nLenses: get_friction_report · get_profile · summarize_my_agent · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_network_status`;
 

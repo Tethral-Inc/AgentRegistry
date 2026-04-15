@@ -6,6 +6,7 @@ import { getAgentProfile, type AgentProfileResponse } from '../../../lib/api';
 import { Stat } from '../../../components/Stat';
 import { MetaRow } from '../../../components/MetaRow';
 import { PageError } from '../../../components/PageError';
+import { ApiKeyInput } from '../../../components/ApiKeyInput';
 import { formatTimestamp } from '../../../lib/format';
 
 export default function AgentProfile() {
@@ -29,9 +30,18 @@ export default function AgentProfile() {
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
-  if (loading) return <p style={{ color: '#888', textAlign: 'center', marginTop: '4rem' }}>Loading...</p>;
-  if (error) return <PageError message={error} onRetry={loadProfile} />;
-  if (!profile) return null;
+  if (loading || error || !profile) {
+    return (
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <a href="/agents" style={{ color: '#888', textDecoration: 'none', fontSize: '0.85rem' }}>&larr; Back to agents</a>
+        <div style={{ marginTop: '1rem' }}>
+          <ApiKeyInput onChange={() => loadProfile()} />
+        </div>
+        {loading && <p style={{ color: '#888', textAlign: 'center', marginTop: '4rem' }}>Loading...</p>}
+        {error && !loading && <PageError message={error} onRetry={loadProfile} />}
+      </div>
+    );
+  }
 
   const counts = profile.counts;
   const comp = profile.composition_summary;
@@ -41,6 +51,10 @@ export default function AgentProfile() {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <a href="/agents" style={{ color: '#888', textDecoration: 'none', fontSize: '0.85rem' }}>&larr; Back to agents</a>
+
+      <div style={{ marginTop: '1rem' }}>
+        <ApiKeyInput onChange={() => loadProfile()} />
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1rem 0 1.5rem' }}>
         <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{profile.name || id}</h1>
