@@ -1,6 +1,6 @@
 {
   "name": "@tethral/acr-mcp",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "MCP server for ACR (Agent Composition Records). An interaction profile registry for AI agents — log interactions, build a profile, and query it through behavioral lenses (friction, coverage, stable corridors, failure registry, trend). 21 tools. Raw data, no synthetic labels.",
   "type": "module",
   "main": "dist/index.mjs",
@@ -37,7 +37,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Tethral-Inc/AgentRegistry",
+    "url": "git+https://github.com/Tethral-Inc/AgentRegistry.git",
     "directory": "packages/mcp-server"
   },
   "bugs": {
@@ -49,12 +49,11 @@
     "node": ">=20.0.0"
   },
   "files": [
-    "dist",
+    "dist/*.mjs",
     "README.md",
     "LICENSE"
   ],
   "publishConfig": {
-    "access": "public",
-    "provenance": false
+    "access": "public"
   }
 }
