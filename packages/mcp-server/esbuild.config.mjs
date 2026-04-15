@@ -6,7 +6,7 @@ const shared = {
   target: 'node20',
   format: 'esm',
   external: ['node:*'],
-  sourcemap: true,
+  sourcemap: false,
   minify: false,
 };
 
