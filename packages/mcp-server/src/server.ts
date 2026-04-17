@@ -18,7 +18,7 @@ import { getSkillVersionsTool } from './tools/get-skill-versions.js';
 import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
 import { acknowledgeThreatTool } from './tools/acknowledge-threat.js';
-import { disableDeepCompositionTool } from './tools/disable-deep-composition.js';
+import { disableDeepCompositionTool } from './tools/configure-deep-composition.js';
 import { getProfileTool } from './tools/get-profile.js';
 import { getCoverageTool } from './tools/get-coverage.js';
 import { getStableCorridorsTool } from './tools/get-stable-corridors.js';

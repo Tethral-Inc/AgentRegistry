@@ -37,12 +37,14 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         if (systems.length > 0) {
           text += `\n-- Systems (${systems.length}, worst-first) --\n`;
           for (const s of systems.slice(0, 20)) {
-            text += `  ${s.system_id}`;
-            text += ` — ${s.agent_count ?? 0} agents`;
-            if (s.failure_rate > 0) text += `, ${(s.failure_rate * 100).toFixed(1)}% failure`;
-            if (s.anomaly_rate > 0) text += `, ${(s.anomaly_rate * 100).toFixed(1)}% anomaly`;
-            if (s.median_duration_ms != null) text += `, ${s.median_duration_ms}ms median`;
-            text += '\n';
+            let line = `  ${s.system_id}`;
+            line += ` — ${s.agent_count ?? 0} agents`;
+            if (s.failure_rate > 0) line += `, ${(s.failure_rate * 100).toFixed(1)}% failure`;
+            if (s.anomaly_rate > 0) line += `, ${(s.anomaly_rate * 100).toFixed(1)}% anomaly`;
+            if (s.median_duration_ms != null) line += `, ${s.median_duration_ms}ms median`;
+            if (s.p95_duration_ms != null) line += `, p95 ${s.p95_duration_ms}ms`;
+            if (s.total_interactions != null) line += `, ${s.total_interactions} interactions`;
+            text += line + '\n';
           }
           if (systems.length > 20) {
             text += `  ... and ${systems.length - 20} more systems\n`;

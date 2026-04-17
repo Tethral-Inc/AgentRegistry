@@ -49,7 +49,7 @@ export function logInteractionTool(
         response_size_bytes: z.number().nonnegative().optional().describe('Response payload size in bytes'),
         chain_id: z.string().max(64).optional().describe('ID linking sequential calls in a chain. Same chain_id for all calls in a multi-step workflow.'),
         chain_position: z.number().nonnegative().optional().describe('Position in chain (0-indexed). First call = 0, second = 1.'),
-        preceded_by: z.string().optional().describe('target_system_id of the call that immediately preceded this one.'),
+        preceded_by: z.string().optional().describe("The target_system_id of the immediately preceding call in a multi-step chain (e.g. 'api:openai.com'). Use this to link sequential calls so ACR can compute directional amplification — how much slower a call becomes when preceded by another. Pass the target of the previous step, not a receipt ID."),
         // Category classification (all optional, all descriptive, all non-content)
         target_type: z.string().max(64).optional().describe('More granular target type, e.g. "api.llm_provider", "api.payment", "mcp.database".'),
         activity_class: z.string().max(32).optional().describe('Kind of work the call represents. Examples: language, math, visuals, creative, deterministic, sound. Expandable — add new values as they emerge.'),

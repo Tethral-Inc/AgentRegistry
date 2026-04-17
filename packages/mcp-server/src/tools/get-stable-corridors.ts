@@ -49,7 +49,7 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        text += `\n-- Matches (${data.match_count ?? matches.length}) --\n`;
+        text += `\n-- Matches (${data.match_count !== undefined ? data.match_count : matches.length}) --\n`;
 
         if (matches.length === 0) {
           text += `  No stable corridors found for this period. This means no targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;

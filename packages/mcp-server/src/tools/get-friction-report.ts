@@ -71,6 +71,8 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             const avgMs = cat.interaction_count > 0 ? Math.round(cat.total_duration_ms / cat.interaction_count) : 0;
             text += `  ${cat.category}: ${cat.interaction_count} calls, ${(cat.total_duration_ms / 1000).toFixed(1)}s total, avg ${avgMs}ms`;
             if (cat.failure_count > 0) text += `, ${cat.failure_count} failures`;
+            if (cat.median_duration_ms != null) text += ` | median ${cat.median_duration_ms}ms`;
+            if (cat.p95_duration_ms != null) text += ` | p95 ${cat.p95_duration_ms}ms`;
             text += `\n`;
           }
         }
@@ -152,7 +154,10 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         if (data.by_transport && data.by_transport.length > 0) {
           text += `\n── By Transport ──\n`;
           for (const t of data.by_transport) {
-            text += `  ${t.transport}: ${t.interaction_count} calls, ${(t.total_duration_ms / 1000).toFixed(1)}s total\n`;
+            text += `  ${t.transport}: ${t.interaction_count} calls, ${(t.total_duration_ms / 1000).toFixed(1)}s total`;
+            if (t.median_duration_ms != null) text += ` | median ${t.median_duration_ms}ms`;
+            if (t.p95_duration_ms != null) text += ` | p95 ${t.p95_duration_ms}ms`;
+            text += `\n`;
           }
         }
 

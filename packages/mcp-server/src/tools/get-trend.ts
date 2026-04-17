@@ -43,10 +43,6 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
         text += `Current: ${data.current_period}\n`;
         text += `Previous: ${data.comparison_period}\n`;
 
-        if (rules) {
-          text += `Inclusion: ${rules.target_included_if}\n`;
-        }
-
         if (targets.length === 0) {
           text += `\nNo targets with data in both periods.\n`;
         } else {
@@ -69,6 +65,12 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
               text += `    previous: no data\n`;
             }
           }
+        }
+
+        if (rules) {
+          text += `\n── How targets are included ──\n`;
+          text += `  ${rules.target_included_if}\n`;
+          if (rules.previous_window != null) text += `  Previous window: ${rules.previous_window}\n`;
         }
 
         return { content: [{ type: 'text' as const, text }] };
