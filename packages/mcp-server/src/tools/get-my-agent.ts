@@ -7,7 +7,7 @@ const TOOL_MENU = `
 ── Available Tools ──
   Your agent:   get_my_agent · register_agent · update_composition · configure_deep_composition
   Logging:      log_interaction
-  Your profile: get_friction_report · summarize_my_agent · get_profile · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log
+  Your profile: get_friction_report · summarize_my_agent · get_profile · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · whats_new
   Notifications: get_notifications · acknowledge_threat
   Network:      get_network_status · check_environment · check_entity
   Registry:     search_skills · get_skill_tracker · get_skill_versions`.trimStart();

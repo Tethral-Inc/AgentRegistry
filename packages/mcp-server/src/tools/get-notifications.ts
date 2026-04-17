@@ -7,7 +7,7 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
   server.registerTool(
     'get_notifications',
     {
-      description: 'Check for unread anomaly signal notifications about components in your composition. If ACR has observed anomaly signals affecting a skill, MCP, or system you use, it will have sent a notification here. Also delivers version updates. Call this on startup. ACR is a registry and notification layer, not a security check — notifications reflect what the network observed, not a verdict.',
+      description: 'An anomaly signal is a behavioral pattern ACR observed across multiple unrelated agents (not a security event). Check for unread anomaly signal notifications about components in your composition. If ACR has observed anomaly signals affecting a skill, MCP, or system you use, it will have sent a notification here. Also delivers version updates. Call this on startup. ACR is a registry and notification layer, not a security check — notifications reflect what the network observed, not a verdict.',
       inputSchema: {
         agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
       },

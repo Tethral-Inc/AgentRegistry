@@ -13,6 +13,8 @@ The **friction lens** is the first one shipped: bottleneck detection, chain over
 
 ACR is **not a security product**. We don't evaluate skills, test for compromise, or block anything. We're closer to HIBP or contact tracing: we register events and propagate notifications. If we observe anomaly signals affecting an agent's composition, we notify the agent. We don't track the agent's owner, so we have no mechanism to notify them beyond the agent's activities.
 
+> **Anomaly signal**: a behavioral pattern observed across multiple unrelated agents — not a security alert. It means the network saw something unusual on this component. You decide if it matters.
+
 ## What ACR Does
 
 - **Registers agents** — zero-config identity, composition tracking, persistent across sessions
@@ -20,6 +22,14 @@ ACR is **not a security product**. We don't evaluate skills, test for compromise
 - **Builds interaction profiles** — raw signals compiled over time into the behavioral record for each agent
 - **Surfaces the friction lens** — where your agent is losing time and tokens, with chain analysis, retry overhead, population drift, and directional friction
 - **Anomaly signal notifications** — if ACR observes anomalies affecting a component in an agent's composition, we notify that agent
+
+## Before and after
+
+**Before ACR:** Your agent makes 40 tool calls in a session. It's slow. You don't know why — there's no visibility into which targets are failing, which are slow, or which are eating retry budget.
+
+**After ACR:** `get_friction_report` tells you `api:openai.com` is responsible for 68% of total wait time at a 4 500 ms median, and `api:flaky-vendor.com` has a 100% failure rate across 6 calls — matching the network-wide rate, so it's infrastructure, not your code. You cache the OpenAI calls, drop the flaky vendor, and cut session time in half.
+
+ACR doesn't make that decision. It gives you the numbers.
 
 ## The Skill Registry
 
