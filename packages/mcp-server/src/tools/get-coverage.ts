@@ -1,13 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
-
-async function resolveId(nameOrId: string): Promise<string> {
-  if (nameOrId.startsWith('acr_') || nameOrId.startsWith('pseudo_')) return nameOrId;
-  const res = await fetch(`${getApiUrl()}/api/v1/agent/${encodeURIComponent(nameOrId)}`);
-  if (!res.ok) throw new Error(`Agent "${nameOrId}" not found`);
-  return ((await res.json()) as { agent_id: string }).agent_id;
-}
+import { getAgentName, getAuthHeaders } from '../state.js';
+import { resolveAgentId } from '../utils/resolve-agent-id.js';
 
 export function getCoverageTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -23,8 +17,11 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
     },
     async ({ agent_id, agent_name }) => {
       let id: string;
+      let displayName: string;
       try {
-        id = agent_name ? await resolveId(agent_name) : (agent_id || getAgentId() || await ensureRegistered());
+        const resolved = await resolveAgentId({ agentId: agent_id, agentName: agent_name });
+        id = resolved.id;
+        displayName = resolved.displayName;
       } catch (err) {
         return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
       }
@@ -36,7 +33,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           return { content: [{ type: 'text' as const, text: `Coverage error: ${errText}` }] };
         }
         const data = await res.json() as Record<string, unknown>;
-        const displayName = agent_name || getAgentName() || id;
+        displayName = agent_name || getAgentName() || displayName;
 
         const signals = data.signals as Record<string, number>;
         const rules = data.rules as Array<{ signal: string; rule: string; observed: Record<string, number>; triggered: boolean }>;

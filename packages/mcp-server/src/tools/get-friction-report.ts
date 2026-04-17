@@ -1,22 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
-
-/**
- * Resolve an agent name to an agent_id via the lookup endpoint.
- */
-async function resolveAgentId(nameOrId: string): Promise<string> {
-  if (nameOrId.startsWith('acr_') || nameOrId.startsWith('pseudo_')) {
-    return nameOrId;
-  }
-  const apiUrl = getApiUrl();
-  const res = await fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(nameOrId)}`);
-  if (!res.ok) {
-    throw new Error(`Agent "${nameOrId}" not found`);
-  }
-  const data = await res.json() as { agent_id: string };
-  return data.agent_id;
-}
+import { getAgentName, getAuthHeaders } from '../state.js';
+import { resolveAgentId } from '../utils/resolve-agent-id.js';
 
 export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -26,19 +11,18 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
-        scope: z.enum(['session', 'day', 'week']).optional().default('day').describe('Time window for the report'),
+        scope: z.enum(['session', 'day', 'week']).optional().default('week').describe('Time window for the report'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
     },
     async ({ agent_id, agent_name, scope }) => {
       let id: string;
+      let displayName: string;
       try {
-        if (agent_name) {
-          id = await resolveAgentId(agent_name);
-        } else {
-          id = agent_id || getAgentId() || await ensureRegistered();
-        }
+        const resolved = await resolveAgentId({ agentId: agent_id, agentName: agent_name });
+        id = resolved.id;
+        displayName = resolved.displayName;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return { content: [{ type: 'text' as const, text: `Error: ${msg}` }] };
@@ -57,7 +41,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         }
 
         const s = data.summary;
-        const displayName = data.name || agent_name || getAgentName() || id;
+        displayName = data.name || agent_name || getAgentName() || displayName;
 
         if (s.total_interactions === 0) {
           return {
@@ -73,7 +57,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Tier: ${data.tier || 'free'}\n\n`;
 
-        // Summary metrics
+        // Summary metrics (CHANGE 6: add absolute seconds next to total_wait_time_ms)
         text += `── Summary ──\n`;
         text += `  Interactions: ${s.total_interactions}\n`;
         text += `  Total wait: ${(s.total_wait_time_ms / 1000).toFixed(1)}s\n`;
@@ -91,16 +75,27 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        // Top targets with full metrics
+        // Top targets with full metrics (CHANGE 6: add absolute seconds for proportion and wasted time)
         if (data.top_targets && data.top_targets.length > 0) {
           text += `\n── Top Targets ──\n`;
           for (const t of data.top_targets) {
             const pct = (t.proportion_of_total * 100).toFixed(1);
+            const absWaitS = s.total_wait_time_ms > 0
+              ? ((t.proportion_of_total * s.total_wait_time_ms) / 1000).toFixed(1)
+              : null;
             text += `\n  ${t.target_system_id} (${t.target_system_type})\n`;
-            text += `    ${t.interaction_count} calls | ${pct}% of wait time\n`;
+            text += `    ${t.interaction_count} calls | ${pct}% of wait time`;
+            if (absWaitS != null) text += ` (${absWaitS}s)`;
+            text += `\n`;
             text += `    median ${t.median_duration_ms}ms`;
             if (t.p95_duration_ms != null) text += ` | p95 ${t.p95_duration_ms}ms`;
             text += `\n`;
+
+            // Wasted time from failures (CHANGE 6)
+            if (t.failure_count > 0 && t.median_duration_ms != null) {
+              const wastedMs = t.failure_count * t.median_duration_ms;
+              text += `    ${t.interaction_count} calls, ${t.failure_count} failures = ${(wastedMs / 1000).toFixed(1)}s wasted\n`;
+            }
 
             // Status breakdown
             if (t.status_breakdown) {
@@ -128,7 +123,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               }
             }
 
-            if (t.failure_count > 0 && !t.recent_anomalies?.length) {
+            if (t.failure_count > 0 && !t.recent_anomalies?.length && t.median_duration_ms == null) {
               text += `    ${t.failure_count} failures\n`;
             }
 
@@ -164,10 +159,10 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        // Chain Analysis
+        // Chain Analysis (CHANGE 5: always render header)
+        text += '\n── Chain Analysis ──\n';
         if (data.chain_analysis) {
           const ca = data.chain_analysis;
-          text += '\n── Chain Analysis ──\n';
           text += `  Distinct chains: ${ca.chain_count}\n`;
           text += `  Avg chain length: ${ca.avg_chain_length} calls\n`;
           text += `  Total chain overhead: ${(ca.total_chain_overhead_ms / 1000).toFixed(1)}s\n`;
@@ -177,39 +172,45 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               text += `    ${p.pattern.join(' -> ')} (${p.frequency}x, ${p.avg_overhead_ms}ms avg overhead)\n`;
             }
           }
+        } else {
+          text += `  None recorded this week.\n`;
         }
 
-        // Directional Analysis (pro) — raw amplification factor, no
-        // SLOWS/SPEEDS/~ label. Client reads the factor.
+        // Directional Analysis (CHANGE 5: always render header; pro — raw amplification factor)
+        text += '\n── Directional Analysis ──\n';
         if (data.directional_pairs && data.directional_pairs.length > 0) {
-          text += '\n── Directional Analysis ──\n';
           for (const dp of data.directional_pairs) {
             text += `  ${dp.source_target} -> ${dp.destination_target}: amplification ${dp.amplification_factor.toFixed(2)}x`;
             text += ` (${dp.avg_duration_when_preceded}ms after vs ${dp.avg_duration_standalone}ms standalone)`;
             text += ` [${dp.sample_count} samples]\n`;
           }
+        } else {
+          text += `  None recorded this week.\n`;
         }
 
-        // Retry Overhead (pro)
+        // Retry Overhead (CHANGE 5: always render header; pro)
+        text += '\n── Retry Overhead ──\n';
         if (data.retry_overhead) {
           const ro = data.retry_overhead;
-          text += '\n── Retry Overhead ──\n';
           text += `  Total retries: ${ro.total_retries}\n`;
           text += `  Wasted time: ${(ro.total_wasted_ms / 1000).toFixed(1)}s\n`;
           for (const t of ro.top_retry_targets) {
             text += `    ${t.target_system_id}: ${t.retry_count} retries, ${t.wasted_ms}ms wasted\n`;
           }
+        } else {
+          text += `  None recorded this week.\n`;
         }
 
-        // Population Drift (pro) — raw drift percentage, no
-        // DEGRADING/IMPROVING/stable label.
+        // Population Drift (CHANGE 5: always render header; pro — raw drift percentage)
+        text += '\n── Population Drift ──\n';
         if (data.population_drift && data.population_drift.targets.length > 0) {
-          text += '\n── Population Drift ──\n';
           for (const t of data.population_drift.targets) {
             const sign = t.drift_percentage > 0 ? '+' : '';
             text += `  ${t.target_system_id}: ${sign}${t.drift_percentage}% vs baseline`;
             text += ` (current ${t.current_median_ms}ms, baseline ${t.baseline_median_ms}ms)\n`;
           }
+        } else {
+          text += `  None recorded this week.\n`;
         }
 
         // Population comparison (paid tier)

@@ -44,6 +44,15 @@ Add this to your Claude Code settings (`.claude/settings.json` or via IDE):
 
 Your agent auto-registers, gets a name (e.g. `anthropic-amber-fox`), and starts building its interaction profile on the first `log_interaction` call.
 
+## Get started in 4 steps
+
+1. **Add to Claude Code** — paste the config snippet above (30 seconds)
+2. **Call `get_my_agent`** — get your dashboard link, API key, and a health snapshot
+3. **Call `log_interaction` after every external tool call** — every lens depends on these signals
+4. **Call `summarize_my_agent` after a session** — see where your time went
+
+Not sure where you are? Call `getting_started` for a personalised checklist.
+
 ## Add to Any Agent (SDK)
 
 ```bash

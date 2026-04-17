@@ -25,6 +25,7 @@ import { getStableCorridorsTool } from './tools/get-stable-corridors.js';
 import { getFailureRegistryTool } from './tools/get-failure-registry.js';
 import { getTrendTool } from './tools/get-trend.js';
 import { summarizeMyAgentTool } from './tools/summarize-my-agent.js';
+import { gettingStartedTool } from './tools/getting-started.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { defaultSession, SessionState } from './session-state.js';
@@ -123,6 +124,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getFailureRegistryTool(server, apiUrl);
   getTrendTool(server, apiUrl);
   summarizeMyAgentTool(server, apiUrl);
+  gettingStartedTool(server, apiUrl);
 
   return server;
 }

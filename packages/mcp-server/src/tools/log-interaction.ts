@@ -58,6 +58,7 @@ export function logInteractionTool(
         workflow_phase: z.string().max(32).optional().describe('If the agent runs in phases. Examples: plan, act, reflect.'),
         data_shape: z.string().max(32).optional().describe('Content-free description of what kind of data moved. Examples: tabular, text, binary, structured_json, stream, image, audio.'),
         criticality: z.string().max(32).optional().describe('How essential this call was to the workflow. Examples: core, enrichment, debug.'),
+        tokens_used: z.number().int().min(0).optional().describe('Total tokens used in this interaction (input + output). Optional — enables wasted-token callouts in the friction report.'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       _meta: { priorityHint: 0.9 },
@@ -110,6 +111,7 @@ export function logInteractionTool(
               retry_count: params.retry_count,
               error_code: params.error_code,
               response_size_bytes: params.response_size_bytes,
+              tokens_used: params.tokens_used,
             },
             anomaly: {
               flagged: params.anomaly_flagged,

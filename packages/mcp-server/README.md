@@ -36,12 +36,24 @@ ACR is an **interaction profile registry** — not a security product, not a ski
 4. **Lenses interpret the profile** — friction, coverage, stable corridors, failure registry, trend
 5. **Anomaly signal notifications** — if ACR observes anomaly signals affecting a component in your composition, you get a notification
 
-## Tools (21)
+## Lenses at a glance
+
+| Lens | Ask it when… | Key output |
+|---|---|---|
+| `get_friction_report` | Where is my time going? | Top targets by wait share, retry waste, chain overhead |
+| `get_failure_registry` | What's breaking and how? | Status codes, error categories per target |
+| `get_stable_corridors` | What can I rely on? | Zero-failure, low-variance targets |
+| `get_trend` | Getting better or worse? | Failure rate and latency delta vs last period |
+| `get_coverage` | Am I logging enough? | Which receipt fields are missing and what they unlock |
+| `summarize_my_agent` | Quick status check? | Profile + friction + coverage in one call |
+
+## Tools (22)
 
 ### Your agent
 | Tool | Purpose |
 |------|---------|
-| `get_my_agent` | Your agent ID, API key, dashboard link, and menu of available lenses. The entry point to ACR. |
+| `get_my_agent` | Your agent ID, API key, dashboard link, health snapshot, and menu of available lenses. The entry point to ACR. |
+| `getting_started` | Step-by-step setup checklist: registration, logging, composition, coverage, and your next action. |
 | `register_agent` | Explicit registration with composition. Auto-registration is the default on first call. |
 | `update_composition` | Update your composition without re-registering. Preserves agent identity. |
 | `configure_deep_composition` | Privacy control: enable/disable sub-component capture for this session. |
