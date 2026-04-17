@@ -39,11 +39,12 @@ export function getMyAgentTool(server: McpServer) {
 
       try {
         // Fetch agent record + health data in parallel
-        const [agentRes, frictionData, notifData, coverageData] = await Promise.all([
+        const [agentRes, frictionData, notifData, coverageData, profileData] = await Promise.all([
           fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(id)}`, { headers: authHeaders }),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/friction?scope=week`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/coverage`, authHeaders),
+          fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/profile`, authHeaders),
         ]);
 
         const agent = agentRes.ok
@@ -91,12 +92,15 @@ export function getMyAgentTool(server: McpServer) {
             }
           }
 
-          // Composition empty check from friction response
-          const profile = frictionData.composition_summary as Record<string, unknown> | null;
-          if (profile) {
-            const skills = (profile.skill_count as number) ?? 0;
-            const mcps = (profile.mcp_count as number) ?? 0;
-            const tools = (profile.tool_count as number) ?? 0;
+        }
+
+        // Composition empty check from profile endpoint
+        if (profileData && !profileData.error) {
+          const compositionSummary = profileData.composition_summary as Record<string, unknown> | null;
+          if (compositionSummary) {
+            const skills = (compositionSummary.skill_count as number) ?? 0;
+            const mcps = (compositionSummary.mcp_count as number) ?? 0;
+            const tools = (compositionSummary.tool_count as number) ?? 0;
             if (skills === 0 && mcps === 0 && tools === 0) {
               flags.push('!  Composition empty — targeted notifications disabled. Call update_composition.');
             }
