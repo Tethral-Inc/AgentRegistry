@@ -11,7 +11,7 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
-        scope: z.enum(['day', 'week']).optional().default('week').describe('Time window (compares current to previous)'),
+        scope: z.enum(['day', 'yesterday', 'week']).optional().default('week').describe('Time window (compares current to previous)'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.5 },

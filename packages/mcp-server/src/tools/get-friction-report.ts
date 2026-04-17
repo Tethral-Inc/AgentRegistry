@@ -11,7 +11,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
-        scope: z.enum(['session', 'day', 'week']).optional().default('week').describe('Time window for the report'),
+        scope: z.enum(['session', 'day', 'yesterday', 'week']).optional().default('week').describe('Time window for the report'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
@@ -125,6 +125,11 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
 
             if (t.failure_count > 0 && !t.recent_anomalies?.length && t.median_duration_ms == null) {
               text += `    ${t.failure_count} failures\n`;
+            }
+
+            // Percentile rank (free tier)
+            if (t.percentile_rank !== undefined) {
+              text += `    faster than ${t.percentile_rank}% of agents on this target\n`;
             }
 
             // Network context — raw rates across the population. No

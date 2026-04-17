@@ -11,7 +11,7 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
-        scope: z.enum(['day', 'week', 'month']).optional().default('week').describe('Time window'),
+        scope: z.enum(['day', 'yesterday', 'week', 'month']).optional().default('week').describe('Time window'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.6 },

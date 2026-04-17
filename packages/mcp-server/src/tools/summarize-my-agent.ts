@@ -61,7 +61,8 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
         text += `  Composition: ${comp?.skill_count ?? 0} skills, ${comp?.mcp_count ?? 0} MCPs, ${comp?.tool_count ?? 0} tools\n`;
       }
 
-      // Friction section — smart scope fallback: if today is empty, try week
+      // Friction section — smart scope fallback: if today is empty, try yesterday,
+      // then week if yesterday is also empty.
       let friction = frictionDay;
       let frictionScope = 'today';
       let frictionNote: string | null = null;
@@ -69,12 +70,23 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
       if (friction && !friction.error) {
         const s = friction.summary as Record<string, unknown> | null;
         if (!s || (s.total_interactions as number) === 0) {
-          // Re-fetch with week scope
-          const frictionWeek = await fetchJSON(`${apiUrl}/api/v1/agent/${id}/friction?scope=week`);
-          if (frictionWeek && !frictionWeek.error) {
-            friction = frictionWeek;
-            frictionScope = 'this week';
-            frictionNote = 'No activity today — showing this week\'s data instead.';
+          // Re-fetch with yesterday scope
+          const frictionYesterday = await fetchJSON(`${apiUrl}/api/v1/agent/${id}/friction?scope=yesterday`);
+          if (frictionYesterday && !frictionYesterday.error) {
+            const sy = frictionYesterday.summary as Record<string, unknown> | null;
+            if (sy && (sy.total_interactions as number) > 0) {
+              friction = frictionYesterday;
+              frictionScope = 'yesterday';
+              frictionNote = 'No activity today — showing yesterday\'s data instead.';
+            } else {
+              // Fall back to week if yesterday is also empty
+              const frictionWeek = await fetchJSON(`${apiUrl}/api/v1/agent/${id}/friction?scope=week`);
+              if (frictionWeek && !frictionWeek.error) {
+                friction = frictionWeek;
+                frictionScope = 'this week';
+                frictionNote = 'No activity today or yesterday — showing this week\'s data instead.';
+              }
+            }
           }
         }
       }

@@ -38,6 +38,12 @@ function getScopeWindow(scope: string): { start: Date; end: Date } {
     case 'day':
       start.setHours(0, 0, 0, 0);
       break;
+    case 'yesterday':
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      break;
     case 'week':
       start.setDate(start.getDate() - 7);
       break;
@@ -53,7 +59,7 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
 
   const scopeParsed = FrictionScope.safeParse(scopeParam);
   if (!scopeParsed.success) {
-    return c.json(makeError('INVALID_INPUT', 'scope must be session, day, or week'), 400);
+    return c.json(makeError('INVALID_INPUT', 'scope must be session, day, yesterday, or week'), 400);
   }
 
   const scope = scopeParsed.data;

@@ -76,9 +76,9 @@ app.post('/receipts', async (c) => {
         transport_type, source,
         queue_wait_ms, retry_count, error_code, response_size_bytes,
         chain_id, chain_position, preceded_by,
-        categories
+        categories, tokens_used
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24)
+        $17, $18, $19, $20, $21, $22, $23, $24, $25)
       ON CONFLICT (receipt_id, created_at) DO NOTHING`,
       [
         receiptId,
@@ -105,6 +105,7 @@ app.post('/receipts', async (c) => {
         receipt.chain_position ?? null,
         receipt.preceded_by ?? null,
         categoriesJson,
+        receipt.interaction.tokens_used ?? null,
       ],
     );
 
