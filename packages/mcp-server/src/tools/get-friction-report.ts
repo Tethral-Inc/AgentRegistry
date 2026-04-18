@@ -114,6 +114,13 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               text += `    ${t.interaction_count} calls, ${t.failure_count} failures = ${(wastedMs / 1000).toFixed(1)}s wasted\n`;
             }
 
+            // Wasted tokens from failed calls — dollar impact of bad
+            // targets, not just time impact. Only surfaced when the
+            // agent supplied tokens_used on log_interaction.
+            if (typeof t.wasted_tokens === 'number' && t.wasted_tokens > 0) {
+              text += `    wasted tokens on failures: ${t.wasted_tokens.toLocaleString()}\n`;
+            }
+
             // Status breakdown
             if (t.status_breakdown) {
               const statuses = Object.entries(t.status_breakdown as Record<string, number>)
@@ -212,8 +219,31 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         // Source breakdown (server self-logs vs agent-initiated)
         if (data.by_source && data.by_source.length > 0) {
           text += `\n── By Source ──\n`;
-          for (const s of data.by_source) {
-            text += `  ${s.source}: ${s.interaction_count} interactions\n`;
+          for (const src of data.by_source) {
+            text += `  ${src.source}: ${src.interaction_count} interactions\n`;
+          }
+        }
+
+        // Classification cuts — these come from categories.{activity_class,
+        // target_type, interaction_purpose} on each receipt and give the
+        // operator a "kind of work" view instead of just a "which target"
+        // view. Only rendered when receipts actually set these fields.
+        if (data.by_activity_class && data.by_activity_class.length > 0) {
+          text += `\n── By Activity Class ──\n`;
+          for (const row of data.by_activity_class) {
+            text += `  ${row.activity_class}: ${row.interaction_count} calls, ${(row.total_duration_ms / 1000).toFixed(1)}s total\n`;
+          }
+        }
+        if (data.by_target_type && data.by_target_type.length > 0) {
+          text += `\n── By Target Type ──\n`;
+          for (const row of data.by_target_type) {
+            text += `  ${row.target_type}: ${row.interaction_count} calls, ${(row.total_duration_ms / 1000).toFixed(1)}s total\n`;
+          }
+        }
+        if (data.by_interaction_purpose && data.by_interaction_purpose.length > 0) {
+          text += `\n── By Interaction Purpose ──\n`;
+          for (const row of data.by_interaction_purpose) {
+            text += `  ${row.interaction_purpose}: ${row.interaction_count} calls, ${(row.total_duration_ms / 1000).toFixed(1)}s total\n`;
           }
         }
 

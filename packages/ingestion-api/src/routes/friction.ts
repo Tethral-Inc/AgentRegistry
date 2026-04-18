@@ -54,6 +54,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
   // Optional transport_type and source filters
   const transportFilter = c.req.query('transport_type');
   const sourceFilter = c.req.query('source');
+  // Environmental probes (background reachability checks) are emitted as
+  // the agent's own agent_id but represent baseline network health, not
+  // agent work. Excluding them by default keeps totals, friction_percentage,
+  // failure_rate, and top targets focused on what the agent actually did.
+  // Opt-in via ?include_env=1 for operators who want the full picture.
+  const includeEnv = c.req.query('include_env') === '1';
 
   // Resolve name or agent_id
   const resolved = await resolveAgentId(identifier);
@@ -70,6 +76,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
   if (sourceFilter) {
     queryParams.push(sourceFilter);
     whereExtra += ` AND source = $${queryParams.length}`;
+  } else if (!includeEnv) {
+    whereExtra += ` AND (source IS NULL OR source != 'environmental')`;
   }
 
   const rows = await query<{
@@ -189,23 +197,34 @@ app.get('/agent/:agent_id/friction', async (c) => {
   }
 
   // ── Chain Analysis (free tier) ──
-  const chainMap = new Map<string, { targets: string[]; durations: number[] }>();
+  // After server-side chain inference (W2.2) every receipt picks up a
+  // chain_id even when it's a lone call, so the raw chainMap is padded
+  // with hundreds of length-1 "chains" that aren't chains at all. We
+  // only surface chainMap entries with ≥2 receipts so chain_count and
+  // avg_chain_length reflect actual multi-step workflows.
+  const chainMapAll = new Map<string, { targets: string[]; durations: number[] }>();
   for (const row of rows) {
     if (!row.chain_id) continue;
-    let chain = chainMap.get(row.chain_id);
-    if (!chain) { chain = { targets: [], durations: [] }; chainMap.set(row.chain_id, chain); }
+    let chain = chainMapAll.get(row.chain_id);
+    if (!chain) { chain = { targets: [], durations: [] }; chainMapAll.set(row.chain_id, chain); }
     chain.targets.push(row.target_system_id);
     chain.durations.push(row.duration_ms ?? 0);
   }
+  const chainMap = new Map(
+    Array.from(chainMapAll.entries()).filter(([, c]) => c.targets.length >= 2),
+  );
 
   let chainAnalysis: { chain_count: number; avg_chain_length: number; total_chain_overhead_ms: number; top_patterns?: unknown[] } | undefined;
   if (chainMap.size > 0) {
     const lengths = Array.from(chainMap.values()).map(c => c.targets.length);
     const avgLen = lengths.reduce((a, b) => a + b, 0) / lengths.length;
-    // Overhead approximation: sum of queue_wait_ms for chained calls
+    // Overhead approximation: sum of queue_wait_ms for chained calls.
+    // Only count rows whose chain survived the length≥2 filter.
     let totalOverhead = 0;
     for (const row of rows) {
-      if (row.chain_id && row.queue_wait_ms) totalOverhead += row.queue_wait_ms;
+      if (row.chain_id && chainMap.has(row.chain_id) && row.queue_wait_ms) {
+        totalOverhead += row.queue_wait_ms;
+      }
     }
     chainAnalysis = {
       chain_count: chainMap.size,
@@ -437,6 +456,10 @@ app.get('/agent/:agent_id/friction', async (c) => {
   // retry_overhead structure so the number the agent sees reflects
   // actual retry behaviour, not self-reported retry behaviour.
   const IMPLICIT_RETRY_WINDOW_SECS = 30;
+  // The current receipt must not already be a self-reported retry —
+  // otherwise the explicit-count pass below would double-count it.
+  // We also skip environmental probes (unless include_env=1) so baseline
+  // reachability checks don't masquerade as agent retries.
   const implicitRetryRows = await query<{ target_system_id: string; implicit_retries: number; wasted_ms: number }>(
     `SELECT cur.target_system_id AS "target_system_id",
             COUNT(*)::int AS "implicit_retries",
@@ -445,6 +468,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
      WHERE cur.emitter_agent_id = $1
        AND cur.created_at >= $2
        AND cur.created_at <= $3
+       AND COALESCE(cur.retry_count, 0) = 0
+       AND ($5::boolean OR cur.source IS NULL OR cur.source != 'environmental')
        AND EXISTS (
          SELECT 1 FROM interaction_receipts prev
          WHERE prev.emitter_agent_id = cur.emitter_agent_id
@@ -454,7 +479,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
            AND prev.created_at >= cur.created_at - (INTERVAL '1 second' * $4)
        )
      GROUP BY cur.target_system_id`,
-    [agentId, start.toISOString(), end.toISOString(), IMPLICIT_RETRY_WINDOW_SECS],
+    [agentId, start.toISOString(), end.toISOString(), IMPLICIT_RETRY_WINDOW_SECS, includeEnv],
   ).catch((err) => { log.debug({ err }, 'Implicit retry detection failed'); return [] as Array<{ target_system_id: string; implicit_retries: number; wasted_ms: number }>; });
 
   // ── Retry Overhead ──
@@ -663,6 +688,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
          AND created_at >= $2
          AND created_at <= $3
          AND categories ? 'activity_class'
+         AND ($4::boolean OR source IS NULL OR source != 'environmental')
        GROUP BY categories->>'activity_class'
        UNION ALL
        SELECT 'target_type' AS "dimension",
@@ -674,6 +700,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
          AND created_at >= $2
          AND created_at <= $3
          AND categories ? 'target_type'
+         AND ($4::boolean OR source IS NULL OR source != 'environmental')
        GROUP BY categories->>'target_type'
        UNION ALL
        SELECT 'interaction_purpose' AS "dimension",
@@ -685,8 +712,9 @@ app.get('/agent/:agent_id/friction', async (c) => {
          AND created_at >= $2
          AND created_at <= $3
          AND categories ? 'interaction_purpose'
+         AND ($4::boolean OR source IS NULL OR source != 'environmental')
        GROUP BY categories->>'interaction_purpose'`,
-      [agentId, start.toISOString(), end.toISOString()],
+      [agentId, start.toISOString(), end.toISOString(), includeEnv],
     );
 
     for (const row of categoryRows) {
