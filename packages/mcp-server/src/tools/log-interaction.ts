@@ -68,14 +68,31 @@ export function logInteractionTool(
         const id = params.agent_id || getAgentId() || await ensureRegistered();
         const nowMs = Date.now();
 
+        // Observation principle: chain structure is derived from session
+        // activity, not reported by the agent. If the agent didn't supply
+        // chain_id/chain_position, we inject the session's own chain
+        // context. A 5-minute idle gap rotates the chain, so unrelated
+        // later work doesn't get fused into an earlier workflow.
+        //
+        // If the agent explicitly provides chain_id, their value wins —
+        // this preserves the option for orchestrators that track chains
+        // themselves.
+        let chainId = params.chain_id;
+        let chainPosition = params.chain_position;
+        if (!chainId) {
+          const ctx = defaultSession.nextChainContext(nowMs);
+          chainId = ctx.chain_id;
+          if (chainPosition === undefined) chainPosition = ctx.chain_position;
+        }
+
         // Consult the correlation window for an automatic preceded_by link
         // if the agent didn't supply one explicitly. The window is a passive
         // buffer: it doesn't analyze, it just holds recent receipts' chain
         // context so in-flight workflows can be stitched at ingest time.
         // If the agent explicitly provided preceded_by, that wins.
         let precededBy = params.preceded_by;
-        if (!precededBy && correlationWindow && params.chain_id) {
-          const found = correlationWindow.findPrecededBy(params.chain_id, nowMs);
+        if (!precededBy && correlationWindow && chainId) {
+          const found = correlationWindow.findPrecededBy(chainId, nowMs);
           if (found) precededBy = found;
         }
 
@@ -119,8 +136,8 @@ export function logInteractionTool(
             },
             transport_type: defaultSession.transportType,
             source: 'agent' as const,
-            chain_id: params.chain_id,
-            chain_position: params.chain_position,
+            chain_id: chainId,
+            chain_position: chainPosition,
             preceded_by: precededBy,
             categories: Object.keys(categories).length > 0 ? categories : undefined,
           }),
@@ -132,14 +149,14 @@ export function logInteractionTool(
         }
 
         // Record the receipt's correlation keys into the window so the
-        // next in-flight receipt in the same chain can find it.
-        // Only record if we have a chain_id — receipts without a chain
-        // don't participate in in-flight linkage.
-        if (correlationWindow && params.chain_id && Array.isArray(data.receipt_ids)) {
+        // next in-flight receipt in the same chain can find it. We now
+        // always have a chain_id (session-inferred if agent didn't set
+        // one), so linkage works uniformly regardless of agent behavior.
+        if (correlationWindow && chainId && Array.isArray(data.receipt_ids)) {
           for (const receiptId of data.receipt_ids) {
             correlationWindow.record({
               receipt_id: String(receiptId),
-              chain_id: params.chain_id,
+              chain_id: chainId,
               target_system_id: params.target_system_id,
               created_at_ms: nowMs,
             });

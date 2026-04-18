@@ -64,7 +64,7 @@ export const AnomalySchema = z.object({
 });
 
 export const TransportType = z.enum(['stdio', 'streamable-http']);
-export const ReceiptSource = z.enum(['agent', 'server']);
+export const ReceiptSource = z.enum(['agent', 'server', 'environmental', 'fetch-observer']);
 
 // Categories: descriptive classification fields about the call.
 // The taxonomy is expected to evolve. Known dimensions get per-field

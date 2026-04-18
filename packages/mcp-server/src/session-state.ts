@@ -19,6 +19,16 @@ const CLIENT_TO_PROVIDER: Record<string, string> = {
   'copilot': 'openai',
 };
 
+/**
+ * Idle timeout (ms) for rotating the session chain_id. When more than this
+ * many milliseconds elapse between successive log_interaction calls, the
+ * session is considered to have moved on to a new logical workflow and a
+ * fresh chain_id is minted. 5 minutes is a pragmatic default: long enough
+ * to encompass multi-step workflows with thinking pauses, short enough
+ * that unrelated later activity doesn't get stitched into the same chain.
+ */
+const CHAIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class SessionState {
   private _agentId: string | null = null;
   private _agentName: string | null = null;
@@ -29,8 +39,47 @@ export class SessionState {
   private _clientType: string | null = null;
   private _deepComposition: boolean = (process.env.ACR_DEEP_COMPOSITION ?? 'true') !== 'false';
 
+  // Session-scoped chain state. The MCP observes session structure
+  // directly — the agent never needs to pass chain_id or chain_position.
+  // Rotated on idle > CHAIN_IDLE_TIMEOUT_MS so a new logical workflow
+  // doesn't get fused into an earlier one.
+  private _sessionChainId: string | null = null;
+  private _sessionCallCount: number = 0;
+  private _lastCallMs: number = 0;
+
   constructor(transportType: 'stdio' | 'streamable-http' = 'stdio') {
     this._transportType = transportType;
+  }
+
+  /**
+   * Return the chain context that a new log_interaction should use when
+   * the agent didn't supply its own. Mints a new chain_id if this is the
+   * first call, or if the last call was more than CHAIN_IDLE_TIMEOUT_MS
+   * ago. Otherwise extends the existing chain.
+   *
+   * This is the session-boundary probe: chains are inferred from the
+   * timing of MCP activity, not reported by the agent.
+   */
+  nextChainContext(nowMs: number = Date.now()): { chain_id: string; chain_position: number } {
+    const idle = this._lastCallMs === 0 ? Infinity : nowMs - this._lastCallMs;
+    if (!this._sessionChainId || idle > CHAIN_IDLE_TIMEOUT_MS) {
+      // Mint a fresh chain_id. 16 hex chars = 64 bits of entropy, plenty
+      // for uniqueness within a single agent. Prefix makes it recognisable
+      // in the database as session-inferred rather than agent-supplied.
+      this._sessionChainId = `s-${randomBytes(8).toString('hex')}`;
+      this._sessionCallCount = 0;
+    }
+    const position = this._sessionCallCount;
+    this._sessionCallCount += 1;
+    this._lastCallMs = nowMs;
+    return { chain_id: this._sessionChainId, chain_position: position };
+  }
+
+  /** Testing hook: reset the session chain state. */
+  resetChain(): void {
+    this._sessionChainId = null;
+    this._sessionCallCount = 0;
+    this._lastCallMs = 0;
   }
 
   get deepComposition(): boolean { return this._deepComposition; }

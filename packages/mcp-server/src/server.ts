@@ -29,6 +29,8 @@ import { gettingStartedTool } from './tools/getting-started.js';
 import { whatsNewTool } from './tools/whats-new.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
+import { installFetchObserver, getUnwrappedFetch } from './middleware/fetch-observer.js';
+import { runEnvironmentalProbe } from './probes/environmental.js';
 import { defaultSession, SessionState } from './session-state.js';
 
 export interface AcrServerOptions {
@@ -101,6 +103,15 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   // Give the session a reference to the server so it can read clientInfo for provider detection
   session.setMcpServer(server);
 
+  // Install the fetch observer before any outbound HTTP. This wraps
+  // globalThis.fetch so every downstream fetch (from tools, skills, or
+  // the agent's own code sharing this process) becomes an observation
+  // event. The observer bypasses its own receipt emissions via a host
+  // match on apiUrl + an AsyncLocalStorage re-entrancy guard, and is
+  // idempotent if createAcrServer is called twice. Opt out with
+  // ACR_DISABLE_FETCH_OBSERVE=1.
+  installFetchObserver({ apiUrl, session });
+
   // Apply self-logging middleware before tool registration
   withSelfLogging(server, () => session, apiUrl);
 
@@ -127,6 +138,26 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   summarizeMyAgentTool(server, apiUrl);
   gettingStartedTool(server, apiUrl);
   whatsNewTool(server, apiUrl);
+
+  // Fire the environmental probe in the background. We register the
+  // agent first (if needed) then fire probes to common public targets
+  // so we have a local baseline of "what does latency from this host
+  // look like when nothing is wrong?" against which to compare the
+  // agent's real interactions. Errors are swallowed: baseline is a
+  // nice-to-have, never a startup blocker. Opt out with
+  // ACR_DISABLE_ENV_PROBE=1.
+  void (async () => {
+    try {
+      await session.ensureRegistered(apiUrl);
+      await runEnvironmentalProbe({
+        apiUrl,
+        session,
+        unwrappedFetch: getUnwrappedFetch(),
+      });
+    } catch {
+      // Silent drop — probe failures must not affect MCP startup.
+    }
+  })();
 
   return server;
 }
