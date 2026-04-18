@@ -1,0 +1,33 @@
+{
+  "name": "@tethral/acr-hook",
+  "version": "0.1.0",
+  "description": "Claude Code hook that emits ACR receipts for every tool call. Observation at the transport boundary — no agent cooperation required.",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "acr-hook": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "acr",
+    "claude-code",
+    "hook",
+    "observation",
+    "agent"
+  ],
+  "author": "Tethral",
+  "license": "MIT"
+}
