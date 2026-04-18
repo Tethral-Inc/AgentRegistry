@@ -88,7 +88,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
     [agentId, start.toISOString(), end.toISOString()],
-  ).catch(() => []);
+  ).catch((err) => { log.warn({ err, agentId }, 'Failure-registry rows query failed'); return []; });
 
   // Group by target.
   type TargetGroup = {
@@ -142,7 +142,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
        AND created_at >= $2
        AND created_at <= $3`,
     [agentId, start.toISOString(), end.toISOString()],
-  ).catch(() => []);
+  ).catch((err) => { log.warn({ err, agentId }, 'Failure-registry totals query failed'); return []; });
 
   const total = totalRows[0]?.total ?? 0;
   const totalFailures = totalRows[0]?.failures ?? 0;

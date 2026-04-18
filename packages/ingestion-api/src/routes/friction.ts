@@ -283,7 +283,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
      FROM interaction_receipts
      WHERE created_at >= $1 AND created_at <= $2`,
     [start.toISOString(), end.toISOString()],
-  ).catch(() => [{ count: '0' }]);
+  ).catch((err) => { log.warn({ err }, 'Agent count query failed — percentile rank unavailable'); return [{ count: '0' }]; });
 
   const totalAgents = parseInt(agentCountResult[0]?.count ?? '0', 10);
 

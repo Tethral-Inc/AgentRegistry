@@ -87,7 +87,7 @@ app.get('/agent/:agent_id/coverage', async (c) => {
      FROM interaction_receipts
      WHERE emitter_agent_id = $1`,
     [agentId],
-  ).catch(() => []);
+  ).catch((err) => { log.warn({ err, agentId }, 'Coverage stats query failed'); return []; });
 
   const s = stats[0] ?? {
     total_receipts: 0,

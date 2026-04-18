@@ -26,6 +26,15 @@ app.post('/composition/update', async (c) => {
 
   const { agent_id, composition, composition_source } = parsed.data;
 
+  // Authorization: the API key must belong to the agent_id being updated.
+  // agentAuth middleware already validated the key and set X-ACR-Auth-Agent;
+  // we check body ownership here because the agent_id lives in the body,
+  // not the URL.
+  const authAgent = c.req.header('X-ACR-Auth-Agent');
+  if (!authAgent || authAgent !== agent_id) {
+    return c.json(makeError('FORBIDDEN', 'API key does not authorize composition updates for this agent.'), 403);
+  }
+
   // Verify agent exists
   const agent = await queryOne<{ agent_id: string }>(
     `SELECT agent_id AS "agent_id" FROM agents WHERE agent_id = $1`,

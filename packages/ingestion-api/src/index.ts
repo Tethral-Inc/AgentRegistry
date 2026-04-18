@@ -56,6 +56,12 @@ app.use('/api/v1/agent/:identifier/trend', agentAuth);
 app.use('/api/v1/agent/:identifier/composition-diff', agentAuth);
 app.use('/api/v1/agent/:identifier/notifications', agentAuth);
 app.use('/api/v1/agent/:identifier/notifications/*', agentAuth);
+app.use('/api/v1/agent/:identifier/subscriptions', agentAuth);
+app.use('/api/v1/agent/:identifier/subscriptions/*', agentAuth);
+// /composition/update reads agent_id from the body, so the middleware
+// only validates the API key; the handler itself checks that
+// X-ACR-Auth-Agent matches body.agent_id before writing.
+app.use('/api/v1/composition/update', agentAuth);
 
 // API routes
 app.route('/api/v1', registerRoute);
