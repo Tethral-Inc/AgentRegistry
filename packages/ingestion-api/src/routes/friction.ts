@@ -23,6 +23,12 @@ function getScopeWindow(scope: string): { start: Date; end: Date } {
     case 'day':
       start.setHours(0, 0, 0, 0);
       break;
+    case 'yesterday':
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      break;
     case 'week':
       start.setDate(start.getDate() - 7);
       break;
@@ -39,7 +45,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
 
   const scopeParsed = FrictionScope.safeParse(scopeParam);
   if (!scopeParsed.success) {
-    return c.json(makeError('INVALID_INPUT', 'scope must be session, day, or week'), 400);
+    return c.json(makeError('INVALID_INPUT', 'scope must be session, day, yesterday, or week'), 400);
   }
 
   const scope = scopeParsed.data;
@@ -85,6 +91,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
     chain_id: string | null;
     chain_position: number | null;
     preceded_by: string | null;
+    tokens_used: number | null;
   }>(
     `SELECT target_system_id AS "target_system_id",
             target_system_type AS "target_system_type",
@@ -102,7 +109,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
             error_code AS "error_code",
             chain_id AS "chain_id",
             chain_position AS "chain_position",
-            preceded_by AS "preceded_by"
+            preceded_by AS "preceded_by",
+            tokens_used AS "tokens_used"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
@@ -134,6 +142,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
     system_type: string;
     durations: number[];
     failures: number;
+    failedTokensUsed: number;
     statuses: Map<string, number>;
     anomalies: Array<{ category: string | null; detail: string | null; timestamp: string }>;
   }>();
@@ -143,21 +152,26 @@ app.get('/agent/:agent_id/friction', async (c) => {
 
   let totalWaitMs = 0;
   let totalFailures = 0;
+  let totalTokensUsed = 0;
 
   for (const row of rows) {
     const dur = row.duration_ms ?? 0;
     totalWaitMs += dur;
     const isFailed = row.status !== 'success';
     if (isFailed) totalFailures++;
+    totalTokensUsed += row.tokens_used ?? 0;
 
     // Target grouping
     let entry = targetMap.get(row.target_system_id);
     if (!entry) {
-      entry = { system_type: row.target_system_type, durations: [], failures: 0, statuses: new Map(), anomalies: [] };
+      entry = { system_type: row.target_system_type, durations: [], failures: 0, failedTokensUsed: 0, statuses: new Map(), anomalies: [] };
       targetMap.set(row.target_system_id, entry);
     }
     entry.durations.push(dur);
-    if (isFailed) entry.failures++;
+    if (isFailed) {
+      entry.failures++;
+      if (row.tokens_used != null) entry.failedTokensUsed += row.tokens_used;
+    }
     entry.statuses.set(row.status, (entry.statuses.get(row.status) ?? 0) + 1);
     if (row.anomaly_flagged && entry.anomalies.length < 3) {
       entry.anomalies.push({
@@ -227,6 +241,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
 
   const totalAgents = parseInt(agentCountResult[0]?.count ?? '0', 10);
 
+  // Compute total wasted tokens across all targets before building targets array
+  let wastedTokensTotal = 0;
+  for (const entry of targetMap.values()) {
+    wastedTokensTotal += entry.failedTokensUsed;
+  }
+
   // Build top_targets sorted by total_duration_ms desc
   const targets = Array.from(targetMap.entries())
     .map(([targetId, data]) => {
@@ -275,6 +295,11 @@ app.get('/agent/:agent_id/friction', async (c) => {
         target.recent_anomalies = data.anomalies;
       }
 
+      // Wasted tokens from failed calls
+      if (data.failedTokensUsed > 0) {
+        target.wasted_tokens = data.failedTokensUsed;
+      }
+
       return target;
     })
     .sort((a, b) => (b.total_duration_ms as number) - (a.total_duration_ms as number))
@@ -308,6 +333,52 @@ app.get('/agent/:agent_id/friction', async (c) => {
       t.network_failure_rate = h.failure_rate;
       t.network_anomaly_rate = h.anomaly_rate;
       t.network_agent_count = h.distinct_agent_count;
+    }
+  }
+
+  // Compute percentile rank: where does this agent's median sit among all
+  // agents for each target in this window? Free tier — useful for everyone.
+  const targetIdsForPercentile = Array.from(targetMap.keys());
+  let percentileMap = new Map<string, number>();
+  if (targetIdsForPercentile.length > 0) {
+    try {
+      const percentileRows = await query<{ target_system_id: string; percentile_rank: number }>(
+        `SELECT target_system_id, percentile_rank
+         FROM (
+           SELECT
+             target_system_id,
+             emitter_agent_id,
+             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms) AS agent_median,
+             PERCENT_RANK() OVER (
+               PARTITION BY target_system_id
+               ORDER BY PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)
+             ) AS percentile_rank
+           FROM interaction_receipts
+           WHERE created_at >= $1
+             AND created_at <= $2
+             AND target_system_id = ANY($3)
+             AND duration_ms IS NOT NULL
+           GROUP BY target_system_id, emitter_agent_id
+           HAVING COUNT(*) >= 3
+         ) ranked
+         WHERE emitter_agent_id = $4`,
+        [start.toISOString(), end.toISOString(), targetIdsForPercentile, agentId],
+      );
+      for (const row of percentileRows) {
+        // PERCENT_RANK 0 = fastest (lowest latency), 1 = slowest.
+        // Invert so the value = "faster than X fraction of agents"
+        percentileMap.set(row.target_system_id, Math.round((1 - row.percentile_rank) * 100));
+      }
+    } catch (err) {
+      log.debug({ err }, 'Percentile rank query failed — non-fatal');
+    }
+  }
+
+  // Attach percentile_rank to each target object
+  for (const t of targets) {
+    const rank = percentileMap.get(t.target_system_id as string);
+    if (rank !== undefined) {
+      t.percentile_rank = rank; // "faster than N% of agents on this target"
     }
   }
 
@@ -555,6 +626,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
       friction_percentage: Math.round(frictionPercentage * 1000) / 1000,
       total_failures: totalFailures,
       failure_rate: rows.length > 0 ? Math.round((totalFailures / rows.length) * 1000) / 1000 : 0,
+      ...(totalTokensUsed > 0 ? { total_tokens_used: totalTokensUsed } : {}),
+      ...(wastedTokensTotal > 0 ? { wasted_tokens: wastedTokensTotal } : {}),
     },
     by_category: categories,
     top_targets: visibleTargets,

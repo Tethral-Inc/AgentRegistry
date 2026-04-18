@@ -54,6 +54,7 @@ export const InteractionSchema = z.object({
   retry_count: z.number().nonnegative().optional().default(0),
   error_code: z.string().max(50).optional(),
   response_size_bytes: z.number().nonnegative().optional(),
+  tokens_used: z.number().int().min(0).optional(),
 });
 
 export const AnomalySchema = z.object({

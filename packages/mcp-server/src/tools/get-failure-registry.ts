@@ -1,13 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
-
-async function resolveId(nameOrId: string): Promise<string> {
-  if (nameOrId.startsWith('acr_') || nameOrId.startsWith('pseudo_')) return nameOrId;
-  const res = await fetch(`${getApiUrl()}/api/v1/agent/${encodeURIComponent(nameOrId)}`);
-  if (!res.ok) throw new Error(`Agent "${nameOrId}" not found`);
-  return ((await res.json()) as { agent_id: string }).agent_id;
-}
+import { getAgentName, getAuthHeaders } from '../state.js';
+import { resolveAgentId } from '../utils/resolve-agent-id.js';
 
 export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -17,15 +11,18 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
-        scope: z.enum(['day', 'week', 'month']).optional().default('week').describe('Time window'),
+        scope: z.enum(['day', 'yesterday', 'week', 'month']).optional().default('week').describe('Time window'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.6 },
     },
     async ({ agent_id, agent_name, scope }) => {
       let id: string;
+      let displayName: string;
       try {
-        id = agent_name ? await resolveId(agent_name) : (agent_id || getAgentId() || await ensureRegistered());
+        const resolved = await resolveAgentId({ agentId: agent_id, agentName: agent_name });
+        id = resolved.id;
+        displayName = resolved.displayName;
       } catch (err) {
         return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
       }
@@ -37,7 +34,7 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
           return { content: [{ type: 'text' as const, text: `Failure registry error: ${errText}` }] };
         }
         const data = await res.json() as Record<string, unknown>;
-        const displayName = (data.name as string) || agent_name || getAgentName() || id;
+        displayName = (data.name as string) || agent_name || getAgentName() || displayName;
 
         const failures = data.failures as Array<Record<string, unknown>> ?? [];
 

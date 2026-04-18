@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAgentName, getApiUrl , getAuthHeaders } from '../state.js';
+import { getAgentName, getAuthHeaders } from '../state.js';
+import { resolveAgentId } from '../utils/resolve-agent-id.js';
 
 const STATUS_TRANSLATIONS: Record<string, string> = {
   success: 'success',
@@ -11,17 +12,6 @@ const STATUS_TRANSLATIONS: Record<string, string> = {
 
 // Anomaly categories are passed through as-is from the agent's report.
 // No synthetic descriptions — the category name is the data.
-
-async function resolveId(agentName: string | undefined, agentId: string | undefined, apiUrl: string): Promise<string> {
-  if (agentName) {
-    if (agentName.startsWith('acr_') || agentName.startsWith('pseudo_')) return agentName;
-    const res = await fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(agentName)}`);
-    if (!res.ok) throw new Error(`Agent "${agentName}" not found`);
-    const data = await res.json() as { agent_id: string };
-    return data.agent_id;
-  }
-  return agentId || getAgentId() || await ensureRegistered();
-}
 
 export function getInteractionLogTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -45,8 +35,11 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
     },
     async ({ agent_id, agent_name, receipt_id, mode, limit, target, category, status, anomaly_only, since }) => {
       let id: string;
+      let resolvedDisplayName: string;
       try {
-        id = await resolveId(agent_name, agent_id, apiUrl);
+        const resolved = await resolveAgentId({ agentId: agent_id, agentName: agent_name });
+        id = resolved.id;
+        resolvedDisplayName = resolved.displayName;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return { content: [{ type: 'text' as const, text: `Error: ${msg}` }] };
@@ -74,7 +67,7 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
           return { content: [{ type: 'text' as const, text: `Error: ${data.error.message}` }] };
         }
 
-        const displayName = data.name || agent_name || getAgentName() || id;
+        const displayName = data.name || agent_name || getAgentName() || resolvedDisplayName;
 
         // Detail mode — single receipt
         if (receipt_id || mode === 'detail') {

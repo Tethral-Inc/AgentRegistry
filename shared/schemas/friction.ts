@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const FrictionScope = z.enum(['session', 'day', 'week']);
+export const FrictionScope = z.enum(['session', 'day', 'yesterday', 'week']);
 
 export const FrictionSummarySchema = z.object({
   total_interactions: z.number(),

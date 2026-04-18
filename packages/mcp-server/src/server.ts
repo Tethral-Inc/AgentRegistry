@@ -18,13 +18,15 @@ import { getSkillVersionsTool } from './tools/get-skill-versions.js';
 import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
 import { acknowledgeThreatTool } from './tools/acknowledge-threat.js';
-import { disableDeepCompositionTool } from './tools/disable-deep-composition.js';
+import { disableDeepCompositionTool } from './tools/configure-deep-composition.js';
 import { getProfileTool } from './tools/get-profile.js';
 import { getCoverageTool } from './tools/get-coverage.js';
 import { getStableCorridorsTool } from './tools/get-stable-corridors.js';
 import { getFailureRegistryTool } from './tools/get-failure-registry.js';
 import { getTrendTool } from './tools/get-trend.js';
 import { summarizeMyAgentTool } from './tools/summarize-my-agent.js';
+import { gettingStartedTool } from './tools/getting-started.js';
+import { whatsNewTool } from './tools/whats-new.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { defaultSession, SessionState } from './session-state.js';
@@ -123,6 +125,8 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getFailureRegistryTool(server, apiUrl);
   getTrendTool(server, apiUrl);
   summarizeMyAgentTool(server, apiUrl);
+  gettingStartedTool(server, apiUrl);
+  whatsNewTool(server, apiUrl);
 
   return server;
 }

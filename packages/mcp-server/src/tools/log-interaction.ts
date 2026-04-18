@@ -49,7 +49,7 @@ export function logInteractionTool(
         response_size_bytes: z.number().nonnegative().optional().describe('Response payload size in bytes'),
         chain_id: z.string().max(64).optional().describe('ID linking sequential calls in a chain. Same chain_id for all calls in a multi-step workflow.'),
         chain_position: z.number().nonnegative().optional().describe('Position in chain (0-indexed). First call = 0, second = 1.'),
-        preceded_by: z.string().optional().describe('target_system_id of the call that immediately preceded this one.'),
+        preceded_by: z.string().optional().describe("The target_system_id of the immediately preceding call in a multi-step chain (e.g. 'api:openai.com'). Use this to link sequential calls so ACR can compute directional amplification — how much slower a call becomes when preceded by another. Pass the target of the previous step, not a receipt ID."),
         // Category classification (all optional, all descriptive, all non-content)
         target_type: z.string().max(64).optional().describe('More granular target type, e.g. "api.llm_provider", "api.payment", "mcp.database".'),
         activity_class: z.string().max(32).optional().describe('Kind of work the call represents. Examples: language, math, visuals, creative, deterministic, sound. Expandable — add new values as they emerge.'),
@@ -58,6 +58,7 @@ export function logInteractionTool(
         workflow_phase: z.string().max(32).optional().describe('If the agent runs in phases. Examples: plan, act, reflect.'),
         data_shape: z.string().max(32).optional().describe('Content-free description of what kind of data moved. Examples: tabular, text, binary, structured_json, stream, image, audio.'),
         criticality: z.string().max(32).optional().describe('How essential this call was to the workflow. Examples: core, enrichment, debug.'),
+        tokens_used: z.number().int().min(0).optional().describe('Total tokens used in this interaction (input + output). Optional — enables wasted-token callouts in the friction report.'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       _meta: { priorityHint: 0.9 },
@@ -110,6 +111,7 @@ export function logInteractionTool(
               retry_count: params.retry_count,
               error_code: params.error_code,
               response_size_bytes: params.response_size_bytes,
+              tokens_used: params.tokens_used,
             },
             anomaly: {
               flagged: params.anomaly_flagged,
