@@ -14,14 +14,19 @@ async function fetchJsonSafe(url: string, headers: Record<string, string>): Prom
 }
 
 const SIGNAL_COSTS: Record<string, string> = {
+  log_interaction: 'every friction, coverage, trend, and chain lens',
   duration_ms: 'latency analysis and friction report',
   status: 'failure registry and trend',
   anomaly_flagged: 'anomaly signal notifications',
   chain_id: 'chain analysis and chain overhead',
-  error_code: 'detailed failure breakdown',
-  retry_count: 'retry waste analysis',
-  queue_wait_ms: 'queue wait vs execution split',
-  response_size_bytes: 'payload size tracking',
+  'interaction.category': 'category breakdowns in the friction report',
+  'interaction.queue_wait_ms': 'queue wait vs execution split',
+  'interaction.retry_count': 'explicit retry waste analysis (implicit retries are still detected from timing)',
+  'interaction.error_code': 'detailed failure breakdown',
+  'interaction.tokens_used': 'wasted-token callouts in the friction report',
+  'target.system_type': 'target-type-aware grouping',
+  'categories.activity_class': 'kind-of-work breakdowns (language/math/visuals/etc)',
+  'categories.*': 'richer classification slices in the friction report',
 };
 
 export function gettingStartedTool(server: McpServer, apiUrl: string) {

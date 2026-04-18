@@ -63,6 +63,21 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         text += `  Total wait: ${(s.total_wait_time_ms / 1000).toFixed(1)}s\n`;
         text += `  Friction: ${s.friction_percentage.toFixed(2)}% of active time\n`;
         text += `  Failures: ${s.total_failures} (${(s.failure_rate * 100).toFixed(1)}% rate)\n`;
+        // Token usage: surface total + wasted-on-failure so the operator can
+        // see the dollar impact of bad targets, not just the time impact.
+        // Rendered whenever the server reports them (agent must supply
+        // tokens_used on log_interaction).
+        if (typeof s.total_tokens_used === 'number' && s.total_tokens_used > 0) {
+          text += `  Tokens used: ${s.total_tokens_used.toLocaleString()}\n`;
+        }
+        if (typeof s.wasted_tokens === 'number' && s.wasted_tokens > 0) {
+          const wastePct = (s.total_tokens_used ?? 0) > 0
+            ? ((s.wasted_tokens / s.total_tokens_used) * 100).toFixed(1)
+            : null;
+          text += `  Wasted tokens (on failed calls): ${s.wasted_tokens.toLocaleString()}`;
+          if (wastePct) text += ` (${wastePct}% of total)`;
+          text += `\n`;
+        }
 
         // Category breakdown
         if (data.by_category && data.by_category.length > 0) {
@@ -134,18 +149,51 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               text += `    faster than ${t.percentile_rank}% of agents on this target\n`;
             }
 
-            // Network context — raw rates across the population. No
-            // synthetic health_status label (the inherited column is
-            // ignored here; see inherited-drift note in
-            // proposals/open-items-plan.md).
+            // Network context — actionable comparison instead of a raw
+            // rate dump. We only compare when both samples are big enough
+            // to be meaningful:
+            //   - this agent has >= 10 interactions with the target
+            //   - the network side has >= 3 agents and >= 50 interactions
+            // Below those thresholds we surface the network rate without
+            // a verdict, so the operator sees the number but isn't misled
+            // by a 1-agent "network".
             if (
               t.network_failure_rate != null ||
               t.network_anomaly_rate != null ||
               t.network_agent_count != null
             ) {
-              text += `    population: ${t.network_agent_count ?? 0} agents`;
-              text += `, failure rate ${((t.network_failure_rate ?? 0) * 100).toFixed(1)}%`;
+              const agentFailRate = t.interaction_count > 0
+                ? (t.failure_count / t.interaction_count)
+                : null;
+              const netFailRate = t.network_failure_rate ?? null;
+              const netAgents = t.network_agent_count ?? 0;
+              const netInteractions = (t.network_interaction_count as number | undefined) ?? null;
+              const enoughLocal = t.interaction_count >= 10;
+              const enoughNetwork = netAgents >= 3 && (netInteractions == null || netInteractions >= 50);
+
+              text += `    population: ${netAgents} agents`;
+              text += `, network failure rate ${((netFailRate ?? 0) * 100).toFixed(1)}%`;
               text += `, anomaly rate ${((t.network_anomaly_rate ?? 0) * 100).toFixed(1)}%\n`;
+
+              if (agentFailRate != null && netFailRate != null && enoughLocal && enoughNetwork) {
+                const yoursPct = agentFailRate * 100;
+                const netPct = netFailRate * 100;
+                let verdict: string;
+                if (netPct < 5 && yoursPct > netPct * 2) {
+                  verdict = 'likely your config/network — most agents succeed here';
+                } else if (yoursPct > 0 && netPct > yoursPct * 2) {
+                  verdict = 'better than the network on this target';
+                } else if (netPct >= 20 && yoursPct >= 20) {
+                  verdict = 'network-wide issue — this target is failing for many agents';
+                } else {
+                  verdict = 'consistent with the network';
+                }
+                text += `    you ${yoursPct.toFixed(1)}% vs network ${netPct.toFixed(1)}% → ${verdict}\n`;
+              } else if (!enoughLocal) {
+                text += `    (need ≥10 local interactions for a network comparison; you have ${t.interaction_count})\n`;
+              } else if (!enoughNetwork) {
+                text += `    (not enough network data for a verdict yet)\n`;
+              }
             }
           }
         }
@@ -198,14 +246,27 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           text += `  None recorded this week.\n`;
         }
 
-        // Retry Overhead (CHANGE 5: always render header; pro)
+        // Retry Overhead. Totals (including implicit retries detected at
+        // the transport boundary) are now free-tier. Per-target breakdown
+        // remains pro-tier. If the agent didn't explicitly report any
+        // retries but implicit ones were detected, surface the implicit
+        // count so the operator sees what the observer caught.
         text += '\n── Retry Overhead ──\n';
         if (data.retry_overhead) {
           const ro = data.retry_overhead;
-          text += `  Total retries: ${ro.total_retries}\n`;
+          text += `  Total retries: ${ro.total_retries}`;
+          if (typeof ro.implicit_retries === 'number' && typeof ro.explicit_retries === 'number') {
+            text += ` (${ro.explicit_retries} reported, ${ro.implicit_retries} detected from timing)`;
+          }
+          text += `\n`;
           text += `  Wasted time: ${(ro.total_wasted_ms / 1000).toFixed(1)}s\n`;
-          for (const t of ro.top_retry_targets) {
-            text += `    ${t.target_system_id}: ${t.retry_count} retries, ${t.wasted_ms}ms wasted\n`;
+          if (typeof ro.detection_window_seconds === 'number') {
+            text += `  (implicit retry = failure + same target within ${ro.detection_window_seconds}s)\n`;
+          }
+          if (Array.isArray(ro.top_retry_targets)) {
+            for (const t of ro.top_retry_targets) {
+              text += `    ${t.target_system_id}: ${t.retry_count} retries, ${t.wasted_ms}ms wasted\n`;
+            }
           }
         } else {
           text += `  None recorded this week.\n`;
