@@ -3,6 +3,20 @@ import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 
+/** "1h 12m", "12m 4s", "4.2s" — picks the right unit for the magnitude. */
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0s';
+  if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`;
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const remSec = sec % 60;
+  if (min < 60) return remSec > 0 ? `${min}m ${remSec}s` : `${min}m`;
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  return remMin > 0 ? `${hr}h ${remMin}m` : `${hr}h`;
+}
+
 export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_friction_report',
@@ -57,10 +71,22 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Tier: ${data.tier || 'free'}\n\n`;
 
-        // Summary metrics (CHANGE 6: add absolute seconds next to total_wait_time_ms)
+        // Summary metrics
         text += `── Summary ──\n`;
         text += `  Interactions: ${s.total_interactions}\n`;
-        text += `  Total wait: ${(s.total_wait_time_ms / 1000).toFixed(1)}s\n`;
+        text += `  Total wait: ${formatDuration(s.total_wait_time_ms)}\n`;
+        // Active span: the burst-union of interaction timestamps, which is
+        // the denominator of friction_percentage. Rendering it turns the %
+        // from a ratio into a number the operator can act on.
+        // "3.1% of 4h active" ≠ "3.1% of 40s active".
+        if (typeof s.active_span_ms === 'number' && s.active_span_ms > 0) {
+          const scopeStartMs = new Date(data.period_start).getTime();
+          const scopeEndMs = new Date(data.period_end).getTime();
+          const scopeSpanMs = Math.max(scopeEndMs - scopeStartMs, 0);
+          text += `  Active span: ${formatDuration(s.active_span_ms)}`;
+          if (scopeSpanMs > 0) text += ` of ${formatDuration(scopeSpanMs)} (${scope} scope)`;
+          text += `\n`;
+        }
         // friction_percentage can exceed 100% when calls run in parallel
         // (wall-clock wait exceeds active span). Show the raw number so
         // the operator sees the signal, but annotate the cause so it
@@ -93,6 +119,23 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             const avgMs = cat.interaction_count > 0 ? Math.round(cat.total_duration_ms / cat.interaction_count) : 0;
             text += `  ${cat.category}: ${cat.interaction_count} calls, ${(cat.total_duration_ms / 1000).toFixed(1)}s total, avg ${avgMs}ms`;
             if (cat.failure_count > 0) text += `, ${cat.failure_count} failures`;
+            text += `\n`;
+          }
+        }
+
+        // Error codes — concrete + actionable. "401: 6 hits, mostly Slack"
+        // is the kind of signal that lets the operator fix the failure,
+        // versus just knowing the failure_rate %.
+        if (data.by_error_code && data.by_error_code.length > 0) {
+          text += `\n── Failures by Error Code ──\n`;
+          for (const ec of data.by_error_code) {
+            text += `  ${ec.error_code}: ${ec.count}`;
+            if (ec.top_target) {
+              const allOne = ec.top_target_count === ec.count;
+              text += allOne
+                ? ` (all ${ec.top_target})`
+                : ` (mostly ${ec.top_target}: ${ec.top_target_count})`;
+            }
             text += `\n`;
           }
         }

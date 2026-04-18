@@ -157,6 +157,11 @@ app.get('/agent/:agent_id/friction', async (c) => {
   // Group by category
   const categoryMap = new Map<string, { count: number; total_ms: number; failures: number }>();
 
+  // Group by error_code (only populated on failures). Lets the user see
+  // "401: 6 hits, all Slack" instead of just a failure percentage —
+  // concrete + actionable, same data we already loaded.
+  const errorCodeMap = new Map<string, Map<string, number>>();
+
   let totalWaitMs = 0;
   let totalFailures = 0;
   let totalTokensUsed = 0;
@@ -194,7 +199,30 @@ app.get('/agent/:agent_id/friction', async (c) => {
     cat.total_ms += dur;
     if (isFailed) cat.failures++;
     categoryMap.set(row.interaction_category, cat);
+
+    // Error-code grouping (failures only; error_code is null for success)
+    if (isFailed && row.error_code) {
+      let perTarget = errorCodeMap.get(row.error_code);
+      if (!perTarget) { perTarget = new Map(); errorCodeMap.set(row.error_code, perTarget); }
+      perTarget.set(row.target_system_id, (perTarget.get(row.target_system_id) ?? 0) + 1);
+    }
   }
+
+  // Flatten error code map into sorted summary. Top target is surfaced
+  // per code so the user sees "401: 6 (mostly Slack)" at a glance.
+  const byErrorCode = Array.from(errorCodeMap.entries())
+    .map(([error_code, perTarget]) => {
+      let count = 0;
+      let topTarget = '';
+      let topTargetCount = 0;
+      for (const [tid, c] of perTarget) {
+        count += c;
+        if (c > topTargetCount) { topTargetCount = c; topTarget = tid; }
+      }
+      return { error_code, count, top_target: topTarget, top_target_count: topTargetCount };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
   // ── Chain Analysis (free tier) ──
   // After server-side chain inference (W2.2) every receipt picks up a
@@ -613,10 +641,14 @@ app.get('/agent/:agent_id/friction', async (c) => {
     }
   }
 
-  // Free tier: summary + top 3 targets, no baselines
-  // Paid tier: top 10 targets with baselines + population comparison
-  const visibleTargets = isPaidTier ? targets : targets.slice(0, 3).map((t) => {
-    // Strip baseline fields from free tier
+  // Free tier: top 10 targets, no baseline comparisons.
+  // Paid tier: top 10 targets WITH baselines (vs_baseline, volatility, etc.)
+  // and drift-over-time analysis.
+  //
+  // The free/paid split is the comparison, not the count. Capping free-tier
+  // at 3 targets hid data the user already owns, and didn't protect any
+  // paid differentiator — the paywall value is the population baseline.
+  const visibleTargets = isPaidTier ? targets : targets.map((t) => {
     const { vs_baseline, baseline_median_ms, baseline_p95_ms, volatility, ...rest } = t as Record<string, unknown>;
     return rest;
   });
@@ -757,6 +789,10 @@ app.get('/agent/:agent_id/friction', async (c) => {
     summary: {
       total_interactions: rows.length,
       total_wait_time_ms: totalWaitMs,
+      // Raw active-span (burst-union) so the denominator of friction_percentage
+      // is visible to the user. Without this the % is uninterpretable —
+      // 3% of 4h means something different from 3% of 40s.
+      active_span_ms: activeMs,
       friction_percentage: Math.round(frictionPercentage * 1000) / 1000,
       total_failures: totalFailures,
       failure_rate: rows.length > 0 ? Math.round((totalFailures / rows.length) * 1000) / 1000 : 0,
@@ -764,6 +800,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
       ...(wastedTokensTotal > 0 ? { wasted_tokens: wastedTokensTotal } : {}),
     },
     by_category: categories,
+    by_error_code: byErrorCode,
     top_targets: visibleTargets,
     by_transport: byTransport,
     by_source: bySource,
