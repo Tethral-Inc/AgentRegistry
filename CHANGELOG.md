@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2.2.0] — @tethral/acr-mcp — 2026-04-17
+
 ### Added
 - `whats_new` tool: morning briefing combining yesterday's performance, degraded targets this week, today's activity, and unread notifications in one call
-- `getting_started` tool: step-by-step setup checklist covering registration, logging, composition, coverage, and next action
+- `getting_started` tool: step-by-step setup wizard covering registration, logging, composition, and signal coverage — with the next action to take
 - Health card in `get_my_agent`: friction flags, composition empty warning, coverage gaps, and unread notification count shown inline
 - `yesterday` scope across friction, trend, and stable corridors tools
 - `tokens_used` field in `log_interaction` to enable wasted-token callouts in the friction report
