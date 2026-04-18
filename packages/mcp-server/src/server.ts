@@ -27,6 +27,7 @@ import { getTrendTool } from './tools/get-trend.js';
 import { summarizeMyAgentTool } from './tools/summarize-my-agent.js';
 import { gettingStartedTool } from './tools/getting-started.js';
 import { whatsNewTool } from './tools/whats-new.js';
+import { getCompositionDiffTool } from './tools/get-composition-diff.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { installFetchObserver, getUnwrappedFetch } from './middleware/fetch-observer.js';
@@ -138,6 +139,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   summarizeMyAgentTool(server, apiUrl);
   gettingStartedTool(server, apiUrl);
   whatsNewTool(server, apiUrl);
+  getCompositionDiffTool(server, apiUrl);
 
   // Fire the environmental probe in the background. We register the
   // agent first (if needed) then fire probes to common public targets
