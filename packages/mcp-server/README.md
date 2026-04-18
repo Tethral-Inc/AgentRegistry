@@ -2,6 +2,8 @@
 
 MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) network. Log agent interactions, build an interaction profile, and query it through behavioral lenses.
 
+![ACR MCP demo](./demo.svg)
+
 ## Quick Start
 
 Add to your project (`.mcp.json`):

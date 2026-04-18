@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="490" viewBox="0 0 760 490">
+  <style>
+    @keyframes l00{0%,3.8%{opacity:0}4.2%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l01{0%,6.9%{opacity:0}7.3%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l02{0%,8.4%{opacity:0}8.8%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l03{0%,10.0%{opacity:0}10.4%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l04{0%,13.0%{opacity:0}13.5%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l05{0%,14.6%{opacity:0}15.0%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l06{0%,16.1%{opacity:0}16.5%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l07{0%,17.6%{opacity:0}18.1%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l08{0%,20.7%{opacity:0}21.1%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l09{0%,22.3%{opacity:0}22.7%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l10{0%,23.8%{opacity:0}24.2%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l11{0%,34.6%{opacity:0}35.0%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l12{0%,37.6%{opacity:0}38.1%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l13{0%,39.2%{opacity:0}39.6%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l14{0%,42.3%{opacity:0}42.7%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l15{0%,43.8%{opacity:0}44.2%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l16{0%,45.3%{opacity:0}45.8%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes l17{0%,46.9%{opacity:0}47.3%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+    @keyframes cur{0%,80.7%{opacity:1}84.6%,100%{opacity:0}}
+    .l{opacity:0}
+    .l00{animation:l00 13s infinite}
+    .l01{animation:l01 13s infinite}
+    .l02{animation:l02 13s infinite}
+    .l03{animation:l03 13s infinite}
+    .l04{animation:l04 13s infinite}
+    .l05{animation:l05 13s infinite}
+    .l06{animation:l06 13s infinite}
+    .l07{animation:l07 13s infinite}
+    .l08{animation:l08 13s infinite}
+    .l09{animation:l09 13s infinite}
+    .l10{animation:l10 13s infinite}
+    .l11{animation:l11 13s infinite}
+    .l12{animation:l12 13s infinite}
+    .l13{animation:l13 13s infinite}
+    .l14{animation:l14 13s infinite}
+    .l15{animation:l15 13s infinite}
+    .l16{animation:l16 13s infinite}
+    .l17{animation:l17 13s infinite}
+  </style>
+
+  <!-- Full background -->
+  <rect width="760" height="490" rx="8" fill="#1e1e2e"/>
+
+  <!-- Title bar -->
+  <rect x="0" y="0" width="760" height="36" rx="8" fill="#313244"/>
+  <!-- Cover bottom-rounded corners of title bar -->
+  <rect x="0" y="20" width="760" height="16" fill="#313244"/>
+
+  <!-- Traffic lights -->
+  <circle cx="20" cy="18" r="6" fill="#f38ba8"/>
+  <circle cx="40" cy="18" r="6" fill="#f9e2af"/>
+  <circle cx="60" cy="18" r="6" fill="#a6e3a1"/>
+
+  <!-- Title -->
+  <text x="380" y="23" text-anchor="middle" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="11" fill="#6c7086">@tethral/acr-mcp &#x2014; claude</text>
+
+  <!-- Content lines -->
+  <text class="l l00" x="20" y="58" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#a6e3a1">&#x276F; </tspan><tspan fill="#cdd6f4">get_my_agent</tspan>
+  </text>
+
+  <text class="l l01" x="20" y="94" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#cba6f7">anthropic-amber-orca</tspan><tspan fill="#6c7086"> (anthropic)</tspan>
+  </text>
+
+  <text class="l l02" x="20" y="112" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">ID: </tspan><tspan fill="#cdd6f4">acr_c238e3345772</tspan><tspan fill="#6c7086">  &#xB7;  Status: </tspan><tspan fill="#a6e3a1">active</tspan><tspan fill="#6c7086">  &#xB7;  Last active: </tspan><tspan fill="#cdd6f4">4 min ago</tspan>
+  </text>
+
+  <text class="l l03" x="20" y="130" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">Dashboard: </tspan><tspan fill="#89dceb">https://dashboard.acr.nfkey.ai/agents/acr_c238e3345772</tspan>
+  </text>
+
+  <text class="l l04" x="20" y="166" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#89dceb">&#x2500;&#x2500; Health &#x2500;&#x2500;</tspan>
+  </text>
+
+  <text class="l l05" x="20" y="184" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#fab387">  &#x26A0;  </tspan><tspan fill="#cdd6f4">api:flaky-test.example.com</tspan><tspan fill="#6c7086"> &#x2014; </tspan><tspan fill="#f38ba8">71% of wait time, 100% failure</tspan>
+  </text>
+
+  <text class="l l06" x="20" y="202" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">       Network-wide failure &#x2014; infrastructure, not your code</tspan>
+  </text>
+
+  <text class="l l07" x="20" y="220" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#fab387">  !  </tspan><tspan fill="#6c7086">Composition empty &#x2014; call </tspan><tspan fill="#cdd6f4">update_composition</tspan><tspan fill="#6c7086"> for targeted alerts</tspan>
+  </text>
+
+  <text class="l l08" x="20" y="256" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#89dceb">&#x2500;&#x2500; Available Tools &#x2500;&#x2500;</tspan>
+  </text>
+
+  <text class="l l09" x="20" y="274" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">  Your agent:   </tspan><tspan fill="#cdd6f4">get_my_agent &#xB7; register_agent &#xB7; update_composition</tspan>
+  </text>
+
+  <text class="l l10" x="20" y="292" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">  Your profile: </tspan><tspan fill="#cdd6f4">get_friction_report &#xB7; summarize_my_agent &#xB7; get_coverage &#x2026;</tspan>
+  </text>
+
+  <text class="l l11" x="20" y="328" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#a6e3a1">&#x276F; </tspan><tspan fill="#cdd6f4">get_friction_report</tspan><tspan fill="#6c7086"> (scope: week)</tspan>
+  </text>
+
+  <text class="l l12" x="20" y="364" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">Friction Report &#x2014; </tspan><tspan fill="#cba6f7">anthropic-amber-orca</tspan><tspan fill="#6c7086"> (week, Apr 10&#x2013;17)</tspan>
+  </text>
+
+  <text class="l l13" x="20" y="382" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#89dceb">&#x2500;&#x2500; Summary &#x2500;&#x2500;  </tspan><tspan fill="#cdd6f4">38 interactions &#xB7; </tspan><tspan fill="#f38ba8">2 failures (5.3%)</tspan><tspan fill="#cdd6f4"> &#xB7; 42.4s total wait</tspan>
+  </text>
+
+  <text class="l l14" x="20" y="418" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#89dceb">&#x2500;&#x2500; Top Targets &#x2500;&#x2500;</tspan>
+  </text>
+
+  <text class="l l15" x="20" y="436" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">  </tspan><tspan fill="#f38ba8">api:flaky-test.example.com</tspan><tspan fill="#6c7086">  1 call &#xB7; 71% of wait (30.0s) &#xB7; 100% failure</tspan>
+  </text>
+
+  <text class="l l16" x="20" y="454" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">    30.0s wasted &#xB7; network-wide &#xB7; faster than </tspan><tspan fill="#f38ba8">0%</tspan><tspan fill="#6c7086"> of agents on this target</tspan>
+  </text>
+
+  <text class="l l17" x="20" y="472" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">
+    <tspan fill="#6c7086">  </tspan><tspan fill="#a6e3a1">mcp:acr-registry</tspan><tspan fill="#6c7086">  34 calls &#xB7; 28% of wait &#xB7; faster than </tspan><tspan fill="#a6e3a1">65%</tspan><tspan fill="#6c7086"> of agents</tspan>
+  </text>
+
+  <!-- Blinking cursor -->
+  <g style="animation:cur 13s infinite">
+    <text x="20" y="490" fill="#cdd6f4" style="animation:blink 1s infinite" font-family="'SF Mono','Cascadia Code','Fira Code',Menlo,monospace" font-size="13">&#x258B;</text>
+  </g>
+</svg>
