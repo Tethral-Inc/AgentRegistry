@@ -50,7 +50,6 @@ app.get('/agent/:agent_id/friction', async (c) => {
 
   const scope = scopeParsed.data;
   const { start, end } = getScopeWindow(scope);
-  const scopeMs = end.getTime() - start.getTime();
 
   // Optional transport_type and source filters
   const transportFilter = c.req.query('transport_type');
@@ -305,7 +304,46 @@ app.get('/agent/:agent_id/friction', async (c) => {
     .sort((a, b) => (b.total_duration_ms as number) - (a.total_duration_ms as number))
     .slice(0, 10);
 
-  const frictionPercentage = scopeMs > 0 ? (totalWaitMs / scopeMs) * 100 : 0;
+  // Burst-based active span for friction_percentage denominator.
+  //
+  // The original formula used the full scope window (e.g. 24h for scope=day)
+  // as the denominator, which made friction_percentage dominated by idle
+  // time — agents that worked for 20 minutes inside a 24h window would
+  // report ~0% friction no matter how slow the work was. The observation
+  // principle says: the denominator should be the time the agent was
+  // actually active, not the wall-clock window.
+  //
+  // We compute active time by sorting receipt timestamps, grouping them
+  // into bursts separated by gaps > BURST_GAP_MS, and summing each
+  // burst's duration (max - min). A single-receipt burst contributes the
+  // receipt's own duration. We floor the total at MIN_ACTIVE_MS so a
+  // handful of fast calls doesn't produce a denominator so small the
+  // percentage explodes past 100%.
+  const BURST_GAP_MS = 10 * 60 * 1000; // 10 minutes
+  const MIN_ACTIVE_MS = 60 * 1000;     // 60 seconds floor
+  const timestamps = rows
+    .map((r) => ({ ts: new Date(r.created_at).getTime(), dur: r.duration_ms ?? 0 }))
+    .filter((r) => Number.isFinite(r.ts))
+    .sort((a, b) => a.ts - b.ts);
+
+  let activeMs = 0;
+  if (timestamps.length > 0) {
+    let burstStart = timestamps[0]!.ts;
+    let burstEnd = timestamps[0]!.ts + (timestamps[0]!.dur ?? 0);
+    for (let i = 1; i < timestamps.length; i++) {
+      const { ts, dur } = timestamps[i]!;
+      if (ts - burstEnd > BURST_GAP_MS) {
+        activeMs += Math.max(burstEnd - burstStart, 0);
+        burstStart = ts;
+        burstEnd = ts + (dur ?? 0);
+      } else {
+        burstEnd = Math.max(burstEnd, ts + (dur ?? 0));
+      }
+    }
+    activeMs += Math.max(burstEnd - burstStart, 0);
+  }
+  const activeSpanMs = Math.max(activeMs, MIN_ACTIVE_MS);
+  const frictionPercentage = (totalWaitMs / activeSpanMs) * 100;
 
   // Enrich targets with network-wide system health
   const targetIds = Array.from(targetMap.keys());
@@ -315,11 +353,13 @@ app.get('/agent/:agent_id/friction', async (c) => {
         failure_rate: number;
         anomaly_rate: number;
         distinct_agent_count: number;
+        total_interactions: number;
       }>(
         `SELECT system_id AS "system_id",
                 failure_rate AS "failure_rate",
                 anomaly_rate AS "anomaly_rate",
-                distinct_agent_count AS "distinct_agent_count"
+                distinct_agent_count AS "distinct_agent_count",
+                total_interactions::int AS "total_interactions"
          FROM system_health
          WHERE system_id = ANY($1)`,
         [targetIds],
@@ -333,6 +373,10 @@ app.get('/agent/:agent_id/friction', async (c) => {
       t.network_failure_rate = h.failure_rate;
       t.network_anomaly_rate = h.anomaly_rate;
       t.network_agent_count = h.distinct_agent_count;
+      // Surface the total interaction count so the MCP-side rendering
+      // can apply sample-size guards before drawing a verdict from the
+      // network failure rate.
+      t.network_interaction_count = h.total_interactions;
     }
   }
 
@@ -384,35 +428,97 @@ app.get('/agent/:agent_id/friction', async (c) => {
 
   const isPaidTier = (c.req.header('X-ACR-Auth-Tier') ?? 'free') !== 'free';
 
-  // ── Retry Overhead (pro tier) ──
-  let retryOverhead: { total_retries: number; total_wasted_ms: number; top_retry_targets: Array<{ target_system_id: string; retry_count: number; avg_duration_ms: number; wasted_ms: number }> } | undefined;
-  if (isPaidTier) {
-    const retryMap = new Map<string, { count: number; totalMs: number }>();
-    let totalRetries = 0;
-    let totalWastedMs = 0;
-    for (const row of rows) {
-      const rc = row.retry_count ?? 0;
-      if (rc > 0) {
-        totalRetries += rc;
-        const dur = row.duration_ms ?? 0;
-        totalWastedMs += rc * dur;
-        const entry = retryMap.get(row.target_system_id) ?? { count: 0, totalMs: 0 };
-        entry.count += rc;
-        entry.totalMs += rc * dur;
-        retryMap.set(row.target_system_id, entry);
-      }
+  // ── Implicit retry detection (transport-boundary observation) ──
+  // Observation principle: don't require the agent to set retry_count.
+  // Any receipt whose target was just called and failed within
+  // IMPLICIT_RETRY_WINDOW_MS is almost certainly a retry, regardless
+  // of whether the agent's code labelled it one. We detect those
+  // receipts with an EXISTS subquery and sum them into the same
+  // retry_overhead structure so the number the agent sees reflects
+  // actual retry behaviour, not self-reported retry behaviour.
+  const IMPLICIT_RETRY_WINDOW_SECS = 30;
+  const implicitRetryRows = await query<{ target_system_id: string; implicit_retries: number; wasted_ms: number }>(
+    `SELECT cur.target_system_id AS "target_system_id",
+            COUNT(*)::int AS "implicit_retries",
+            COALESCE(SUM(cur.duration_ms), 0)::int AS "wasted_ms"
+     FROM interaction_receipts cur
+     WHERE cur.emitter_agent_id = $1
+       AND cur.created_at >= $2
+       AND cur.created_at <= $3
+       AND EXISTS (
+         SELECT 1 FROM interaction_receipts prev
+         WHERE prev.emitter_agent_id = cur.emitter_agent_id
+           AND prev.target_system_id = cur.target_system_id
+           AND prev.status != 'success'
+           AND prev.created_at < cur.created_at
+           AND prev.created_at >= cur.created_at - (INTERVAL '1 second' * $4)
+       )
+     GROUP BY cur.target_system_id`,
+    [agentId, start.toISOString(), end.toISOString(), IMPLICIT_RETRY_WINDOW_SECS],
+  ).catch((err) => { log.debug({ err }, 'Implicit retry detection failed'); return [] as Array<{ target_system_id: string; implicit_retries: number; wasted_ms: number }>; });
+
+  // ── Retry Overhead ──
+  // Totals (total_retries, total_wasted_ms, implicit_retries) are
+  // free-tier: the aggregate is the headline number most users want and
+  // gating it behind a paywall hides the very signal the product is
+  // trying to surface. The per-target breakdown (top_retry_targets)
+  // remains paid.
+  const retryMap = new Map<string, { count: number; totalMs: number }>();
+  let explicitRetries = 0;
+  let explicitWastedMs = 0;
+  for (const row of rows) {
+    const rc = row.retry_count ?? 0;
+    if (rc > 0) {
+      explicitRetries += rc;
+      const dur = row.duration_ms ?? 0;
+      explicitWastedMs += rc * dur;
+      const entry = retryMap.get(row.target_system_id) ?? { count: 0, totalMs: 0 };
+      entry.count += rc;
+      entry.totalMs += rc * dur;
+      retryMap.set(row.target_system_id, entry);
     }
-    if (totalRetries > 0) {
-      const topRetryTargets = Array.from(retryMap.entries())
+  }
+
+  let implicitRetryCount = 0;
+  let implicitWastedMs = 0;
+  for (const r of implicitRetryRows) {
+    implicitRetryCount += r.implicit_retries;
+    implicitWastedMs += r.wasted_ms;
+    const entry = retryMap.get(r.target_system_id) ?? { count: 0, totalMs: 0 };
+    entry.count += r.implicit_retries;
+    entry.totalMs += r.wasted_ms;
+    retryMap.set(r.target_system_id, entry);
+  }
+
+  const totalRetries = explicitRetries + implicitRetryCount;
+  const totalWastedMs = explicitWastedMs + implicitWastedMs;
+
+  let retryOverhead: {
+    total_retries: number;
+    total_wasted_ms: number;
+    implicit_retries: number;
+    explicit_retries: number;
+    detection_window_seconds: number;
+    top_retry_targets?: Array<{ target_system_id: string; retry_count: number; avg_duration_ms: number; wasted_ms: number }>;
+  } | undefined;
+  if (totalRetries > 0) {
+    retryOverhead = {
+      total_retries: totalRetries,
+      total_wasted_ms: totalWastedMs,
+      implicit_retries: implicitRetryCount,
+      explicit_retries: explicitRetries,
+      detection_window_seconds: IMPLICIT_RETRY_WINDOW_SECS,
+    };
+    if (isPaidTier) {
+      retryOverhead.top_retry_targets = Array.from(retryMap.entries())
         .map(([tid, data]) => ({
           target_system_id: tid,
           retry_count: data.count,
-          avg_duration_ms: Math.round(data.totalMs / data.count),
+          avg_duration_ms: data.count > 0 ? Math.round(data.totalMs / data.count) : 0,
           wasted_ms: data.totalMs,
         }))
         .sort((a, b) => b.wasted_ms - a.wasted_ms)
         .slice(0, 5);
-      retryOverhead = { total_retries: totalRetries, total_wasted_ms: totalWastedMs, top_retry_targets: topRetryTargets };
     }
   }
 

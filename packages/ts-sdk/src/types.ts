@@ -212,6 +212,10 @@ export interface FrictionSummary {
   friction_percentage: number;
   total_failures: number;
   failure_rate: number;
+  /** Sum of tokens_used across all receipts in the period, when reported. */
+  total_tokens_used?: number;
+  /** Tokens spent on failed calls — the "wasted" portion. */
+  wasted_tokens?: number;
 }
 
 export interface TargetFriction {
@@ -225,6 +229,14 @@ export interface TargetFriction {
   vs_baseline?: number;
   volatility?: number;
   p95_duration_ms?: number;
+  status_breakdown?: Record<string, number>;
+  percentile_rank?: number;
+  wasted_tokens?: number;
+  /** Network-wide rates for the same target, from the system_health table. */
+  network_failure_rate?: number;
+  network_anomaly_rate?: number;
+  network_agent_count?: number;
+  network_interaction_count?: number;
 }
 
 export interface ChainAnalysis {
@@ -250,7 +262,14 @@ export interface DirectionalPair {
 export interface RetryOverhead {
   total_retries: number;
   total_wasted_ms: number;
-  top_retry_targets: Array<{
+  /** Retries detected at the transport boundary (failure + same-target within detection window). */
+  implicit_retries?: number;
+  /** Retries explicitly reported via retry_count on log_interaction. */
+  explicit_retries?: number;
+  /** Window (seconds) used to detect implicit retries. */
+  detection_window_seconds?: number;
+  /** Pro-tier only — undefined on free-tier responses. */
+  top_retry_targets?: Array<{
     target_system_id: string;
     retry_count: number;
     avg_duration_ms: number;
