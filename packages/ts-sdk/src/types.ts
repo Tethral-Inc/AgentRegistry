@@ -209,6 +209,12 @@ export interface SkillNotification {
 export interface FrictionSummary {
   total_interactions: number;
   total_wait_time_ms: number;
+  /**
+   * Burst-union of active time across the scope — the denominator of
+   * friction_percentage. Rendering it makes the ratio interpretable
+   * ("3% of 4h" ≠ "3% of 40s").
+   */
+  active_span_ms: number;
   friction_percentage: number;
   total_failures: number;
   failure_rate: number;
@@ -216,6 +222,42 @@ export interface FrictionSummary {
   total_tokens_used?: number;
   /** Tokens spent on failed calls — the "wasted" portion. */
   wasted_tokens?: number;
+}
+
+export interface CategoryBreakdownRow {
+  category: string;
+  interaction_count: number;
+  total_duration_ms: number;
+  failure_count: number;
+}
+
+export interface TransportBreakdownRow {
+  transport: string;
+  interaction_count: number;
+  total_duration_ms: number;
+}
+
+export interface SourceBreakdownRow {
+  source: string;
+  interaction_count: number;
+}
+
+export interface ErrorCodeBreakdownRow {
+  error_code: string;
+  count: number;
+  /** Target that saw this error most often (empty if nothing failed). */
+  top_target: string;
+  top_target_count: number;
+}
+
+export interface ClassificationBreakdownRow {
+  /** The specific field varies by dimension — one of activity_class /
+   *  target_type / interaction_purpose lives on each row. */
+  activity_class?: string;
+  target_type?: string;
+  interaction_purpose?: string;
+  interaction_count: number;
+  total_duration_ms: number;
 }
 
 export interface TargetFriction {
@@ -288,11 +330,21 @@ export interface PopulationDrift {
 
 export interface FrictionReport {
   agent_id: string;
-  scope: 'session' | 'day' | 'week';
+  /** Display name of the agent (when resolvable). */
+  name?: string;
+  scope: 'session' | 'day' | 'yesterday' | 'week';
   period_start: string;
   period_end: string;
   summary: FrictionSummary;
+  by_category: CategoryBreakdownRow[];
+  /** Failures grouped by error_code, top 10 by count. */
+  by_error_code: ErrorCodeBreakdownRow[];
   top_targets: TargetFriction[];
+  by_transport: TransportBreakdownRow[];
+  by_source: SourceBreakdownRow[];
+  by_activity_class: ClassificationBreakdownRow[];
+  by_target_type: ClassificationBreakdownRow[];
+  by_interaction_purpose: ClassificationBreakdownRow[];
   population_comparison?: {
     total_agents_in_period: number;
     baselines_available: number;
