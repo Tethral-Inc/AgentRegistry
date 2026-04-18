@@ -61,7 +61,12 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         text += `── Summary ──\n`;
         text += `  Interactions: ${s.total_interactions}\n`;
         text += `  Total wait: ${(s.total_wait_time_ms / 1000).toFixed(1)}s\n`;
-        text += `  Friction: ${s.friction_percentage.toFixed(2)}% of active time\n`;
+        // friction_percentage can exceed 100% when calls run in parallel
+        // (wall-clock wait exceeds active span). Show the raw number so
+        // the operator sees the signal, but annotate the cause so it
+        // doesn't read as a bug.
+        const fricNote = s.friction_percentage > 100 ? ' (parallel calls — wait exceeds active span)' : '';
+        text += `  Friction: ${s.friction_percentage.toFixed(2)}% of active time${fricNote}\n`;
         text += `  Failures: ${s.total_failures} (${(s.failure_rate * 100).toFixed(1)}% rate)\n`;
         // Token usage: surface total + wasted-on-failure so the operator can
         // see the dollar impact of bad targets, not just the time impact.
@@ -79,15 +84,15 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           text += `\n`;
         }
 
-        // Category breakdown
+        // Category breakdown. Only count/total are computed server-side
+        // today; median/p95 would require a second aggregate pass and
+        // aren't populated, so we render what we have.
         if (data.by_category && data.by_category.length > 0) {
           text += `\n── By Category ──\n`;
           for (const cat of data.by_category) {
             const avgMs = cat.interaction_count > 0 ? Math.round(cat.total_duration_ms / cat.interaction_count) : 0;
             text += `  ${cat.category}: ${cat.interaction_count} calls, ${(cat.total_duration_ms / 1000).toFixed(1)}s total, avg ${avgMs}ms`;
             if (cat.failure_count > 0) text += `, ${cat.failure_count} failures`;
-            if (cat.median_duration_ms != null) text += ` | median ${cat.median_duration_ms}ms`;
-            if (cat.p95_duration_ms != null) text += ` | p95 ${cat.p95_duration_ms}ms`;
             text += `\n`;
           }
         }
@@ -124,7 +129,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             // Status breakdown
             if (t.status_breakdown) {
               const statuses = Object.entries(t.status_breakdown as Record<string, number>)
-                .map(([s, c]) => `${s}: ${c}`)
+                .map(([status, count]) => `${status}: ${count}`)
                 .join(', ');
               text += `    statuses: ${statuses}\n`;
             }
@@ -186,7 +191,11 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
                 const yoursPct = agentFailRate * 100;
                 const netPct = netFailRate * 100;
                 let verdict: string;
-                if (netPct < 5 && yoursPct > netPct * 2) {
+                // Absolute floor on yoursPct before blaming the user's
+                // config — a single failure out of 10 interactions is
+                // 10% which trivially beats `netPct * 2` when netPct is
+                // 0.5%. Require both relative AND absolute elevation.
+                if (netPct < 5 && yoursPct >= 5 && yoursPct > netPct * 2) {
                   verdict = 'likely your config/network — most agents succeed here';
                 } else if (yoursPct > 0 && netPct > yoursPct * 2) {
                   verdict = 'better than the network on this target';
@@ -205,14 +214,11 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        // Transport breakdown
+        // Transport breakdown (same shape as by_category — count + total).
         if (data.by_transport && data.by_transport.length > 0) {
           text += `\n── By Transport ──\n`;
           for (const t of data.by_transport) {
-            text += `  ${t.transport}: ${t.interaction_count} calls, ${(t.total_duration_ms / 1000).toFixed(1)}s total`;
-            if (t.median_duration_ms != null) text += ` | median ${t.median_duration_ms}ms`;
-            if (t.p95_duration_ms != null) text += ` | p95 ${t.p95_duration_ms}ms`;
-            text += `\n`;
+            text += `  ${t.transport}: ${t.interaction_count} calls, ${(t.total_duration_ms / 1000).toFixed(1)}s total\n`;
           }
         }
 
@@ -261,7 +267,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             }
           }
         } else {
-          text += `  None recorded this week.\n`;
+          text += `  None recorded this ${scope}.\n`;
         }
 
         // Directional Analysis (CHANGE 5: always render header; pro — raw amplification factor)
@@ -273,7 +279,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             text += ` [${dp.sample_count} samples]\n`;
           }
         } else {
-          text += `  None recorded this week.\n`;
+          text += `  None recorded this ${scope}.\n`;
         }
 
         // Retry Overhead. Totals (including implicit retries detected at
@@ -295,11 +301,11 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }
           if (Array.isArray(ro.top_retry_targets)) {
             for (const t of ro.top_retry_targets) {
-              text += `    ${t.target_system_id}: ${t.retry_count} retries, ${t.wasted_ms}ms wasted\n`;
+              text += `    ${t.target_system_id}: ${t.retry_count} retries, ${(t.wasted_ms / 1000).toFixed(1)}s wasted\n`;
             }
           }
         } else {
-          text += `  None recorded this week.\n`;
+          text += `  None recorded this ${scope}.\n`;
         }
 
         // Population Drift (CHANGE 5: always render header; pro — raw drift percentage)
@@ -311,7 +317,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             text += ` (current ${t.current_median_ms}ms, baseline ${t.baseline_median_ms}ms)\n`;
           }
         } else {
-          text += `  None recorded this week.\n`;
+          text += `  None recorded this ${scope}.\n`;
         }
 
         // Population comparison (paid tier)
