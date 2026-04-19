@@ -52,9 +52,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
   const { start, end } = getScopeWindow(scope);
   const scopeMs = end.getTime() - start.getTime();
 
-  // Optional transport_type and source filters
+  // Optional transport_type and source filters.
+  // Source defaults to 'agent' so lenses show the truth — self-log (source='server')
+  // describes the observer, not the agent's interactions. Pass source=all to include both.
   const transportFilter = c.req.query('transport_type');
-  const sourceFilter = c.req.query('source');
+  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
 
   // Resolve name or agent_id
   const resolved = await resolveAgentId(identifier);
@@ -231,12 +234,20 @@ app.get('/agent/:agent_id/friction', async (c) => {
 
   const baselineMap = new Map(baselines.map((b) => [b.target_class, b]));
 
-  // Compute total agent count for percentile ranking
+  // Compute total agent count for percentile ranking.
+  // Apply the same source filter so the population we compare against
+  // matches the population we're measuring.
+  const agentCountParams: unknown[] = [start.toISOString(), end.toISOString()];
+  let agentCountSourceClause = '';
+  if (sourceFilter) {
+    agentCountParams.push(sourceFilter);
+    agentCountSourceClause = ` AND source = $${agentCountParams.length}`;
+  }
   const agentCountResult = await query<{ count: string }>(
     `SELECT COUNT(DISTINCT emitter_agent_id)::text AS count
      FROM interaction_receipts
-     WHERE created_at >= $1 AND created_at <= $2`,
-    [start.toISOString(), end.toISOString()],
+     WHERE created_at >= $1 AND created_at <= $2${agentCountSourceClause}`,
+    agentCountParams,
   ).catch(() => [{ count: '0' }]);
 
   const totalAgents = parseInt(agentCountResult[0]?.count ?? '0', 10);
@@ -342,6 +353,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
   let percentileMap = new Map<string, number>();
   if (targetIdsForPercentile.length > 0) {
     try {
+      const percentileParams: unknown[] = [start.toISOString(), end.toISOString(), targetIdsForPercentile, agentId];
+      let percentileSourceClause = '';
+      if (sourceFilter) {
+        percentileParams.push(sourceFilter);
+        percentileSourceClause = ` AND source = $${percentileParams.length}`;
+      }
       const percentileRows = await query<{ target_system_id: string; percentile_rank: number }>(
         `SELECT target_system_id, percentile_rank
          FROM (
@@ -357,12 +374,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
            WHERE created_at >= $1
              AND created_at <= $2
              AND target_system_id = ANY($3)
-             AND duration_ms IS NOT NULL
+             AND duration_ms IS NOT NULL${percentileSourceClause}
            GROUP BY target_system_id, emitter_agent_id
            HAVING COUNT(*) >= 3
          ) ranked
          WHERE emitter_agent_id = $4`,
-        [start.toISOString(), end.toISOString(), targetIdsForPercentile, agentId],
+        percentileParams,
       );
       for (const row of percentileRows) {
         // PERCENT_RANK 0 = fastest (lowest latency), 1 = slowest.
@@ -542,6 +559,12 @@ app.get('/agent/:agent_id/friction', async (c) => {
   let byInteractionPurpose: Array<{ interaction_purpose: string; interaction_count: number; total_duration_ms: number }> = [];
 
   try {
+    const catParams: unknown[] = [agentId, start.toISOString(), end.toISOString()];
+    let catSourceClause = '';
+    if (sourceFilter) {
+      catParams.push(sourceFilter);
+      catSourceClause = ` AND source = $${catParams.length}`;
+    }
     const categoryRows = await query<{
       dimension: string;
       value: string;
@@ -556,7 +579,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND categories ? 'activity_class'
+         AND categories ? 'activity_class'${catSourceClause}
        GROUP BY categories->>'activity_class'
        UNION ALL
        SELECT 'target_type' AS "dimension",
@@ -567,7 +590,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND categories ? 'target_type'
+         AND categories ? 'target_type'${catSourceClause}
        GROUP BY categories->>'target_type'
        UNION ALL
        SELECT 'interaction_purpose' AS "dimension",
@@ -578,9 +601,9 @@ app.get('/agent/:agent_id/friction', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND categories ? 'interaction_purpose'
+         AND categories ? 'interaction_purpose'${catSourceClause}
        GROUP BY categories->>'interaction_purpose'`,
-      [agentId, start.toISOString(), end.toISOString()],
+      catParams,
     );
 
     for (const row of categoryRows) {

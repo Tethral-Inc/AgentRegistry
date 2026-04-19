@@ -65,9 +65,21 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
   const scope = scopeParsed.data;
   const { start, end } = getScopeWindow(scope);
 
+  // Source defaults to 'agent' so corridor stability reflects the agent's
+  // real calls, not server-side self-log latency. Pass source=all for both.
+  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
+
   const resolved = await resolveAgentId(identifier);
   const agentId = resolved.agent_id;
   const agentName = resolved.name;
+
+  const params: unknown[] = [agentId, start.toISOString(), end.toISOString()];
+  let sourceClause = '';
+  if (sourceFilter) {
+    params.push(sourceFilter);
+    sourceClause = ` AND source = $${params.length}`;
+  }
 
   const rows = await query<CorridorRow>(
     `SELECT
@@ -88,14 +100,14 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND duration_ms IS NOT NULL
+       AND duration_ms IS NOT NULL${sourceClause}
      GROUP BY target_system_id, target_system_type
      HAVING COUNT(*) >= 10
         AND COUNT(*) FILTER (WHERE status IN ('failure', 'timeout')) = 0
         AND COUNT(*) FILTER (WHERE anomaly_flagged = true) = 0
      ORDER BY COUNT(*) DESC
      LIMIT 50`,
-    [agentId, start.toISOString(), end.toISOString()],
+    params,
   ).catch(() => []);
 
   // The SQL already filters to receipts >= 10, 0 failures, 0 anomalies.

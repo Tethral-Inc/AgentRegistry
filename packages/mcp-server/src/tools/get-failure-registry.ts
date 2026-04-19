@@ -12,11 +12,12 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
         scope: z.enum(['day', 'yesterday', 'week', 'month']).optional().default('week').describe('Time window'),
+        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source. 'agent' = your log_interaction calls (default). 'server' = observer-side self-log. 'all' = both."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.6 },
     },
-    async ({ agent_id, agent_name, scope }) => {
+    async ({ agent_id, agent_name, scope, source }) => {
       let id: string;
       let displayName: string;
       try {
@@ -28,7 +29,8 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/failure-registry?scope=${scope}`, { headers: getAuthHeaders() });
+        const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/failure-registry?${params}`, { headers: getAuthHeaders() });
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Failure registry error: ${errText}` }] };
@@ -39,6 +41,7 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         const failures = data.failures as Array<Record<string, unknown>> ?? [];
 
         let text = `Failure Registry for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
+        text += `Source: ${source ?? 'agent'}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Total interactions: ${data.total_interactions}\n`;
         text += `Total failures: ${data.total_failures}\n`;

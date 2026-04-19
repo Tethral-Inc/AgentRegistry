@@ -46,7 +46,7 @@ export function withSelfLog(
 
         if (agentId) {
           selfLogging = true;
-          fireAndForgetLog(apiUrl, agentId, toolName, status, durationMs, state.transportType)
+          fireAndForgetLog(apiUrl, agentId, toolName, status, durationMs, state.transportType, state.providerClass)
             .finally(() => { selfLogging = false; });
         }
       }
@@ -63,6 +63,7 @@ async function fireAndForgetLog(
   status: string,
   durationMs: number,
   transportType: string,
+  providerClass: string,
 ): Promise<void> {
   try {
     const controller = new AbortController();
@@ -75,7 +76,7 @@ async function fireAndForgetLog(
       body: JSON.stringify({
         emitter: {
           agent_id: agentId,
-          provider_class: 'unknown',
+          provider_class: providerClass,
         },
         target: {
           system_id: `mcp:acr-registry`,

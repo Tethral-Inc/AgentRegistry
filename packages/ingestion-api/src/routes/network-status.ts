@@ -11,6 +11,18 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
  * All queries run sequentially (pool max:1 on Vercel).
  */
 app.get('/network/status', async (c) => {
+  // Source defaults to 'agent' so network totals reflect agent traffic,
+  // not server-side self-log. Pass source=all for both.
+  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
+
+  const totalsParams: unknown[] = [];
+  let totalsSourceClause = '';
+  if (sourceFilter) {
+    totalsParams.push(sourceFilter);
+    totalsSourceClause = ` AND source = $${totalsParams.length}`;
+  }
+
   // 1. 24h totals
   const totalsRows = await query<{
     active_agents: number;
@@ -26,7 +38,8 @@ app.get('/network/status', async (c) => {
               NULLIF(COUNT(*), 0), 0
             ) AS "anomaly_rate_24h"
      FROM interaction_receipts
-     WHERE created_at >= now() - INTERVAL '24 hours'`,
+     WHERE created_at >= now() - INTERVAL '24 hours'${totalsSourceClause}`,
+    totalsParams,
   ).catch(() => [{ active_agents: 0, active_systems: 0, interactions_24h: 0, anomaly_rate_24h: 0 }]);
 
   const totals = totalsRows[0]!;

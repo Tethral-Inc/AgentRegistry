@@ -1,16 +1,21 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_network_status',
     {
-      description: 'Network-wide observation dashboard. Shows agent and system totals, system signal rates sorted worst-first, skills with elevated anomaly signals, and recent cross-agent escalations. Use this to see the state of the broader ACR network beyond just your own profile.',
+      description: "Network-wide observation dashboard. Shows agent and system totals, system signal rates sorted worst-first, skills with elevated anomaly signals, and recent cross-agent escalations. Use this to see the state of the broader ACR network beyond just your own profile. Defaults to source='agent' for the 24h totals so the numbers reflect real agent traffic, not observer self-log.",
+      inputSchema: {
+        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source for 24h totals. 'agent' = log_interaction (default). 'server' = self-log. 'all' = both."),
+      },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
     },
-    async () => {
+    async ({ source }) => {
       try {
-        const res = await fetch(`${apiUrl}/api/v1/network/status`);
+        const params = new URLSearchParams({ source: source ?? 'agent' });
+        const res = await fetch(`${apiUrl}/api/v1/network/status?${params}`);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Network status error: ${errText}` }] };
@@ -19,6 +24,7 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
 
         const t = data.totals ?? {};
         let text = `ACR Network Dashboard\n${'='.repeat(30)}\n`;
+        text += `Source: ${source ?? 'agent'}\n`;
 
         if (data.stale) {
           text += `\nDATA MAY BE STALE — background jobs may not have run recently.\n`;

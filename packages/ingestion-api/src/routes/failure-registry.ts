@@ -64,11 +64,25 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
   const scope = scopeParsed.data;
   const { start, end } = getScopeWindow(scope);
 
+  // Source defaults to 'agent' so the registry reflects the agent's
+  // own observed failures, not self-log rows. Pass source=all for both.
+  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
+
   const resolved = await resolveAgentId(identifier);
   const agentId = resolved.agent_id;
   const agentName = resolved.name;
 
+  const groupedParams: unknown[] = [agentId, start.toISOString(), end.toISOString()];
+  let groupedSourceClause = '';
+  if (sourceFilter) {
+    groupedParams.push(sourceFilter);
+    groupedSourceClause = ` AND source = $${groupedParams.length}`;
+  }
+
   // Pull all failure rows grouped by (target, status, error_code, category).
+  // Errors here must NOT be silently swallowed — the grouped result is the
+  // source of truth for distinct_failing_targets and total_failures below.
   const rows = await query<FailureRow>(
     `SELECT
        target_system_id AS "target_system_id",
@@ -83,12 +97,12 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND status IN ('failure', 'timeout')
+       AND status IN ('failure', 'timeout')${groupedSourceClause}
      GROUP BY target_system_id, target_system_type, status, error_code, interaction_category
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
-    [agentId, start.toISOString(), end.toISOString()],
-  ).catch(() => []);
+    groupedParams,
+  ).catch((err) => { log.warn({ err }, 'Failed to query failure-registry grouped rows'); return [] as FailureRow[]; });
 
   // Group by target.
   type TargetGroup = {
@@ -132,20 +146,29 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
   // Sort by count desc.
   const failures = Array.from(grouped.values()).sort((a, b) => b.total_count - a.total_count);
 
-  // Total failure rate over the period.
-  const totalRows = await query<{ total: number; failures: number }>(
-    `SELECT
-       COUNT(*)::int AS "total",
-       COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::int AS "failures"
+  // Derive totalFailures from the grouped rows to guarantee consistency
+  // with `failures`/`distinct_failing_targets`. The old code queried failures
+  // a second time, which could produce contradictions (e.g. total_failures=2
+  // but distinct_failing_targets=0) when the two queries disagreed.
+  const totalFailures = failures.reduce((sum, f) => sum + f.total_count, 0);
+
+  // Overall receipt count for the denominator only.
+  const totalParams: unknown[] = [agentId, start.toISOString(), end.toISOString()];
+  let totalSourceClause = '';
+  if (sourceFilter) {
+    totalParams.push(sourceFilter);
+    totalSourceClause = ` AND source = $${totalParams.length}`;
+  }
+  const totalRows = await query<{ total: number }>(
+    `SELECT COUNT(*)::int AS "total"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
-       AND created_at <= $3`,
-    [agentId, start.toISOString(), end.toISOString()],
-  ).catch(() => []);
+       AND created_at <= $3${totalSourceClause}`,
+    totalParams,
+  ).catch((err) => { log.warn({ err }, 'Failed to query failure-registry total'); return [] as Array<{ total: number }>; });
 
   const total = totalRows[0]?.total ?? 0;
-  const totalFailures = totalRows[0]?.failures ?? 0;
   const failureRate = total > 0 ? totalFailures / total : 0;
 
   c.header('Cache-Control', 'private, max-age=60');
