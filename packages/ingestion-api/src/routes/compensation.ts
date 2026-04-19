@@ -70,7 +70,7 @@ app.get('/agent/:agent_id/compensation', async (c) => {
   // Build output list. Keep the overhead alongside the pattern so a user
   // can see "this pattern is low-stability AND expensive" without having
   // to cross-reference the friction report.
-  const overheadByHash = new Map(patternRows.map((r) => [r.pattern_hash, r.avg_overhead_ms]));
+  const overheadByHash = new Map(patternRows.map((r) => [r.pattern_hash, r.avg_overhead_ms] as const));
 
   const patterns = scored.map((s) => {
     const fleet = fleetMap.get(s.pattern_hash);
