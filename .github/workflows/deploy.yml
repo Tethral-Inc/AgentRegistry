@@ -44,11 +44,12 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx wrangler deploy || echo "Resolver API not yet built, skipping"
-      # Deploy ingestion API to Vercel
-      - uses: amondnet/vercel-action@v25
+      # Deploy ingestion API to Vercel (production)
+      - name: Deploy ingestion-api to Vercel
+        uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
           working-directory: packages/ingestion-api
-        continue-on-error: true
