@@ -86,6 +86,13 @@ export interface InteractionReceipt {
     retry_count?: number;
     error_code?: string;
     response_size_bytes?: number;
+    tokens_used?: number;
+    // Capture-surface expansion (migration 000016). All optional.
+    substitution_of?: string;
+    decision_tokens?: number;
+    result_used?: boolean;
+    context_bytes?: number;
+    prompt_cache_hit_ratio?: number;
   };
   anomaly: {
     flagged: boolean;

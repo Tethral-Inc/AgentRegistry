@@ -59,6 +59,14 @@ export function logInteractionTool(
         data_shape: z.string().max(32).optional().describe('Content-free description of what kind of data moved. Examples: tabular, text, binary, structured_json, stream, image, audio.'),
         criticality: z.string().max(32).optional().describe('How essential this call was to the workflow. Examples: core, enrichment, debug.'),
         tokens_used: z.number().int().min(0).optional().describe('Total tokens used in this interaction (input + output). Optional — enables wasted-token callouts in the friction report.'),
+        // Capture-surface expansion. All optional. Reporting these now
+        // seeds future lenses (substitution graph, decision-cost,
+        // wasted-attention, contextual cost, prompt-cache efficiency).
+        substitution_of: z.string().max(200).optional().describe("When this call replaces a preceding failed call to a different target, pass the replaced target_system_id here (e.g. 'api:openai.com'). Seeds the substitution-graph lens."),
+        decision_tokens: z.number().int().min(0).optional().describe("Tokens spent deciding *which* target to call, separate from the target call itself. Useful for agents that run reasoning before routing."),
+        result_used: z.boolean().optional().describe("Did the agent actually use the response? Set false if the response was discarded (e.g. wrong shape, low quality). Seeds the wasted-attention lens."),
+        context_bytes: z.number().int().min(0).optional().describe("Context payload size in bytes shipped to the target. Enables per-target context-cost analysis."),
+        prompt_cache_hit_ratio: z.number().min(0).max(1).optional().describe("Fraction of prompt cached (0..1). Pass when the provider reports it."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       _meta: { priorityHint: 0.9 },
@@ -112,6 +120,11 @@ export function logInteractionTool(
               error_code: params.error_code,
               response_size_bytes: params.response_size_bytes,
               tokens_used: params.tokens_used,
+              substitution_of: params.substitution_of,
+              decision_tokens: params.decision_tokens,
+              result_used: params.result_used,
+              context_bytes: params.context_bytes,
+              prompt_cache_hit_ratio: params.prompt_cache_hit_ratio,
             },
             anomaly: {
               flagged: params.anomaly_flagged,

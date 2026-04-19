@@ -2,19 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
-
-/**
- * Sample-size confidence tag. Attach to any per-target or per-pair stat
- * that could be misread as authoritative. Keeps raw numbers; annotates
- * interpretation. Thresholds are deliberate: <10 = pre-signal (may vanish
- * next window), 10-29 = directional (real pattern, thin floor), >=30 =
- * significant (ask whether it persists).
- */
-function confidence(n: number): string {
-  if (n < 10) return `(pre-signal — ${n} samples)`;
-  if (n < 30) return `(directional — ${n} samples)`;
-  return `(significant — ${n} samples)`;
-}
+import { confidence } from '../utils/confidence.js';
 
 export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.registerTool(
