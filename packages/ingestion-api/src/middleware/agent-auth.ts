@@ -6,7 +6,7 @@ import { createMiddleware } from 'hono/factory';
 import { sha256, query, execute, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 
-export const agentAuth = createMiddleware(async (c, next) => {
+export const agentAuth = createMiddleware<any, string, {}, any>(async (c, next) => {
   // Accept key from Authorization header or X-Api-Key (backwards compat)
   const authHeader = c.req.header('Authorization');
   const xApiKey = c.req.header('X-Api-Key');
