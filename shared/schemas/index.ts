@@ -56,3 +56,10 @@ export {
   RetryOverheadSchema,
   PopulationDriftSchema,
 } from './friction.js';
+
+export {
+  RevealedPreferenceScope,
+  RevealedPreferenceClassification,
+  RevealedPreferenceTargetSchema,
+  RevealedPreferenceReportSchema,
+} from './revealed-preference.js';

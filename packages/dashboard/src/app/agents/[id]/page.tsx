@@ -7,6 +7,7 @@ import { Stat } from '../../../components/Stat';
 import { MetaRow } from '../../../components/MetaRow';
 import { PageError } from '../../../components/PageError';
 import { ApiKeyInput } from '../../../components/ApiKeyInput';
+import { AgentLensNav } from '../../../components/AgentLensNav';
 import { formatTimestamp } from '../../../lib/format';
 
 export default function AgentProfile() {
@@ -121,12 +122,13 @@ export default function AgentProfile() {
         </>
       )}
 
-      <a href={`/agents/${id}/friction`} style={{
-        display: 'inline-block', padding: '0.75rem 1.5rem', background: '#1a1a1a', border: '1px solid #333',
-        borderRadius: '8px', color: '#4a9eff', textDecoration: 'none', fontWeight: 500,
-      }}>
-        View Friction Dashboard &rarr;
-      </a>
+      <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Lenses</h2>
+      <AgentLensNav agentId={id} active={null} />
+      <div style={{ color: '#888', fontSize: '0.85rem', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+        Different ways of looking at the same interaction profile. <b style={{ color: '#ccc' }}>Friction</b> surfaces
+        where time and tokens are being lost. <b style={{ color: '#ccc' }}>Revealed Preference</b> compares what you
+        declared to what you actually call — a view only ACR can produce.
+      </div>
     </div>
   );
 }

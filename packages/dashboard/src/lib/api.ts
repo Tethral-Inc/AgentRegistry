@@ -268,6 +268,46 @@ export async function getAgentFriction(id: string, scope: string): Promise<Frict
   return fetchAPI(`/api/v1/agent/${id}/friction?scope=${scope}`);
 }
 
+// Revealed-Preference Dashboard
+
+export type RevealedPreferenceClassification =
+  | 'bound_uncalled' | 'bound_underused' | 'bound_active' | 'called_unbound';
+
+export interface RevealedPreferenceTarget {
+  target_system_id: string;
+  classification: RevealedPreferenceClassification;
+  call_count: number;
+  binding_sources: Array<'mcp_observed' | 'agent_reported'>;
+  last_called: string | null;
+}
+
+export interface RevealedPreferenceResponse {
+  agent_id: string;
+  name: string | null;
+  scope: string;
+  period_start: string;
+  period_end: string;
+  summary: {
+    bound_targets: number;
+    called_targets: number;
+    bound_uncalled: number;
+    bound_underused: number;
+    bound_active: number;
+    called_unbound: number;
+    binding_source_disagreements: number;
+  };
+  targets: RevealedPreferenceTarget[];
+}
+
+export async function getAgentRevealedPreference(
+  id: string,
+  scope: string,
+  source: string = 'agent',
+): Promise<RevealedPreferenceResponse> {
+  const params = new URLSearchParams({ scope, source });
+  return fetchAPI(`/api/v1/agent/${id}/revealed-preference?${params}`);
+}
+
 // Public Leaderboard
 
 export interface LeaderboardResponse {
