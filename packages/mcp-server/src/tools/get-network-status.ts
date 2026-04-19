@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { confidence } from '../utils/confidence.js';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -43,13 +44,14 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         if (systems.length > 0) {
           text += `\n-- Systems (${systems.length}, worst-first) --\n`;
           for (const s of systems.slice(0, 20)) {
+            const totalN = s.total_interactions ?? 0;
             let line = `  ${s.system_id}`;
             line += ` — ${s.agent_count ?? 0} agents`;
             if (s.failure_rate > 0) line += `, ${(s.failure_rate * 100).toFixed(1)}% failure`;
             if (s.anomaly_rate > 0) line += `, ${(s.anomaly_rate * 100).toFixed(1)}% anomaly`;
             if (s.median_duration_ms != null) line += `, ${s.median_duration_ms}ms median`;
             if (s.p95_duration_ms != null) line += `, p95 ${s.p95_duration_ms}ms`;
-            if (s.total_interactions != null) line += `, ${s.total_interactions} interactions`;
+            if (s.total_interactions != null) line += `, ${totalN} interactions ${confidence(totalN)}`;
             text += line + '\n';
           }
           if (systems.length > 20) {

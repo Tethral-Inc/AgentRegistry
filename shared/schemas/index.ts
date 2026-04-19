@@ -48,6 +48,7 @@ export {
 export {
   FrictionScope,
   FrictionSummarySchema,
+  ShadowTaxSchema,
   TargetFrictionSchema,
   FrictionReportSchema,
   ComponentFrictionSchema,
@@ -56,3 +57,16 @@ export {
   RetryOverheadSchema,
   PopulationDriftSchema,
 } from './friction.js';
+
+export {
+  RevealedPreferenceScope,
+  RevealedPreferenceClassification,
+  RevealedPreferenceTargetSchema,
+  RevealedPreferenceReportSchema,
+} from './revealed-preference.js';
+
+export {
+  CompensationWindow,
+  CompensationPatternSchema,
+  CompensationReportSchema,
+} from './compensation.js';

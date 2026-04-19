@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { confidence } from '../utils/confidence.js';
 
 export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -48,11 +49,12 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
         let text = `Skill Tracker\n${'='.repeat(20)}\n\n`;
 
         for (const s of data.skills) {
+          const interactionCount = (s.interaction_count as number) ?? 0;
           text += `${s.skill_name || (s.skill_hash as string).substring(0, 16) + '...'}\n`;
-          text += `  ${s.agent_count} agents | ${s.interaction_count} interactions`;
+          text += `  ${s.agent_count} agents | ${interactionCount} interactions`;
           const sigRate = s.anomaly_signal_rate as number;
           if (sigRate > 0) {
-            text += ` | ${s.anomaly_signal_count} anomaly signals (${(sigRate * 100).toFixed(2)}%)`;
+            text += ` | ${s.anomaly_signal_count} anomaly signals (${(sigRate * 100).toFixed(2)}% ${confidence(interactionCount)})`;
           }
           text += '\n\n';
         }
@@ -74,11 +76,12 @@ function formatSkillDetail(skill: Record<string, unknown>): string {
   let text = `Skill: ${skill.skill_name || skill.skill_hash}\n`;
   text += `${'='.repeat(40)}\n`;
   text += `  Hash: ${skill.skill_hash}\n`;
-  text += `  Adoption: ${skill.agent_count} agents | ${skill.interaction_count} interactions\n`;
+  const interactionCount = (skill.interaction_count as number) ?? 0;
+  text += `  Adoption: ${skill.agent_count} agents | ${interactionCount} interactions\n`;
 
   const sigCount = skill.anomaly_signal_count as number;
   const sigRate = skill.anomaly_signal_rate as number;
-  text += `  Anomaly rate: ${(sigRate * 100).toFixed(2)}% (${sigCount} signals)\n`;
+  text += `  Anomaly rate: ${(sigRate * 100).toFixed(2)}% (${sigCount} signals) ${confidence(interactionCount)}\n`;
   text += `  First seen: ${skill.first_seen} | Last updated: ${skill.last_updated}\n`;
 
   // Provider breakdown

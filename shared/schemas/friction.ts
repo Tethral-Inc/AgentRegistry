@@ -2,12 +2,21 @@ import { z } from 'zod';
 
 export const FrictionScope = z.enum(['session', 'day', 'yesterday', 'week']);
 
+export const ShadowTaxSchema = z.object({
+  total_ms: z.number(),
+  failed_call_ms: z.number(),
+  retry_ms: z.number(),
+  chain_queue_ms: z.number(),
+  percentage_of_wait: z.number(),
+});
+
 export const FrictionSummarySchema = z.object({
   total_interactions: z.number(),
   total_wait_time_ms: z.number(),
   friction_percentage: z.number(),
   total_failures: z.number(),
   failure_rate: z.number(),
+  shadow_tax: ShadowTaxSchema.optional(),
 });
 
 export const TargetFrictionSchema = z.object({

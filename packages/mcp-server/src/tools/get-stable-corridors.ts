@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { confidence } from '../utils/confidence.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -58,8 +59,9 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
           text += `  No stable corridors found for this period. This means no targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;
         } else {
           for (const m of matches) {
+            const receiptCount = (m.receipt_count as number) ?? 0;
             text += `\n  ${m.target_system_id}\n`;
-            text += `    receipts: ${m.receipt_count} | median: ${m.median_duration_ms}ms | p95: ${m.p95_duration_ms}ms\n`;
+            text += `    receipts: ${receiptCount} ${confidence(receiptCount)} | median: ${m.median_duration_ms}ms | p95: ${m.p95_duration_ms}ms\n`;
             text += `    cv: ${typeof m.coefficient_of_variation === 'number' ? (m.coefficient_of_variation as number).toFixed(3) : 'N/A'}\n`;
           }
         }

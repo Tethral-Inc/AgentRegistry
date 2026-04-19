@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { confidence } from '../utils/confidence.js';
 
 export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -45,15 +46,17 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Total interactions: ${data.total_interactions}\n`;
         text += `Total failures: ${data.total_failures}\n`;
-        text += `Failure rate: ${((data.failure_rate as number) * 100).toFixed(1)}%\n`;
+        const totalInteractions = (data.total_interactions as number) ?? 0;
+        text += `Failure rate: ${((data.failure_rate as number) * 100).toFixed(1)}% ${confidence(totalInteractions)}\n`;
         text += `Distinct failing targets: ${data.distinct_failing_targets}\n`;
 
         if (failures.length === 0) {
           text += `\nNo failures recorded in this period.\n`;
         } else {
           for (const f of failures) {
+            const totalCount = (f.total_count as number) ?? 0;
             text += `\n  ${f.target_system_id} (${f.target_system_type})\n`;
-            text += `    total failures: ${f.total_count}\n`;
+            text += `    total failures: ${totalCount} ${confidence(totalCount)}\n`;
 
             const statuses = f.statuses as Record<string, number>;
             if (statuses && Object.keys(statuses).length > 0) {

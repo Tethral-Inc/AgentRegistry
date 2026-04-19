@@ -229,6 +229,13 @@ export interface FrictionResponse {
     friction_percentage: number;
     total_failures: number;
     failure_rate: number;
+    shadow_tax?: {
+      total_ms: number;
+      failed_call_ms: number;
+      retry_ms: number;
+      chain_queue_ms: number;
+      percentage_of_wait: number;
+    };
   };
   by_category: Array<{ category: string; interaction_count: number; total_duration_ms: number; failure_count: number }>;
   top_targets: Array<{
@@ -244,6 +251,10 @@ export interface FrictionResponse {
     vs_baseline?: number | null;
     volatility?: number;
     recent_anomalies?: Array<{ category: string | null; detail: string | null; timestamp: string }>;
+    percentile_rank?: number;
+    percentile_rank_in_class?: number;
+    cohort_size?: number;
+    provider_class?: string | null;
   }>;
   by_transport: Array<{ transport: string; interaction_count: number; total_duration_ms: number }>;
   by_source: Array<{ source: string; interaction_count: number }>;
@@ -266,6 +277,77 @@ export interface FrictionResponse {
 
 export async function getAgentFriction(id: string, scope: string): Promise<FrictionResponse> {
   return fetchAPI(`/api/v1/agent/${id}/friction?scope=${scope}`);
+}
+
+// Revealed-Preference Dashboard
+
+export type RevealedPreferenceClassification =
+  | 'bound_uncalled' | 'bound_underused' | 'bound_active' | 'called_unbound';
+
+export interface RevealedPreferenceTarget {
+  target_system_id: string;
+  classification: RevealedPreferenceClassification;
+  call_count: number;
+  binding_sources: Array<'mcp_observed' | 'agent_reported'>;
+  last_called: string | null;
+}
+
+export interface RevealedPreferenceResponse {
+  agent_id: string;
+  name: string | null;
+  scope: string;
+  period_start: string;
+  period_end: string;
+  summary: {
+    bound_targets: number;
+    called_targets: number;
+    bound_uncalled: number;
+    bound_underused: number;
+    bound_active: number;
+    called_unbound: number;
+    binding_source_disagreements: number;
+  };
+  targets: RevealedPreferenceTarget[];
+}
+
+export async function getAgentRevealedPreference(
+  id: string,
+  scope: string,
+  source: string = 'agent',
+): Promise<RevealedPreferenceResponse> {
+  const params = new URLSearchParams({ scope, source });
+  return fetchAPI(`/api/v1/agent/${id}/revealed-preference?${params}`);
+}
+
+// Compensation Signatures
+
+export interface CompensationPattern {
+  pattern_hash: string;
+  chain_pattern: string[];
+  frequency: number;
+  pattern_stability: number;
+  share_of_chains: number;
+  avg_overhead_ms: number;
+  fleet_agent_count: number | null;
+  fleet_total_frequency: number | null;
+}
+
+export interface CompensationResponse {
+  agent_id: string;
+  name: string | null;
+  window: 'day' | 'week';
+  computed_at: string | null;
+  summary: {
+    total_chains: number;
+    distinct_patterns: number;
+    agent_stability: number;
+  };
+  patterns: CompensationPattern[];
+}
+
+export async function getAgentCompensation(id: string, window: string): Promise<CompensationResponse> {
+  const params = new URLSearchParams({ window });
+  return fetchAPI(`/api/v1/agent/${id}/compensation?${params}`);
 }
 
 // Public Leaderboard

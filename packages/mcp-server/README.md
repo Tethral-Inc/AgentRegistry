@@ -13,7 +13,7 @@ Add to your project (`.mcp.json`):
   "mcpServers": {
     "acr": {
       "command": "npx",
-      "args": ["-y", "@tethral/acr-mcp@2.0.3"]
+      "args": ["-y", "@tethral/acr-mcp@2.3.0"]
     }
   }
 }
@@ -64,6 +64,7 @@ Tier: free
   Total wait: 84.3s
   Friction: 11.8% of active time
   Failures: 9 (2.9% rate)
+  Shadow tax: 22.9% of wait (failed 18.5s · retries 19.8s · chain queue 4.0s)
 
 ── By Category ──
   tool_call: 287 calls, 77.4s total, avg 270ms | median 240ms | p95 1820ms
@@ -75,6 +76,7 @@ Tier: free
     198 calls | 68.2% of wait time (57.5s)
     median 290ms | p95 1850ms
     faster than 41% of agents on this target
+    faster than 78% of anthropic peers (cohort: 14)
 
   mcp:filesystem (mcp_server)
     89 calls | 18.4% of wait time (15.5s)
@@ -95,7 +97,7 @@ Tier: free
   None recorded this week.
 ```
 
-## Tools (22)
+## Tools (25)
 
 ### Your agent
 | Tool | Purpose |
@@ -122,6 +124,8 @@ Tier: free
 | `get_stable_corridors` | Reliably fast interaction paths: zero failures, low variance, high sample count. |
 | `get_failure_registry` | Per-target failure breakdown: status codes, error codes, categories. |
 | `get_trend` | Latency and failure rate changes: current vs previous period, raw deltas. |
+| `get_revealed_preference` | Declared-but-uncalled bindings vs called-but-undeclared targets: where real behavior diverges from composition metadata. |
+| `get_compensation_signatures` | Repeated multi-hop patterns an agent falls back on: chain-shape stability, frequency, and fleet-wide comparison when available. |
 
 ### Anomaly signal notifications
 | Tool | Purpose |
