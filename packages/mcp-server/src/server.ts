@@ -10,6 +10,7 @@ import { checkEntityTool } from './tools/check-entity.js';
 import { checkEnvironmentTool } from './tools/check-environment.js';
 import { getFrictionReportTool } from './tools/get-friction-report.js';
 import { getRevealedPreferenceTool } from './tools/get-revealed-preference.js';
+import { getCompensationSignaturesTool } from './tools/get-compensation-signatures.js';
 import { getMyAgentTool } from './tools/get-my-agent.js';
 import { getInteractionLogTool } from './tools/get-interaction-log.js';
 import { getNetworkStatusTool } from './tools/get-network-status.js';
@@ -113,6 +114,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   checkEnvironmentTool(server, apiUrl, resolverUrl);
   getFrictionReportTool(server, apiUrl);
   getRevealedPreferenceTool(server, apiUrl);
+  getCompensationSignaturesTool(server, apiUrl);
   getMyAgentTool(server);
   getInteractionLogTool(server, apiUrl);
   getNetworkStatusTool(server, apiUrl);

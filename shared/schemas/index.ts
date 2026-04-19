@@ -63,3 +63,9 @@ export {
   RevealedPreferenceTargetSchema,
   RevealedPreferenceReportSchema,
 } from './revealed-preference.js';
+
+export {
+  CompensationWindow,
+  CompensationPatternSchema,
+  CompensationReportSchema,
+} from './compensation.js';

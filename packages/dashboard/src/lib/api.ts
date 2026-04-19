@@ -308,6 +308,37 @@ export async function getAgentRevealedPreference(
   return fetchAPI(`/api/v1/agent/${id}/revealed-preference?${params}`);
 }
 
+// Compensation Signatures
+
+export interface CompensationPattern {
+  pattern_hash: string;
+  chain_pattern: string[];
+  frequency: number;
+  pattern_stability: number;
+  share_of_chains: number;
+  avg_overhead_ms: number;
+  fleet_agent_count: number | null;
+  fleet_total_frequency: number | null;
+}
+
+export interface CompensationResponse {
+  agent_id: string;
+  name: string | null;
+  window: 'day' | 'week';
+  computed_at: string | null;
+  summary: {
+    total_chains: number;
+    distinct_patterns: number;
+    agent_stability: number;
+  };
+  patterns: CompensationPattern[];
+}
+
+export async function getAgentCompensation(id: string, window: string): Promise<CompensationResponse> {
+  const params = new URLSearchParams({ window });
+  return fetchAPI(`/api/v1/agent/${id}/compensation?${params}`);
+}
+
 // Public Leaderboard
 
 export interface LeaderboardResponse {

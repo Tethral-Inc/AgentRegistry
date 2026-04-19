@@ -142,9 +142,78 @@ export async function handler() {
 
     log.info({ patternsUpserted }, 'Chain patterns computed');
 
+    // ── Step 3: Fleet-level pattern aggregation ──
+    // Roll chain_analysis across all agents into chain_analysis_fleet so
+    // the compensation lens can tell the operator whether a pattern is
+    // idiosyncratic (one agent) or fleet-wide (substrate-level signal).
+    // One UPSERT per distinct pattern seen this run.
+    const fleetMap = new Map<string, {
+      chain_pattern: string[];
+      agentSet: Set<string>;
+      total_frequency: number;
+      total_overhead: number;
+      overhead_samples: number;
+    }>();
+    for (const [agentId, patterns] of agentPatterns) {
+      for (const [patternKey, data] of patterns) {
+        const chainPattern = JSON.parse(patternKey) as string[];
+        const patternHash = sha256(patternKey);
+        const entry = fleetMap.get(patternHash) ?? {
+          chain_pattern: chainPattern,
+          agentSet: new Set<string>(),
+          total_frequency: 0,
+          total_overhead: 0,
+          overhead_samples: 0,
+        };
+        entry.agentSet.add(agentId);
+        entry.total_frequency += data.frequency;
+        const avgOverhead = data.frequency > 0 ? data.totalMs / data.frequency : 0;
+        entry.total_overhead += avgOverhead * data.frequency;
+        entry.overhead_samples += data.frequency;
+        fleetMap.set(patternHash, entry);
+      }
+    }
+
+    let fleetUpserted = 0;
+    for (const [patternHash, entry] of fleetMap) {
+      const avgOverheadMs = entry.overhead_samples > 0
+        ? Math.round(entry.total_overhead / entry.overhead_samples)
+        : 0;
+      await execute(
+        `INSERT INTO chain_analysis_fleet (
+           pattern_hash, chain_pattern, analysis_window,
+           agent_count, total_frequency, avg_chain_length,
+           avg_total_ms, avg_overhead_ms, computed_at
+         ) VALUES ($1, $2, 'day', $3, $4, $5, $6, $6, now())
+         ON CONFLICT (pattern_hash, analysis_window) DO UPDATE SET
+           chain_pattern = $2,
+           agent_count = $3,
+           total_frequency = $4,
+           avg_chain_length = $5,
+           avg_overhead_ms = $6,
+           avg_total_ms = $6,
+           computed_at = now()`,
+        [
+          patternHash,
+          entry.chain_pattern,
+          entry.agentSet.size,
+          entry.total_frequency,
+          entry.chain_pattern.length,
+          avgOverheadMs,
+        ],
+      );
+      fleetUpserted++;
+    }
+
+    log.info({ fleetUpserted }, 'Fleet chain patterns computed');
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ pairs_upserted: pairsUpserted, patterns_upserted: patternsUpserted }),
+      body: JSON.stringify({
+        pairs_upserted: pairsUpserted,
+        patterns_upserted: patternsUpserted,
+        fleet_upserted: fleetUpserted,
+      }),
     };
   } catch (err) {
     log.error({ err }, 'Chain analysis computation failed');

@@ -127,7 +127,8 @@ export default function AgentProfile() {
       <div style={{ color: '#888', fontSize: '0.85rem', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
         Different ways of looking at the same interaction profile. <b style={{ color: '#ccc' }}>Friction</b> surfaces
         where time and tokens are being lost. <b style={{ color: '#ccc' }}>Revealed Preference</b> compares what you
-        declared to what you actually call — a view only ACR can produce.
+        declared to what you actually call. <b style={{ color: '#ccc' }}>Compensation</b> measures chain-shape
+        stability — how stereotyped your routines are vs exploratory.
       </div>
     </div>
   );

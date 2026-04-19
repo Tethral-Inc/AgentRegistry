@@ -10,7 +10,7 @@
  * as they ship.
  */
 
-type LensKey = 'friction' | 'revealed-preference' | 'coverage' | 'stable-corridors' | 'trend';
+type LensKey = 'friction' | 'revealed-preference' | 'compensation' | 'coverage' | 'stable-corridors' | 'trend';
 
 interface LensDef {
   key: LensKey;
@@ -33,6 +33,12 @@ const LENSES: LensDef[] = [
     label: 'Revealed Preference',
     href: (id) => `/agents/${id}/revealed-preference`,
     description: 'What you declared vs what you actually call',
+  },
+  {
+    key: 'compensation',
+    label: 'Compensation',
+    href: (id) => `/agents/${id}/compensation`,
+    description: 'Chain-shape stability — routine vs exploratory',
   },
 ];
 
