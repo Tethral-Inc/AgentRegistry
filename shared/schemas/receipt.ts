@@ -55,6 +55,16 @@ export const InteractionSchema = z.object({
   error_code: z.string().max(50).optional(),
   response_size_bytes: z.number().nonnegative().optional(),
   tokens_used: z.number().int().min(0).optional(),
+  // Capture-surface expansion (migration 000016). All optional. Populate
+  // when the agent can supply them; empty otherwise. These fields seed
+  // future lenses (substitution graph, decision-cost, wasted-attention,
+  // contextual cost surface, prompt-cache efficiency) without requiring
+  // further schema changes when those lenses ship.
+  substitution_of: z.string().max(200).optional(),
+  decision_tokens: z.number().int().min(0).optional(),
+  result_used: z.boolean().optional(),
+  context_bytes: z.number().int().min(0).optional(),
+  prompt_cache_hit_ratio: z.number().min(0).max(1).optional(),
 });
 
 export const AnomalySchema = z.object({
