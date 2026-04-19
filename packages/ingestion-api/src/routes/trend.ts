@@ -51,7 +51,18 @@ function getScopeWindows(scope: string): { current: { start: Date; end: Date }; 
   return { current: { start, end }, previous: { start: previousStart, end: previousEnd } };
 }
 
-async function fetchWindow(agentId: string, start: Date, end: Date): Promise<TargetWindow[]> {
+async function fetchWindow(
+  agentId: string,
+  start: Date,
+  end: Date,
+  sourceFilter: string | null,
+): Promise<TargetWindow[]> {
+  const params: unknown[] = [agentId, start.toISOString(), end.toISOString()];
+  let sourceClause = '';
+  if (sourceFilter) {
+    params.push(sourceFilter);
+    sourceClause = ` AND source = $${params.length}`;
+  }
   return query<TargetWindow>(
     `SELECT
        target_system_id AS "target",
@@ -65,10 +76,10 @@ async function fetchWindow(agentId: string, start: Date, end: Date): Promise<Tar
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND duration_ms IS NOT NULL
+       AND duration_ms IS NOT NULL${sourceClause}
      GROUP BY target_system_id
      HAVING COUNT(*) >= 5`,
-    [agentId, start.toISOString(), end.toISOString()],
+    params,
   ).catch(() => []);
 }
 
@@ -84,13 +95,18 @@ app.get('/agent/:agent_id/trend', async (c) => {
   const scope = scopeParsed.data;
   const { current, previous } = getScopeWindows(scope);
 
+  // Source defaults to 'agent' so trend reflects the agent's real interactions,
+  // not server-side self-log. Pass source=all to include both.
+  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
+
   const resolved = await resolveAgentId(identifier);
   const agentId = resolved.agent_id;
   const agentName = resolved.name;
 
   const [currentRows, previousRows] = await Promise.all([
-    fetchWindow(agentId, current.start, current.end),
-    fetchWindow(agentId, previous.start, previous.end),
+    fetchWindow(agentId, current.start, current.end, sourceFilter),
+    fetchWindow(agentId, previous.start, previous.end, sourceFilter),
   ]);
 
   const previousMap = new Map<string, TargetWindow>();

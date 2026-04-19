@@ -49,6 +49,8 @@ export class SessionState {
   setMcpServer(server: McpServer): void { this._mcpServer = server; }
 
   /** Infer provider_class from the MCP client name (e.g. "claude-code" → "anthropic"). */
+  get providerClass(): string { return this.inferProviderClass(); }
+
   private inferProviderClass(): string {
     const clientName = this._mcpServer?.server?.getClientVersion?.()?.name?.toLowerCase();
     if (!clientName) return 'unknown';

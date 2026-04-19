@@ -12,11 +12,12 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
         scope: z.enum(['day', 'yesterday', 'week']).optional().default('week').describe('Time window (compares current to previous)'),
+        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source. 'agent' = your log_interaction calls (default). 'server' = observer-side self-log. 'all' = both."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.5 },
     },
-    async ({ agent_id, agent_name, scope }) => {
+    async ({ agent_id, agent_name, scope, source }) => {
       let id: string;
       let displayName: string;
       try {
@@ -28,7 +29,8 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/trend?scope=${scope}`, { headers: getAuthHeaders() });
+        const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
+        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/trend?${params}`, { headers: getAuthHeaders() });
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Trend error: ${errText}` }] };
@@ -38,10 +40,13 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
 
         const targets = data.per_target as Array<Record<string, unknown>> ?? [];
         const rules = data.inclusion_rules as Record<string, unknown>;
+        const currentPeriod = data.current_period as { start: string; end: string } | undefined;
+        const previousPeriod = data.comparison_period as { start: string; end: string } | undefined;
 
         let text = `Trend for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
-        text += `Current: ${data.current_period}\n`;
-        text += `Previous: ${data.comparison_period}\n`;
+        text += `Source: ${source ?? 'agent'}\n`;
+        if (currentPeriod) text += `Current: ${currentPeriod.start} to ${currentPeriod.end}\n`;
+        if (previousPeriod) text += `Previous: ${previousPeriod.start} to ${previousPeriod.end}\n`;
 
         if (targets.length === 0) {
           text += `\nNo targets with data in both periods.\n`;

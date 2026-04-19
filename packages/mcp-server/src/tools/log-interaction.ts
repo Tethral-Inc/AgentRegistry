@@ -96,7 +96,7 @@ export function logInteractionTool(
           body: JSON.stringify({
             emitter: {
               agent_id: id,
-              provider_class: 'unknown',
+              provider_class: defaultSession.providerClass,
             },
             target: {
               system_id: params.target_system_id,

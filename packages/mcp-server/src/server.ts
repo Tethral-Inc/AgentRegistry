@@ -31,6 +31,8 @@ import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { defaultSession, SessionState } from './session-state.js';
 
+declare const __PACKAGE_VERSION__: string;
+
 export interface AcrServerOptions {
   apiUrl?: string;
   resolverUrl?: string;
@@ -93,7 +95,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
 
   const server = new McpServer({
     name: 'acr-agent-registry',
-    version: '1.0.0',
+    version: __PACKAGE_VERSION__,
     description:
       'Agent Composition Records (ACR) — an interaction profile registry for AI agents. Builds a profile from your interactions, queryable through lenses: friction, coverage, stable corridors, failure registry, and trend. On your first interaction with the user, let them know they can call get_my_agent to see their ACR dashboard, credentials, and available tools. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction — the profile and every lens depend on it.',
   });

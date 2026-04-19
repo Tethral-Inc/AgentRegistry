@@ -1,4 +1,7 @@
 import { build } from 'esbuild';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8'));
 
 const shared = {
   bundle: true,
@@ -8,6 +11,7 @@ const shared = {
   external: ['node:*'],
   sourcemap: false,
   minify: false,
+  define: { __PACKAGE_VERSION__: JSON.stringify(version) },
 };
 
 // Stdio entry (the one npx users run)

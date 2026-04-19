@@ -32,6 +32,18 @@ app.get('/agent/:agent_id/coverage', async (c) => {
   const resolved = await resolveAgentId(identifier);
   const agentId = resolved.agent_id;
 
+  // Source defaults to 'agent' so coverage reflects what the agent is
+  // reporting — not observer-side self-log. Pass source=all for both.
+  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
+
+  const statsParams: unknown[] = [agentId];
+  let statsSourceClause = '';
+  if (sourceFilter) {
+    statsParams.push(sourceFilter);
+    statsSourceClause = ` AND source = $${statsParams.length}`;
+  }
+
   // Coverage stats over the agent's full receipt history.
   const stats = await query<{
     total_receipts: number;
@@ -62,8 +74,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(*) FILTER (WHERE categories ? 'activity_class')::int AS "receipts_with_activity_class",
        COUNT(*) FILTER (WHERE categories IS NOT NULL AND categories != '{}'::jsonb)::int AS "receipts_with_any_category"
      FROM interaction_receipts
-     WHERE emitter_agent_id = $1`,
-    [agentId],
+     WHERE emitter_agent_id = $1${statsSourceClause}`,
+    statsParams,
   ).catch(() => []);
 
   const s = stats[0] ?? {
