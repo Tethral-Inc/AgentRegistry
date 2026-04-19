@@ -48,6 +48,7 @@ export {
 export {
   FrictionScope,
   FrictionSummarySchema,
+  ShadowTaxSchema,
   TargetFrictionSchema,
   FrictionReportSchema,
   ComponentFrictionSchema,

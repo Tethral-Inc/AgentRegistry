@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { confidence } from '../utils/confidence.js';
 
 export function getTrendTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -55,16 +56,21 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
             const curr = t.current as Record<string, unknown>;
             const prev = t.previous as Record<string, unknown> | null;
 
+            const currN = (curr.receipt_count as number) ?? 0;
+            const prevN = (prev?.receipt_count as number) ?? 0;
             text += `\n  ${t.target}\n`;
-            text += `    current:  median ${curr.median_duration_ms}ms | failure ${((curr.failure_rate as number) * 100).toFixed(1)}% | ${curr.receipt_count} receipts\n`;
+            text += `    current:  median ${curr.median_duration_ms}ms | failure ${((curr.failure_rate as number) * 100).toFixed(1)}% | ${currN} receipts ${confidence(currN)}\n`;
 
             if (prev) {
-              text += `    previous: median ${prev.median_duration_ms}ms | failure ${((prev.failure_rate as number) * 100).toFixed(1)}% | ${prev.receipt_count} receipts\n`;
+              text += `    previous: median ${prev.median_duration_ms}ms | failure ${((prev.failure_rate as number) * 100).toFixed(1)}% | ${prevN} receipts ${confidence(prevN)}\n`;
+              // Delta confidence is the weaker of the two periods — a big
+              // delta against a pre-signal baseline is still pre-signal.
+              const deltaN = Math.min(currN, prevN);
               if (t.latency_change_ratio != null) {
-                text += `    latency delta: ${((t.latency_change_ratio as number) * 100).toFixed(1)}%\n`;
+                text += `    latency delta: ${((t.latency_change_ratio as number) * 100).toFixed(1)}% ${confidence(deltaN)}\n`;
               }
               if (t.failure_rate_delta != null) {
-                text += `    failure rate delta: ${((t.failure_rate_delta as number) * 100).toFixed(1)} pp\n`;
+                text += `    failure rate delta: ${((t.failure_rate_delta as number) * 100).toFixed(1)} pp ${confidence(deltaN)}\n`;
               }
             } else {
               text += `    previous: no data\n`;

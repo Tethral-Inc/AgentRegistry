@@ -229,6 +229,13 @@ export interface FrictionResponse {
     friction_percentage: number;
     total_failures: number;
     failure_rate: number;
+    shadow_tax?: {
+      total_ms: number;
+      failed_call_ms: number;
+      retry_ms: number;
+      chain_queue_ms: number;
+      percentage_of_wait: number;
+    };
   };
   by_category: Array<{ category: string; interaction_count: number; total_duration_ms: number; failure_count: number }>;
   top_targets: Array<{
@@ -244,6 +251,10 @@ export interface FrictionResponse {
     vs_baseline?: number | null;
     volatility?: number;
     recent_anomalies?: Array<{ category: string | null; detail: string | null; timestamp: string }>;
+    percentile_rank?: number;
+    percentile_rank_in_class?: number;
+    cohort_size?: number;
+    provider_class?: string | null;
   }>;
   by_transport: Array<{ transport: string; interaction_count: number; total_duration_ms: number }>;
   by_source: Array<{ source: string; interaction_count: number }>;

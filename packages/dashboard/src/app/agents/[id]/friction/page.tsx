@@ -91,6 +91,27 @@ export default function FrictionDashboard() {
         <Stat label="Failure Rate" value={`${(summary.failure_rate * 100).toFixed(1)}%`} />
       </div>
 
+      {summary.shadow_tax && summary.shadow_tax.total_ms > 0 && (
+        <div style={{
+          background: '#141414', border: '1px solid #252525', borderRadius: '8px',
+          padding: '1rem 1.25rem', marginBottom: '1.5rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '1rem', margin: 0, color: '#f97316' }}>Shadow Tax</h2>
+            <span style={{ color: '#888', fontSize: '0.8rem' }}>
+              wait time that produced no forward progress
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+            <Stat label="Total" value={formatMs(summary.shadow_tax.total_ms)} />
+            <Stat label="Failed calls" value={formatMs(summary.shadow_tax.failed_call_ms)} />
+            <Stat label="Retries" value={formatMs(summary.shadow_tax.retry_ms)} />
+            <Stat label="Chain queue" value={formatMs(summary.shadow_tax.chain_queue_ms)} />
+            <Stat label="% of wait" value={`${(summary.shadow_tax.percentage_of_wait * 100).toFixed(1)}%`} />
+          </div>
+        </div>
+      )}
+
       <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Top Friction Targets</h2>
       {data.top_targets.length === 0 ? (
         <p style={{ color: '#666' }}>No target data in this period.</p>
@@ -107,18 +128,20 @@ export default function FrictionDashboard() {
             <tbody>
               {data.top_targets.map(target => {
                 const hasAnomalies = target.recent_anomalies && target.recent_anomalies.length > 0;
+                const hasCohortRank = target.percentile_rank_in_class != null;
+                const expandable = hasAnomalies || hasCohortRank;
                 const expanded = expandedTargets.has(target.target_system_id);
                 return (
                   <Fragment key={target.target_system_id}>
                     <tr
-                      style={{ borderBottom: '1px solid #1a1a1a', cursor: hasAnomalies ? 'pointer' : 'default' }}
-                      onClick={() => hasAnomalies && toggleTarget(target.target_system_id)}
-                      onMouseEnter={(e) => hasAnomalies && (e.currentTarget.style.background = '#141414')}
+                      style={{ borderBottom: '1px solid #1a1a1a', cursor: expandable ? 'pointer' : 'default' }}
+                      onClick={() => expandable && toggleTarget(target.target_system_id)}
+                      onMouseEnter={(e) => expandable && (e.currentTarget.style.background = '#141414')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = '')}
                     >
                       <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontSize: '0.8rem' }}>
                         {target.target_system_id}
-                        {hasAnomalies && <span style={{ color: '#f97316', marginLeft: '0.5rem' }}>{expanded ? '\u25BC' : '\u25B6'} {target.recent_anomalies!.length}</span>}
+                        {expandable && <span style={{ color: hasAnomalies ? '#f97316' : '#4a9eff', marginLeft: '0.5rem' }}>{expanded ? '\u25BC' : '\u25B6'}{hasAnomalies ? ` ${target.recent_anomalies!.length}` : ''}</span>}
                       </td>
                       <td style={{ padding: '0.5rem' }}>{target.interaction_count}</td>
                       <td style={{ padding: '0.5rem' }}>{(target.proportion_of_total * 100).toFixed(1)}%</td>
@@ -130,6 +153,17 @@ export default function FrictionDashboard() {
                       </td>
                       <td style={{ padding: '0.5rem' }}>{target.volatility != null ? target.volatility.toFixed(2) : '\u2014'}</td>
                     </tr>
+                    {expanded && hasCohortRank && (
+                      <tr style={{ background: '#141414' }}>
+                        <td colSpan={8} style={{ padding: '0.4rem 0.5rem 0.4rem 2rem', borderLeft: '3px solid #4a9eff', fontSize: '0.8rem', color: '#ccc' }}>
+                          Faster than <b style={{ color: '#4a9eff' }}>{target.percentile_rank_in_class}%</b> of <b style={{ color: '#ccc' }}>{target.provider_class}</b> peers on this target
+                          <span style={{ color: '#666' }}> — cohort size {target.cohort_size}</span>
+                          {target.percentile_rank != null && (
+                            <span style={{ color: '#666' }}> · global rank: {target.percentile_rank}%</span>
+                          )}
+                        </td>
+                      </tr>
+                    )}
                     {expanded && target.recent_anomalies?.map((anomaly, i) => (
                       <tr key={`anomaly-${i}`} style={{ background: '#141414' }}>
                         <td colSpan={8} style={{ padding: '0.4rem 0.5rem 0.4rem 2rem', borderLeft: '3px solid #f97316', fontSize: '0.8rem', color: '#ccc' }}>

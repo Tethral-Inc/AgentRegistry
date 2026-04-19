@@ -8,6 +8,7 @@ import {
 
 import { sha256 } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { computeShadowTax } from '../lib/shadow-tax.js';
 
 const log = createLogger({ name: 'friction' });
 const app = new Hono();
@@ -95,6 +96,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
     chain_position: number | null;
     preceded_by: string | null;
     tokens_used: number | null;
+    emitter_provider_class: string | null;
   }>(
     `SELECT target_system_id AS "target_system_id",
             target_system_type AS "target_system_type",
@@ -113,7 +115,8 @@ app.get('/agent/:agent_id/friction', async (c) => {
             chain_id AS "chain_id",
             chain_position AS "chain_position",
             preceded_by AS "preceded_by",
-            tokens_used AS "tokens_used"
+            tokens_used AS "tokens_used",
+            emitter_provider_class AS "emitter_provider_class"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
@@ -135,6 +138,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
         friction_percentage: 0,
         total_failures: 0,
         failure_rate: 0,
+        shadow_tax: { total_ms: 0, failed_call_ms: 0, retry_ms: 0, chain_queue_ms: 0, percentage_of_wait: 0 },
       },
       top_targets: [],
     });
@@ -399,6 +403,64 @@ app.get('/agent/:agent_id/friction', async (c) => {
     }
   }
 
+  // Provider-class cohort percentile: the agent's median vs peers of the
+  // same provider_class. Answers "among other anthropic agents, where do I
+  // sit on this target?" — more useful than the cross-class ranking when
+  // provider capabilities differ materially.
+  const providerClass = rows[0]?.emitter_provider_class ?? null;
+  const cohortPercentileMap = new Map<string, { rank: number; cohort_size: number }>();
+  if (providerClass && targetIdsForPercentile.length > 0) {
+    try {
+      const cohortParams: unknown[] = [start.toISOString(), end.toISOString(), targetIdsForPercentile, agentId, providerClass];
+      let cohortSourceClause = '';
+      if (sourceFilter) {
+        cohortParams.push(sourceFilter);
+        cohortSourceClause = ` AND source = $${cohortParams.length}`;
+      }
+      const cohortRows = await query<{ target_system_id: string; percentile_rank: number; cohort_size: number }>(
+        `SELECT target_system_id, percentile_rank, cohort_size
+         FROM (
+           SELECT
+             target_system_id,
+             emitter_agent_id,
+             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms) AS agent_median,
+             PERCENT_RANK() OVER (
+               PARTITION BY target_system_id
+               ORDER BY PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)
+             ) AS percentile_rank,
+             COUNT(*) OVER (PARTITION BY target_system_id)::int AS cohort_size
+           FROM interaction_receipts
+           WHERE created_at >= $1
+             AND created_at <= $2
+             AND target_system_id = ANY($3)
+             AND duration_ms IS NOT NULL
+             AND emitter_provider_class = $5${cohortSourceClause}
+           GROUP BY target_system_id, emitter_agent_id
+           HAVING COUNT(*) >= 3
+         ) ranked
+         WHERE emitter_agent_id = $4`,
+        cohortParams,
+      );
+      for (const row of cohortRows) {
+        cohortPercentileMap.set(row.target_system_id, {
+          rank: Math.round((1 - row.percentile_rank) * 100),
+          cohort_size: row.cohort_size,
+        });
+      }
+    } catch (err) {
+      log.debug({ err }, 'Cohort percentile query failed — non-fatal');
+    }
+  }
+
+  for (const t of targets) {
+    const cohort = cohortPercentileMap.get(t.target_system_id as string);
+    if (cohort && cohort.cohort_size >= 3) {
+      t.percentile_rank_in_class = cohort.rank;
+      t.cohort_size = cohort.cohort_size;
+      t.provider_class = providerClass;
+    }
+  }
+
   const isPaidTier = (c.req.header('X-ACR-Auth-Tier') ?? 'free') !== 'free';
 
   // ── Retry Overhead (pro tier) ──
@@ -651,6 +713,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
       failure_rate: rows.length > 0 ? Math.round((totalFailures / rows.length) * 1000) / 1000 : 0,
       ...(totalTokensUsed > 0 ? { total_tokens_used: totalTokensUsed } : {}),
       ...(wastedTokensTotal > 0 ? { wasted_tokens: wastedTokensTotal } : {}),
+      shadow_tax: computeShadowTax(rows, totalWaitMs),
     },
     by_category: categories,
     top_targets: visibleTargets,
