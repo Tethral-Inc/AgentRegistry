@@ -44,11 +44,23 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx wrangler deploy || echo "Resolver API not yet built, skipping"
-      # Deploy ingestion API to Vercel (production)
-      - name: Deploy ingestion-api to Vercel
+      # Deploy ingestion API to Vercel (production) — prebuilt to avoid remote OOM on monorepo resolution
+      - name: Pull Vercel environment
         working-directory: packages/ingestion-api
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel@latest --prod --yes --token "$VERCEL_TOKEN"
+        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build with Vercel
+        working-directory: packages/ingestion-api
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy prebuilt to Vercel
+        working-directory: packages/ingestion-api
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
