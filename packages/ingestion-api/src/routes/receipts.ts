@@ -10,9 +10,12 @@ import {
   createLogger,
 } from '@acr/shared';
 import type { InteractionReceipt } from '@acr/shared';
+import { optionalAgentAuth } from '../middleware/optional-agent-auth.js';
 
 const log = createLogger({ name: 'receipts' });
 const app = new Hono();
+
+app.use('/receipts', optionalAgentAuth);
 
 app.post('/receipts', async (c) => {
   let body: unknown;
@@ -41,6 +44,22 @@ app.post('/receipts', async (c) => {
       );
     }
     receipts = [parsed.data];
+  }
+
+  // If the caller authenticated with an API key, every receipt in the batch
+  // must be emitted by that key's owner. Unauthenticated callers pass through
+  // (backward compat with SDKs that don't yet send keys); they are still
+  // bounded by the global IP rate limiter.
+  const authedAgent = c.req.raw.headers.get('X-ACR-Auth-Agent');
+  if (authedAgent) {
+    for (const receipt of receipts) {
+      if (receipt.emitter.agent_id !== authedAgent) {
+        return c.json(
+          makeError('FORBIDDEN', 'emitter.agent_id does not match the authenticated API key owner'),
+          403,
+        );
+      }
+    }
   }
 
   const receiptIds: string[] = [];
