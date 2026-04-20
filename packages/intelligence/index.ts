@@ -7,3 +7,5 @@ export { handler as skillThreatUpdate } from './anomaly/skill-threat-update.js';
 export { handler as frictionBaselineCompute } from './anomaly/friction-baseline-compute.js';
 export { handler as agentExpiration } from './maintenance/agent-expiration.js';
 export { handler as dataArchival } from './maintenance/data-archival.js';
+export { handler as agentBaselineCompute } from './anomaly/agent-baseline-compute.js';
+export { handler as agentAnomalyDetect } from './anomaly/agent-anomaly-detect.js';

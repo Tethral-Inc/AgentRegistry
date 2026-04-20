@@ -13,6 +13,8 @@ import {
   frictionBaselineCompute,
   agentExpiration,
   dataArchival,
+  agentBaselineCompute,
+  agentAnomalyDetect,
 } from '@acr/intelligence';
 
 const log = createLogger({ name: 'cron' });
@@ -51,5 +53,10 @@ app.get('/cron/friction-baseline-compute', wrapJob('friction-baseline-compute', 
 // Phase 2: Housekeeping
 app.get('/cron/agent-expiration', wrapJob('agent-expiration', agentExpiration));
 app.get('/cron/data-archival', wrapJob('data-archival', dataArchival));
+
+// Phase 3: Anomaly-on-ingest (shadow mode). Baselines recomputed hourly,
+// detection runs on the schedule the external caller picks (15 min).
+app.get('/cron/agent-baseline-compute', wrapJob('agent-baseline-compute', agentBaselineCompute));
+app.get('/cron/agent-anomaly-detect', wrapJob('agent-anomaly-detect', agentAnomalyDetect));
 
 export { app as cronRoute };
