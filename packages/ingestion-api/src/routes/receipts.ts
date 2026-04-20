@@ -15,6 +15,14 @@ import { optionalAgentAuth } from '../middleware/optional-agent-auth.js';
 const log = createLogger({ name: 'receipts' });
 const app = new Hono();
 
+// Phase 0 of anomaly-on-ingest: write counters, read quarantine, but do not
+// reject. Flip to false once baselines have 24h of coverage per agent and
+// we've confirmed the signals in log review.
+const SHADOW_MODE = true;
+// Hard per-agent hourly receipt cap. Well above any legitimate fleet rate
+// — a single compromised agent flooding this means something is wrong.
+const HARD_HOURLY_CAP = 10_000;
+
 app.use('/receipts', optionalAgentAuth);
 
 app.post('/receipts', async (c) => {
@@ -59,6 +67,72 @@ app.post('/receipts', async (c) => {
           403,
         );
       }
+    }
+  }
+
+  // Shadow-mode anomaly checks: group by agent, read quarantine + bump
+  // hourly counter. Never blocks in SHADOW_MODE — only logs the signal so
+  // we can calibrate thresholds before enforcing.
+  const byAgent = new Map<string, { count: number; flagged: number; targets: Set<string> }>();
+  for (const r of receipts) {
+    const agg = byAgent.get(r.emitter.agent_id) ?? { count: 0, flagged: 0, targets: new Set<string>() };
+    agg.count += 1;
+    if (r.anomaly.flagged) agg.flagged += 1;
+    agg.targets.add(normalizeSystemId(r.target.system_id));
+    byAgent.set(r.emitter.agent_id, agg);
+  }
+
+  for (const [agentId, agg] of byAgent) {
+    try {
+      const quarantineRows = await query<{ reason: string; flagged_at: string }>(
+        `SELECT reason AS "reason", flagged_at::text AS "flagged_at"
+         FROM agent_quarantine
+         WHERE agent_id = $1 AND cleared_at IS NULL
+           AND (expires_at IS NULL OR expires_at > now())`,
+        [agentId],
+      );
+      if (quarantineRows.length > 0) {
+        const q = quarantineRows[0]!;
+        log.warn(
+          { agentId, reason: q.reason, flaggedAt: q.flagged_at, shadow: SHADOW_MODE },
+          'Receipt from quarantined agent',
+        );
+        if (!SHADOW_MODE) {
+          return c.json(
+            makeError('FORBIDDEN', `Agent is quarantined: ${q.reason}`),
+            403,
+          );
+        }
+      }
+
+      const counterRows = await query<{ receipt_count: number }>(
+        `INSERT INTO ingest_counters (agent_id, bucket_hour, receipt_count, anomaly_flagged, distinct_targets)
+         VALUES ($1, date_trunc('hour', now()), $2, $3, $4)
+         ON CONFLICT (agent_id, bucket_hour) DO UPDATE SET
+           receipt_count = ingest_counters.receipt_count + EXCLUDED.receipt_count,
+           anomaly_flagged = ingest_counters.anomaly_flagged + EXCLUDED.anomaly_flagged,
+           distinct_targets = GREATEST(ingest_counters.distinct_targets, EXCLUDED.distinct_targets),
+           updated_at = now()
+         RETURNING receipt_count AS "receipt_count"`,
+        [agentId, agg.count, agg.flagged, agg.targets.size],
+      );
+      const hourly = counterRows[0]?.receipt_count ?? 0;
+      if (hourly > HARD_HOURLY_CAP) {
+        log.warn(
+          { agentId, hourly, cap: HARD_HOURLY_CAP, shadow: SHADOW_MODE },
+          'Agent exceeded hard hourly receipt cap',
+        );
+        if (!SHADOW_MODE) {
+          return c.json(
+            makeError('RATE_LIMITED', `Exceeded hard hourly cap of ${HARD_HOURLY_CAP} receipts`),
+            429,
+          );
+        }
+      }
+    } catch (err) {
+      // Non-fatal in shadow mode: missing tables in envs that haven't run
+      // 000018 yet should not break receipt ingestion.
+      log.warn({ agentId, err: (err as Error).message }, 'Anomaly-on-ingest check failed');
     }
   }
 

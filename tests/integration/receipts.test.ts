@@ -185,4 +185,53 @@ describe('POST /api/v1/receipts', () => {
     });
     expect(res.status).toBe(401);
   });
+
+  it('accepts receipt from quarantined agent in shadow mode', async () => {
+    vi.mocked(query).mockResolvedValueOnce([
+      { reason: 'volume spike', flagged_at: new Date().toISOString() } as never,
+    ]);
+    const res = await app.request('/api/v1/receipts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emitter: { agent_id: 'acr_abcdef123456', provider_class: 'openclaw' },
+        target: { system_id: 'mcp:github', system_type: 'mcp_server' },
+        interaction: {
+          category: 'tool_call',
+          status: 'success',
+          request_timestamp_ms: Date.now() - 1000,
+          duration_ms: 100,
+        },
+        anomaly: { flagged: false },
+      }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it('increments ingest_counters once per unique agent in the batch', async () => {
+    const receipts = Array.from({ length: 3 }, (_, i) => ({
+      emitter: { agent_id: 'acr_abcdef123456', provider_class: 'openclaw' as const },
+      target: { system_id: `mcp:target${i}`, system_type: 'mcp_server' as const },
+      interaction: {
+        category: 'tool_call' as const,
+        status: 'success' as const,
+        request_timestamp_ms: Date.now() - i * 100,
+        duration_ms: 100,
+      },
+      anomaly: { flagged: i === 0 },
+    }));
+
+    const res = await app.request('/api/v1/receipts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receipts }),
+    });
+    expect(res.status).toBe(201);
+
+    const counterCall = vi
+      .mocked(query)
+      .mock.calls.find(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO ingest_counters'));
+    expect(counterCall).toBeDefined();
+    expect(counterCall?.[1]).toEqual(['acr_abcdef123456', 3, 1, 3]);
+  });
 });
