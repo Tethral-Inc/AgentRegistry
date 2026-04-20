@@ -1,1 +1,3 @@
 .vercel
+src/index.vercel-bundle.mjs
+dist/

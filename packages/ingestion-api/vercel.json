@@ -1,6 +1,6 @@
 {
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm --filter @acr/shared build && pnpm --filter @acr/intelligence build",
+  "buildCommand": "cd ../.. && pnpm --filter @acr/shared build && pnpm --filter @acr/intelligence build && pnpm --filter ingestion-api bundle:vercel",
   "rewrites": [
     { "source": "/lookup", "destination": "/public/lookup.html" },
     { "source": "/(.*)", "destination": "/api/[[...route]]" }
