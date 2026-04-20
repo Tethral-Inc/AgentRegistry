@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       hono:
-        specifier: ^4.4.0
-        version: 4.12.9
+        specifier: ^4.12.14
+        version: 4.12.14
     devDependencies:
       '@types/node':
         specifier: ^20
@@ -61,13 +61,13 @@ importers:
         version: link:../../shared
       '@hono/node-server':
         specifier: ^1.11.0
-        version: 1.19.12(hono@4.12.9)
+        version: 1.19.12(hono@4.12.14)
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
       hono:
-        specifier: ^4.4.0
-        version: 4.12.9
+        specifier: ^4.12.14
+        version: 4.12.14
     devDependencies:
       esbuild:
         specifier: ^0.21.0
@@ -1512,8 +1512,8 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.9:
-    resolution: {integrity: sha512-wy3T8Zm2bsEvxKZM5w21VdHDDcwVS1yUFFY6i8UobSsKfFceT7TOwhbhfKsDyx7tYQlmRM5FLpIuYvNFyjctiA==}
+  hono@4.12.14:
+    resolution: {integrity: sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -2528,9 +2528,9 @@ snapshots:
 
   '@fastify/busboy@2.1.1': {}
 
-  '@hono/node-server@1.19.12(hono@4.12.9)':
+  '@hono/node-server@1.19.12(hono@4.12.14)':
     dependencies:
-      hono: 4.12.9
+      hono: 4.12.14
 
   '@img/sharp-darwin-arm64@0.33.5':
     optionalDependencies:
@@ -2622,7 +2622,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.12(hono@4.12.9)
+      '@hono/node-server': 1.19.12(hono@4.12.14)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
@@ -2632,7 +2632,7 @@ snapshots:
       eventsource-parser: 3.0.6
       express: 5.2.1
       express-rate-limit: 8.3.2(express@5.2.1)
-      hono: 4.12.9
+      hono: 4.12.14
       jose: 6.2.2
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -3245,7 +3245,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.9: {}
+  hono@4.12.14: {}
 
   http-errors@2.0.1:
     dependencies:
