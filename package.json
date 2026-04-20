@@ -4,9 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "turbo build",
-    "test": "turbo test",
-    "test:unit": "vitest run --project unit",
-    "test:integration": "vitest run --project integration",
+    "test": "vitest run",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
     "migrate:up": "node scripts/run-migration.mjs up",
