@@ -110,7 +110,7 @@ async function getCurrentVersion(client) {
   const rows = await getAppliedVersions(client);
   if (rows.length === 0) return { version: 0, dirty: false };
   const last = rows[rows.length - 1];
-  return { version: last.version, dirty: last.dirty };
+  return { version: parseInt(last.version, 10), dirty: last.dirty };
 }
 
 async function markApplied(client, version) {
@@ -146,7 +146,7 @@ async function cmdUp(client, migrations, limit) {
     process.exit(1);
   }
 
-  const appliedSet = new Set(applied.map((r) => r.version));
+  const appliedSet = new Set(applied.map((r) => parseInt(r.version, 10)));
   const pending = migrations.filter((m) => !appliedSet.has(m.version));
 
   if (pending.length === 0) {
@@ -195,7 +195,7 @@ async function cmdDown(client, migrations, count) {
     return;
   }
 
-  const appliedVersions = applied.map((r) => r.version).sort((a, b) => b - a);
+  const appliedVersions = applied.map((r) => parseInt(r.version, 10)).sort((a, b) => b - a);
   const toRollback = appliedVersions.slice(0, count);
 
   console.log(`Rolling back ${toRollback.length} migration(s).\n`);
@@ -241,7 +241,7 @@ async function cmdVersion(client) {
 
 async function cmdStatus(client, migrations) {
   const applied = await getAppliedVersions(client);
-  const appliedMap = new Map(applied.map((r) => [r.version, r]));
+  const appliedMap = new Map(applied.map((r) => [parseInt(r.version, 10), r]));
 
   console.log('Migration Status:\n');
   console.log('  Version  | Applied | Dirty | Name');
