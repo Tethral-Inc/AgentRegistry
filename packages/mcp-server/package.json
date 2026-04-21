@@ -1,6 +1,6 @@
 {
   "name": "@tethral/acr-mcp",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "MCP server for ACR (Agent Composition Records). An interaction profile registry for AI agents — log interactions, build a profile, and query it through behavioral lenses (friction, coverage, stable corridors, failure registry, trend, revealed-preference, compensation signatures). 25 tools. Shadow tax + provider-class cohort rank on friction report. Raw data, no synthetic labels.",
   "type": "module",
   "main": "dist/index.mjs",

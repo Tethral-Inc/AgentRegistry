@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { SessionState } from '../session-state.js';
 import { stripSubComponents } from '../strip-sub-components.js';
+import { getAuthHeaders } from '../state.js';
 
 // Component schema — matches shared/schemas/agent.ts CompositionSchema.
 // Kept local so we don't need to cross package boundaries for the Zod type.
@@ -56,7 +57,7 @@ export function updateCompositionTool(server: McpServer, apiUrl: string, getSess
 
         const res = await fetch(`${apiUrl}/api/v1/composition/update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({
             agent_id: resolvedAgentId,
             composition: effectiveComposition,

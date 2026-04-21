@@ -8,6 +8,7 @@
  */
 import type { SessionState } from '../session-state.js';
 import { defaultSession } from '../session-state.js';
+import { getAuthHeaders } from '../state.js';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
 type ToolHandler = (params: Record<string, unknown>, extra: unknown) => Promise<ToolResult>;
@@ -71,7 +72,7 @@ async function fireAndForgetLog(
 
     const res = await fetch(`${apiUrl}/api/v1/receipts`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       signal: controller.signal,
       body: JSON.stringify({
         emitter: {

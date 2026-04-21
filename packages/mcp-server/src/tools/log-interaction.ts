@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId } from '../state.js';
+import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
 import { defaultSession } from '../session-state.js';
 import type { CorrelationWindow } from '../middleware/correlation-window.js';
 
@@ -100,7 +100,7 @@ export function logInteractionTool(
 
         const res = await fetch(`${apiUrl}/api/v1/receipts`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({
             emitter: {
               agent_id: id,

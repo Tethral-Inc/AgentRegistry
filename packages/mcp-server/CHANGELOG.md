@@ -1,3 +1,13 @@
+## 2.3.1 (2026-04-20)
+
+Auth wiring for write paths.
+
+- `log_interaction` now sends the session API key (when one exists) on receipt POSTs. The server's `optional-agent-auth` middleware continues to accept unauthenticated writes for low-friction onboarding, but registered agents now get their writes tagged with a verified owner — which the anomaly-on-ingest layer uses for per-agent rate tracking and quarantine checks.
+- `update_composition` POSTs likewise carry the API key when available.
+- Self-log middleware (`withSelfLog`) sends the key on auto-generated `source=server` receipts, so server-side tool-call telemetry is attributable to the same agent as manually-logged interactions.
+
+No schema changes. Rebuild and republish only.
+
 ## 2.3.0 (2026-04-19)
 
 Metabolic observability — see where time goes and who you look like.
