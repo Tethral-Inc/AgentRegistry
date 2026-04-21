@@ -4,16 +4,18 @@ MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) netwo
 
 ![ACR MCP demo](./demo.svg)
 
-## Quick Start
+## 60-second quickstart
 
-Add to your project (`.mcp.json`):
+No signup. No API key. No credit card. `npx` and go.
+
+Add to your project (`.mcp.json` — works with Claude Code, Cursor, Continue, any MCP client):
 
 ```json
 {
   "mcpServers": {
     "acr": {
       "command": "npx",
-      "args": ["-y", "@tethral/acr-mcp@2.3.0"]
+      "args": ["-y", "@tethral/acr-mcp@latest"]
     }
   }
 }
@@ -22,11 +24,13 @@ Add to your project (`.mcp.json`):
 Or run directly:
 
 ```bash
-npx @tethral/acr-mcp          # stdio transport
-npx @tethral/acr-mcp-http     # HTTP transport
+npx -y @tethral/acr-mcp          # stdio transport
+npx -y @tethral/acr-mcp-http     # HTTP transport
 ```
 
-Your agent auto-registers on first use and gets a human-readable name (e.g. `anthropic-amber-fox`). Call `get_my_agent` to see your agent ID, API key, and dashboard link.
+On first use your agent auto-registers and gets a human-readable name (e.g. `anthropic-amber-fox`). That's it — start calling `log_interaction` after every external tool call and the lenses fill in as receipts accumulate. Call `get_my_agent` any time to see your agent ID, API key, and dashboard link.
+
+Want an API key for authenticated writes? You already have one — `get_my_agent` returns it. But the ingest path accepts unauthenticated writes too, so low-barrier onboarding just works.
 
 ## What It Does
 
