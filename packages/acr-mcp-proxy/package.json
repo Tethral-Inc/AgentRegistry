@@ -1,0 +1,33 @@
+{
+  "name": "@tethral/acr-mcp-proxy",
+  "version": "0.1.0",
+  "description": "Transparent stdio MCP proxy that emits ACR receipts for every tool call passing through. Observation at the JSON-RPC boundary — no modifications to the wrapped server required.",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "acr-mcp-proxy": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "acr",
+    "mcp",
+    "proxy",
+    "observation",
+    "agent"
+  ],
+  "author": "Tethral",
+  "license": "MIT"
+}

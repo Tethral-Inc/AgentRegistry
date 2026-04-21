@@ -226,6 +226,8 @@ export interface FrictionResponse {
   summary: {
     total_interactions: number;
     total_wait_time_ms: number;
+    /** Burst-union of active time — denominator of friction_percentage. */
+    active_span_ms: number;
     friction_percentage: number;
     total_failures: number;
     failure_rate: number;
@@ -236,8 +238,12 @@ export interface FrictionResponse {
       chain_queue_ms: number;
       percentage_of_wait: number;
     };
+    total_tokens_used?: number;
+    wasted_tokens?: number;
   };
   by_category: Array<{ category: string; interaction_count: number; total_duration_ms: number; failure_count: number }>;
+  /** Failures grouped by error_code, top 10 by count. */
+  by_error_code: Array<{ error_code: string; count: number; top_target: string; top_target_count: number }>;
   top_targets: Array<{
     target_system_id: string;
     target_system_type: string;
@@ -250,6 +256,7 @@ export interface FrictionResponse {
     status_breakdown?: Record<string, number>;
     vs_baseline?: number | null;
     volatility?: number;
+    wasted_tokens?: number;
     recent_anomalies?: Array<{ category: string | null; detail: string | null; timestamp: string }>;
     percentile_rank?: number;
     percentile_rank_in_class?: number;
@@ -258,6 +265,9 @@ export interface FrictionResponse {
   }>;
   by_transport: Array<{ transport: string; interaction_count: number; total_duration_ms: number }>;
   by_source: Array<{ source: string; interaction_count: number }>;
+  by_activity_class: Array<{ activity_class: string; interaction_count: number; total_duration_ms: number }>;
+  by_target_type: Array<{ target_type: string; interaction_count: number; total_duration_ms: number }>;
+  by_interaction_purpose: Array<{ interaction_purpose: string; interaction_count: number; total_duration_ms: number }>;
   chain_analysis?: {
     chain_count: number;
     avg_chain_length: number;

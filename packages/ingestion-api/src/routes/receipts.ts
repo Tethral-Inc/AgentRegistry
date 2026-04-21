@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { randomBytes } from 'node:crypto';
 import {
   InteractionReceiptSchema,
   ReceiptBatchSchema,
@@ -31,6 +32,24 @@ const CHURN_THRESHOLD_PER_IP_HOUR = Number.parseInt(
   process.env.CHURN_THRESHOLD_PER_IP_HOUR ?? '50',
   10,
 );
+
+// Server-side chain inference window. A chainless receipt arriving within
+// this many ms of another receipt from the same agent gets fused into the
+// latest active chain, whether that chain was set by the client (chain_id
+// on log_interaction), inferred by the MCP session (s-* prefix), or minted
+// here (srv-* prefix). Keeping the window short — 5 min matches the MCP
+// session idle timeout — means distinct workflows don't get glued together.
+const CHAIN_INFERENCE_WINDOW_MS = 5 * 60 * 1000;
+
+type ChainTail = {
+  chain_id: string;
+  chain_position: number;
+  receipt_id: string;
+};
+
+function mintServerChainId(): string {
+  return `srv-${randomBytes(8).toString('hex')}`;
+}
 
 app.use('/receipts', optionalAgentAuth);
 
@@ -198,6 +217,54 @@ app.post('/receipts', async (c) => {
 
   const receiptIds: string[] = [];
 
+  // --- Chain inference pre-pass ---
+  // For each agent emitting at least one chainless receipt (and where the
+  // source is workflow-adjacent — environmental probes are intentionally
+  // not chained), fetch their most recent chain tail inside the inference
+  // window. The tail is then extended as we process the batch so chainless
+  // receipts from the same agent within one batch share a chain.
+  const agentsNeedingChain = new Set<string>();
+  for (const r of receipts) {
+    if (!r.chain_id && (r.source ?? 'agent') !== 'environmental') {
+      agentsNeedingChain.add(r.emitter.agent_id);
+    }
+  }
+
+  const chainTails = new Map<string, ChainTail>();
+  if (agentsNeedingChain.size > 0) {
+    const windowStartMs = Date.now() - CHAIN_INFERENCE_WINDOW_MS;
+    for (const agentId of agentsNeedingChain) {
+      try {
+        const rows = await query<{
+          receipt_id: string;
+          chain_id: string;
+          chain_position: number | null;
+        }>(
+          `SELECT receipt_id AS "receipt_id",
+                  chain_id AS "chain_id",
+                  chain_position AS "chain_position"
+           FROM interaction_receipts
+           WHERE emitter_agent_id = $1
+             AND chain_id IS NOT NULL
+             AND request_timestamp_ms >= $2
+           ORDER BY request_timestamp_ms DESC
+           LIMIT 1`,
+          [agentId, windowStartMs],
+        );
+        if (rows.length > 0) {
+          chainTails.set(agentId, {
+            chain_id: rows[0].chain_id,
+            chain_position: rows[0].chain_position ?? 0,
+            receipt_id: rows[0].receipt_id,
+          });
+        }
+      } catch {
+        // Non-fatal: if the lookup fails, receipts just land without chain_id
+        // rather than blocking ingest. Chain analysis is a nice-to-have.
+      }
+    }
+  }
+
   for (const receipt of receipts) {
     // Normalize target system_id
     const normalizedTargetId = normalizeSystemId(receipt.target.system_id);
@@ -219,6 +286,41 @@ app.post('/receipts', async (c) => {
     // if the client didn't supply categories — matches the DB column's
     // default and keeps reads consistent.
     const categoriesJson = JSON.stringify(receipt.categories ?? {});
+
+    // Resolve the chain fields actually stored on this receipt. Client
+    // values win — we never overwrite a chain_id the agent/MCP set. Only
+    // chainless receipts (fetch-observer, HTTP-direct posts, hook-emitted
+    // receipts) get server-side inference. Environmental probes stay
+    // chainless on purpose: they're baselines, not workflow.
+    let effectiveChainId: string | null = receipt.chain_id ?? null;
+    let effectiveChainPosition: number | null = receipt.chain_position ?? null;
+    let effectivePrecededBy: string | null = receipt.preceded_by ?? null;
+
+    if (!effectiveChainId && (receipt.source ?? 'agent') !== 'environmental') {
+      const tail = chainTails.get(receipt.emitter.agent_id);
+      if (tail) {
+        effectiveChainId = tail.chain_id;
+        effectiveChainPosition = tail.chain_position + 1;
+        if (!effectivePrecededBy) effectivePrecededBy = tail.receipt_id;
+      } else {
+        // No recent activity — start a new server-inferred chain. The
+        // srv- prefix distinguishes these from client/session-inferred
+        // chains (s-) and explicitly-set chains (anything else).
+        effectiveChainId = mintServerChainId();
+        effectiveChainPosition = 1;
+      }
+    }
+
+    // Keep the in-memory tail up to date so subsequent receipts in this
+    // batch (for the same agent) extend the same chain even if the DB
+    // lookup didn't see them yet.
+    if (effectiveChainId) {
+      chainTails.set(receipt.emitter.agent_id, {
+        chain_id: effectiveChainId,
+        chain_position: effectiveChainPosition ?? 1,
+        receipt_id: receiptId,
+      });
+    }
 
     await execute(
       `INSERT INTO interaction_receipts (
@@ -254,9 +356,9 @@ app.post('/receipts', async (c) => {
         receipt.interaction.retry_count ?? 0,
         receipt.interaction.error_code ?? null,
         receipt.interaction.response_size_bytes ?? null,
-        receipt.chain_id ?? null,
-        receipt.chain_position ?? null,
-        receipt.preceded_by ?? null,
+        effectiveChainId,
+        effectiveChainPosition,
+        effectivePrecededBy,
         categoriesJson,
         receipt.interaction.tokens_used ?? null,
       ],

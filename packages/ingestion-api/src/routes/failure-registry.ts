@@ -102,7 +102,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
     groupedParams,
-  ).catch((err) => { log.warn({ err }, 'Failed to query failure-registry grouped rows'); return [] as FailureRow[]; });
+  ).catch((err) => { log.warn({ err, agentId }, 'Failed to query failure-registry grouped rows'); return [] as FailureRow[]; });
 
   // Group by target.
   type TargetGroup = {
@@ -166,7 +166,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
        AND created_at >= $2
        AND created_at <= $3${totalSourceClause}`,
     totalParams,
-  ).catch((err) => { log.warn({ err }, 'Failed to query failure-registry total'); return [] as Array<{ total: number }>; });
+  ).catch((err) => { log.warn({ err, agentId }, 'Failed to query failure-registry total'); return [] as Array<{ total: number }>; });
 
   const total = totalRows[0]?.total ?? 0;
   const failureRate = total > 0 ? totalFailures / total : 0;

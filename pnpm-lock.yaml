@@ -25,6 +25,10 @@ importers:
         specifier: ^1.6
         version: 1.6.1(@types/node@20.19.37)
 
+  packages/acr-hook: {}
+
+  packages/acr-mcp-proxy: {}
+
   packages/claude-code-plugin: {}
 
   packages/dashboard:

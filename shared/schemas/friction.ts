@@ -17,6 +17,11 @@ export const FrictionSummarySchema = z.object({
   total_failures: z.number(),
   failure_rate: z.number(),
   shadow_tax: ShadowTaxSchema.optional(),
+  // Optional token-cost metrics. Present when at least one receipt in
+  // the window reported tokens_used. wasted_tokens = sum of tokens_used
+  // across failed calls.
+  total_tokens_used: z.number().optional(),
+  wasted_tokens: z.number().optional(),
 });
 
 export const TargetFrictionSchema = z.object({
@@ -70,12 +75,22 @@ export const DirectionalPairSchema = z.object({
 export const RetryOverheadSchema = z.object({
   total_retries: z.number(),
   total_wasted_ms: z.number(),
+  // Implicit retries are detected at the transport boundary: a failure
+  // followed by another receipt to the same target within a short window
+  // is treated as a retry even if the agent didn't set retry_count. The
+  // explicit + implicit counts are surfaced separately so the operator
+  // can tell how much of the retry pressure is self-reported vs observed.
+  implicit_retries: z.number().optional(),
+  explicit_retries: z.number().optional(),
+  detection_window_seconds: z.number().optional(),
+  // Pro-tier only — free-tier responses carry totals without the per-target
+  // breakdown.
   top_retry_targets: z.array(z.object({
     target_system_id: z.string(),
     retry_count: z.number(),
     avg_duration_ms: z.number(),
     wasted_ms: z.number(),
-  })).max(5),
+  })).max(5).optional(),
 });
 
 export const PopulationDriftSchema = z.object({

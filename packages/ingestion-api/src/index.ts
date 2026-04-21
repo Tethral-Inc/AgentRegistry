@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/error-handler.js';
 import { registerRoute } from './routes/register.js';
 import { receiptsRoute } from './routes/receipts.js';
 import { compositionRoute } from './routes/composition.js';
+import { compositionDiffRoute } from './routes/composition-diff.js';
 import { frictionRoute } from './routes/friction.js';
 import { skillVersionRoute } from './routes/skill-version.js';
 import { healthRoute } from './routes/health.js';
@@ -54,8 +55,15 @@ app.use('/api/v1/agent/:identifier/failure-registry', agentAuth);
 app.use('/api/v1/agent/:identifier/trend', agentAuth);
 app.use('/api/v1/agent/:identifier/revealed-preference', agentAuth);
 app.use('/api/v1/agent/:identifier/compensation', agentAuth);
+app.use('/api/v1/agent/:identifier/composition-diff', agentAuth);
 app.use('/api/v1/agent/:identifier/notifications', agentAuth);
 app.use('/api/v1/agent/:identifier/notifications/*', agentAuth);
+app.use('/api/v1/agent/:identifier/subscriptions', agentAuth);
+app.use('/api/v1/agent/:identifier/subscriptions/*', agentAuth);
+// /composition/update reads agent_id from the body, so the middleware
+// only validates the API key; the handler itself checks that
+// X-ACR-Auth-Agent matches body.agent_id before writing.
+app.use('/api/v1/composition/update', agentAuth);
 
 // API routes
 app.route('/api/v1', registerRoute);
@@ -81,6 +89,7 @@ app.route('/api/v1', failureRegistryRoute);
 app.route('/api/v1', trendRoute);
 app.route('/api/v1', revealedPreferenceRoute);
 app.route('/api/v1', compensationRoute);
+app.route('/api/v1', compositionDiffRoute);
 app.route('/api', internalQueryRoute);
 app.route('/api', cronRoute);
 app.route('/api/v1/network', leaderboardRoute);

@@ -29,7 +29,7 @@ app.get('/leaderboard', async (c) => {
      FROM system_health
      ORDER BY distinct_agent_count DESC, total_interactions DESC
      LIMIT 50`,
-  ).catch(() => []);
+  ).catch((err) => { log.warn({ err }, 'Leaderboard systems query failed'); return []; });
 
   // Top skills by adoption, with anomaly signal data
   const skills = await query<{
@@ -52,7 +52,7 @@ app.get('/leaderboard', async (c) => {
      WHERE agent_count > 0
      ORDER BY agent_count DESC, interaction_count DESC
      LIMIT 50`,
-  ).catch(() => []);
+  ).catch((err) => { log.warn({ err }, 'Leaderboard skills query failed'); return []; });
 
   // Network totals (from observatory-summary pattern)
   const totals = await query<{
@@ -66,7 +66,10 @@ app.get('/leaderboard', async (c) => {
        (SELECT COUNT(*)::int FROM interaction_receipts WHERE created_at >= now() - INTERVAL '7 days') AS "total_interactions",
        (SELECT COUNT(*)::int FROM system_health) AS "total_systems",
        (SELECT COUNT(*)::int FROM skill_hashes WHERE agent_count > 0) AS "total_skills"`,
-  ).catch(() => [{ total_agents: 0, total_interactions: 0, total_systems: 0, total_skills: 0 }]);
+  ).catch((err) => {
+    log.warn({ err }, 'Leaderboard totals query failed');
+    return [{ total_agents: 0, total_interactions: 0, total_systems: 0, total_skills: 0 }];
+  });
 
   c.header('Cache-Control', 'public, max-age=300');
 
