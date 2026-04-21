@@ -1,3 +1,45 @@
+## 2.4.0 (2026-04-21)
+
+Transport-boundary observation — the agent doesn't have to remember to
+log every call. The MCP now captures what actually happens on the wire.
+
+- **Fetch observer middleware** (`middleware/fetch-observer.ts`). On
+  `createAcrServer()` the MCP wraps `globalThis.fetch` so every
+  outbound HTTP call made from this process (tools, skills, or the
+  agent's own code sharing the runtime) becomes a receipt automatically
+  — with `source=fetch-observer` and the duration + status captured at
+  the transport boundary. Self-emission is guarded by an ACR host match
+  and an `AsyncLocalStorage` re-entrancy check so the observer never
+  logs its own POSTs. Opt out with `ACR_DISABLE_FETCH_OBSERVE=1`.
+- **Environmental baseline probes** (`probes/environmental.ts`). At
+  startup, the MCP fires a handful of small requests against public
+  targets to build a "what does latency from this host look like when
+  nothing is wrong?" baseline. These receipts carry
+  `source=environmental` and are intentionally excluded from chain
+  inference, so they never contaminate friction chains. Opt out with
+  `ACR_DISABLE_ENV_PROBE=1`.
+- **Session-inferred chains** (`middleware/correlation-window.ts` +
+  `session-state.ts`). Receipts without an explicit `chain_id` that
+  land within the correlation window are stitched into a chain on the
+  server. Chain IDs minted by the MCP use an `s-` prefix; server-minted
+  ones use `srv-`; explicit agent-set values are preserved as-is.
+- **New tool: `get_composition_diff`.** Declared-vs-actual composition
+  — what the agent advertises through `skills`/`targets` in its
+  composition versus what the interaction profile actually shows.
+- **Enhanced `get_friction_report`.** Error-code breakdown (`── Failures
+  by Error Code ──`) surfaces the top failure modes per scope with the
+  dominant target for each code. Token-level waste renders with
+  locale-formatted numbers and a waste percentage. Implicit retries are
+  detected from timing (failure + same target inside the detection
+  window) and reported alongside agent-reported retries. Network
+  verdict logic has sample-size floors so a 1-agent "network" can't
+  issue a false verdict.
+- **Enhanced `log_interaction`.** Accepts `chain_id`, `preceded_by`,
+  `wasted_tokens`, and the expanded category set from receipts v2.
+
+Breaking: none. Observer + probes are on-by-default but gated by env
+vars. All existing tool signatures are backwards-compatible.
+
 ## 2.3.2 (2026-04-20)
 
 Metadata-only release — moves the MCP registry entry from the
