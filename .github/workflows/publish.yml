@@ -55,7 +55,7 @@ jobs:
             echo "::warning::server.json version ($SERVER_VERSION) does not match package.json ($PKG_VERSION); skipping registry publish."
             exit 0
           fi
-          REGISTRY_VERSION=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.TethralAI/acr" \
+          REGISTRY_VERSION=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Tethral-Inc/acr" \
             | python3 -c "import sys,json; d=json.load(sys.stdin); s=d['servers']; print(s[0]['server']['version'] if s else 'none')" || echo "none")
           if [ "$REGISTRY_VERSION" = "$PKG_VERSION" ]; then
             echo "⏭️  MCP registry already at $PKG_VERSION, skipping."
