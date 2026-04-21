@@ -23,6 +23,15 @@ const SHADOW_MODE = true;
 // — a single compromised agent flooding this means something is wrong.
 const HARD_HOURLY_CAP = 10_000;
 
+// Per-IP agent-id churn defense (replaces the deleted Upstash rate limiter).
+// Env-configurable so the threshold and kill switch are flippable in Vercel
+// without a redeploy. CHURN_CHECK_ENABLED=false disables entirely.
+const CHURN_CHECK_ENABLED = process.env.CHURN_CHECK_ENABLED !== 'false';
+const CHURN_THRESHOLD_PER_IP_HOUR = Number.parseInt(
+  process.env.CHURN_THRESHOLD_PER_IP_HOUR ?? '50',
+  10,
+);
+
 app.use('/receipts', optionalAgentAuth);
 
 app.post('/receipts', async (c) => {
@@ -94,7 +103,7 @@ app.post('/receipts', async (c) => {
       if (quarantineRows.length > 0) {
         const q = quarantineRows[0]!;
         log.warn(
-          { agentId, reason: q.reason, flaggedAt: q.flagged_at, shadow: SHADOW_MODE },
+          { event: 'quarantine_read', agentId, reason: q.reason, flaggedAt: q.flagged_at, shadow: SHADOW_MODE },
           'Receipt from quarantined agent',
         );
         if (!SHADOW_MODE) {
@@ -119,7 +128,7 @@ app.post('/receipts', async (c) => {
       const hourly = counterRows[0]?.receipt_count ?? 0;
       if (hourly > HARD_HOURLY_CAP) {
         log.warn(
-          { agentId, hourly, cap: HARD_HOURLY_CAP, shadow: SHADOW_MODE },
+          { event: 'volume_spike', agentId, hourly, cap: HARD_HOURLY_CAP, shadow: SHADOW_MODE },
           'Agent exceeded hard hourly receipt cap',
         );
         if (!SHADOW_MODE) {
@@ -133,6 +142,57 @@ app.post('/receipts', async (c) => {
       // Non-fatal in shadow mode: missing tables in envs that haven't run
       // 000018 yet should not break receipt ingestion.
       log.warn({ agentId, err: (err as Error).message }, 'Anomaly-on-ingest check failed');
+    }
+  }
+
+  // Per-IP agent-id churn check. Flags IPs declaring many distinct agent_ids
+  // per hour — the one vector per-agent counters miss. Shadow-mode: logs
+  // only, never rejects.
+  if (CHURN_CHECK_ENABLED) {
+    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      ?? c.req.header('x-real-ip')
+      ?? 'unknown';
+    if (ip !== 'unknown') {
+      try {
+        for (const agentId of byAgent.keys()) {
+          await execute(
+            `INSERT INTO ip_agent_churn (ip, bucket_hour, agent_id)
+             VALUES ($1, date_trunc('hour', now()), $2)
+             ON CONFLICT (ip, bucket_hour, agent_id) DO NOTHING`,
+            [ip, agentId],
+          );
+        }
+        const churnRows = await query<{ distinct_agents: number }>(
+          `SELECT COUNT(*)::INT AS "distinct_agents"
+           FROM ip_agent_churn
+           WHERE ip = $1 AND bucket_hour = date_trunc('hour', now())`,
+          [ip],
+        );
+        const distinctAgents = churnRows[0]?.distinct_agents ?? 0;
+        if (distinctAgents > CHURN_THRESHOLD_PER_IP_HOUR) {
+          log.warn(
+            {
+              event: 'churn_signal',
+              ip,
+              distinctAgents,
+              threshold: CHURN_THRESHOLD_PER_IP_HOUR,
+              shadow: SHADOW_MODE,
+            },
+            'IP exceeded agent-id churn threshold',
+          );
+          if (!SHADOW_MODE) {
+            return c.json(
+              makeError(
+                'RATE_LIMITED',
+                `IP declared ${distinctAgents} distinct agent_ids this hour (limit ${CHURN_THRESHOLD_PER_IP_HOUR})`,
+              ),
+              429,
+            );
+          }
+        }
+      } catch (err) {
+        log.warn({ ip, err: (err as Error).message }, 'Churn check failed');
+      }
     }
   }
 

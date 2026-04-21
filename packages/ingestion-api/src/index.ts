@@ -4,7 +4,6 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
 import { requestId } from './middleware/request-id.js';
-import { rateLimiter } from './middleware/rate-limiter.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { registerRoute } from './routes/register.js';
 import { receiptsRoute } from './routes/receipts.js';
@@ -41,7 +40,6 @@ app.use('*', requestId());
 app.use('*', secureHeaders());
 app.use('*', cors({ origin: '*' }));
 app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024 }));
-app.use('/api/*', rateLimiter());
 
 // Error handler
 app.onError(errorHandler);
