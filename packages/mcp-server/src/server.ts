@@ -35,6 +35,7 @@ import { CorrelationWindow } from './middleware/correlation-window.js';
 import { installFetchObserver, getUnwrappedFetch } from './middleware/fetch-observer.js';
 import { runEnvironmentalProbe } from './probes/environmental.js';
 import { defaultSession, SessionState } from './session-state.js';
+import { checkLatestVersion } from './version-check.js';
 
 declare const __PACKAGE_VERSION__: string;
 
@@ -164,6 +165,21 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
       });
     } catch {
       // Silent drop — probe failures must not affect MCP startup.
+    }
+  })();
+
+  // Background check for a newer published version. Runs once per
+  // process against the public npm registry, caches the result on the
+  // session, and lets entry-point tools surface an upgrade banner. The
+  // check uses the unwrapped fetch so it is not observed into a
+  // receipt. All failures (network, timeout, parse) are silent. Opt
+  // out with ACR_DISABLE_VERSION_CHECK=1.
+  void (async () => {
+    try {
+      const result = await checkLatestVersion(__PACKAGE_VERSION__, getUnwrappedFetch());
+      session.setVersionCheck(result);
+    } catch {
+      // Silent drop — a failed version check must never affect tool calls.
     }
   })();
 

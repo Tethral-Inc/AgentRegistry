@@ -1,3 +1,25 @@
+## 2.4.1 (2026-04-21)
+
+Built-in upgrade nudge — long-running MCP installs learn about new
+versions without the user having to check.
+
+- **Version probe** (`version-check.ts`). On `createAcrServer()` the MCP
+  fires a single background GET to `registry.npmjs.org/@tethral/acr-mcp/latest`,
+  compares the result against the baked-in package version under a
+  coarse semver comparator (pre-release tags ignored), and caches the
+  result on the session. The probe uses the unwrapped fetch so it is
+  not observed into a receipt, carries a 2s timeout, caps response body
+  at 8KB, and swallows every failure silently. Opt out with
+  `ACR_DISABLE_VERSION_CHECK=1`.
+- **Upgrade banner** on entry-point tools (`getting_started`,
+  `whats_new`, `get_my_agent`). When a newer version is available the
+  tools prepend a two-line banner with the current → latest versions,
+  the `npx` update command, and the opt-out flag. Renders to an empty
+  string when nothing is available, so existing output is unchanged on
+  up-to-date installs.
+
+No schema changes. Rebuild and republish only.
+
 ## 2.4.0 (2026-04-21)
 
 Transport-boundary observation — the agent doesn't have to remember to

@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { detectEnvironment } from './env-detect.js';
 import { writeAcrStateFile, readAcrStateFile } from './acr-state-file.js';
+import type { VersionCheckResult } from './version-check.js';
 
 const CLIENT_TO_PROVIDER: Record<string, string> = {
   'claude-code': 'anthropic',
@@ -46,6 +47,11 @@ export class SessionState {
   private _sessionChainId: string | null = null;
   private _sessionCallCount: number = 0;
   private _lastCallMs: number = 0;
+
+  // Latest published version probe. Populated once at MCP startup (or not
+  // at all if ACR_DISABLE_VERSION_CHECK=1 or the check fails). Entry-point
+  // tools can read this to surface an upgrade banner.
+  private _versionCheck: VersionCheckResult | null = null;
 
   constructor(transportType: 'stdio' | 'streamable-http' = 'stdio') {
     this._transportType = transportType;
@@ -96,6 +102,9 @@ export class SessionState {
   setApiKey(key: string): void { this._apiKey = key; }
   setClientType(type: string): void { this._clientType = type; }
   setMcpServer(server: McpServer): void { this._mcpServer = server; }
+
+  get versionCheck(): VersionCheckResult | null { return this._versionCheck; }
+  setVersionCheck(result: VersionCheckResult): void { this._versionCheck = result; }
 
   /** Infer provider_class from the MCP client name (e.g. "claude-code" → "anthropic"). */
   get providerClass(): string { return this.inferProviderClass(); }
