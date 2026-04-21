@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.TethralAI/acr",
+  "name": "io.github.Tethral-Inc/acr",
   "title": "ACR — Agent Composition Records",
   "description": "Interaction profile registry for AI agents. Log interactions, query behavioral lenses.",
   "version": "2.3.1",
