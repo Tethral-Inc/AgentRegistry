@@ -1,3 +1,13 @@
+## 2.3.2 (2026-04-20)
+
+Metadata-only release — moves the MCP registry entry from the
+`io.github.TethralAI` personal namespace to `io.github.Tethral-Inc`
+(the organization). The npm package's `mcpName` field now matches, so
+the registry validates ownership correctly and future bumps sync from
+CI via GitHub OIDC instead of manual `mcp-publisher` runs.
+
+No runtime or API surface changes.
+
 ## 2.3.1 (2026-04-20)
 
 Auth wiring for write paths.
