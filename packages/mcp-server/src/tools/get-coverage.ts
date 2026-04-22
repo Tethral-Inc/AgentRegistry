@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { coverageNextAction, renderNextActionFooter } from '../utils/next-action.js';
@@ -29,7 +29,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
         id = resolved.id;
         displayName = resolved.displayName;
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return renderResolveError(err);
       }
 
       try {

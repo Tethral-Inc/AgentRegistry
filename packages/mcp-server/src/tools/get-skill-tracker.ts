@@ -47,7 +47,16 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
         const data = await res.json() as { skills: Array<Record<string, unknown>>; next_cursor: string | null };
 
         if (!data.skills || data.skills.length === 0) {
-          return { content: [{ type: 'text' as const, text: 'No skills tracked yet.' }] };
+          // Empty-state branch: give the operator a concrete next step
+          // rather than a dead-end "nothing here." The tracker is
+          // network-wide — if it's empty, either no agent in the cohort
+          // has reported skill usage yet, or the filters excluded
+          // everything.
+          const filterApplied = min_anomaly_signals != null;
+          const text = filterApplied
+            ? `No skills match the filter (min_anomaly_signals=${min_anomaly_signals}). Call get_skill_tracker without filters to see every skill the network has observed.`
+            : 'No skills tracked yet. The network tracker is populated as agents call log_interaction with skill-level target_system_id. Call log_interaction after every skill invocation to start contributing.';
+          return { content: [{ type: 'text' as const, text }] };
         }
 
         let text = `Skill Tracker\n${'='.repeat(20)}\n\n`;

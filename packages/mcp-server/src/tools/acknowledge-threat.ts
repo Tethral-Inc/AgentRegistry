@@ -29,17 +29,20 @@ import { z } from 'zod';
 import { ensureRegistered, getAgentId } from '../state.js';
 import { RegistrationFailedError } from '../session-state.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { ARROW, section, truncId } from '../utils/style.js';
 
 const inputSchema = {
   notification_id: z.string().describe('The notification ID to acknowledge'),
   agent_id: z.string().optional().describe('Your agent ID (uses session if omitted)'),
   reason: z.string().optional().describe('Why the signal is being acknowledged (e.g., "user reviewed and accepted risk")'),
+  verbose: z.boolean().optional().describe('Render full-length notification and agent IDs instead of the truncated inline display.'),
 };
 
 type Input = {
   notification_id: string;
   agent_id?: string;
   reason?: string;
+  verbose?: boolean;
 };
 
 /**
@@ -50,7 +53,7 @@ type Input = {
  */
 async function acknowledgeHandler(
   apiUrl: string,
-  { notification_id, agent_id, reason }: Input,
+  { notification_id, agent_id, reason, verbose }: Input,
   deprecationBanner = '',
 ) {
   let resolvedId: string;
@@ -73,17 +76,41 @@ async function acknowledgeHandler(
       body: JSON.stringify({ reason }),
     });
 
-    const data = await res.json() as { success?: boolean; error?: { message: string } };
+    const data = await res.json() as {
+      success?: boolean;
+      acknowledged_at?: string;
+      expires_at?: string;
+      error?: { message: string };
+    };
     if (!res.ok) {
       return { content: [{ type: 'text' as const, text: `Acknowledgement failed: ${data.error?.message ?? 'Unknown error'}` }] };
     }
 
-    return {
-      content: [{
-        type: 'text' as const,
-        text: `${deprecationBanner}Notification acknowledged. This acknowledgement expires in 30 days.\n\nNote: The anomaly signals remain visible across the network. This acknowledgement records that you and your operator have reviewed the observation.`,
-      }],
-    };
+    // Render the state transition. Even though acknowledgement is a
+    // boolean flip rather than a counts diff, operators benefit from
+    // seeing the before→after shape — it mirrors update_composition's
+    // format so every mutation response reads the same way.
+    const nowIso = data.acknowledged_at ?? new Date().toISOString();
+    const expiresIso = data.expires_at ?? null;
+
+    let text = `${deprecationBanner}Notification acknowledged.\n\n`;
+    text += `${section('Diff')}\n`;
+    text += `  Notification: ${truncId(notification_id, { verbose })}\n`;
+    text += `  State:        unacknowledged ${ARROW} acknowledged\n`;
+    text += `  At:           ${nowIso}\n`;
+    if (expiresIso) {
+      text += `  Expires:      ${expiresIso} (30 days)\n`;
+    } else {
+      text += `  Expires:      30 days from now\n`;
+    }
+    if (reason) {
+      text += `  Reason:       ${reason}\n`;
+    }
+    text += `  Agent:        ${truncId(resolvedId, { verbose })}\n`;
+
+    text += '\nThe anomaly signals remain visible across the network. This acknowledgement records that you and your operator have reviewed the observation.\n';
+
+    return { content: [{ type: 'text' as const, text }] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return { content: [{ type: 'text' as const, text: `Acknowledgement error: ${msg}` }] };

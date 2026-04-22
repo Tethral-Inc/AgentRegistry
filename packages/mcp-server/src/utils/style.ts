@@ -37,6 +37,17 @@
  */
 export const HASH_TRUNC_LENGTH = 16;
 
+/**
+ * Canonical length for agent/notification IDs rendered inline in prose.
+ * Shorter than hashes because IDs appear in denser contexts (one per
+ * row, multiple per list). 12 chars preserves enough entropy to disambiguate
+ * within a single operator's agent set while fitting in a narrow column.
+ * Callers that need the full value (debugging, cross-referencing an
+ * external log) pass `verbose: true` to the enclosing tool — this helper
+ * never truncates when `verbose` is set.
+ */
+export const ID_TRUNC_LENGTH = 12;
+
 /** The canonical horizontal-ellipsis glyph. One column wide. */
 export const ELLIPSIS = '…';
 
@@ -52,6 +63,44 @@ export function truncHash(s: string | null | undefined, length: number = HASH_TR
   if (!s) return '';
   if (s.length <= length) return s;
   return s.slice(0, length) + ELLIPSIS;
+}
+
+/**
+ * Truncate an agent/notification/session id for inline display. Tools
+ * that accept a `verbose: true` input should pass that flag through so
+ * operators can disable truncation when they need the full id (copy-paste,
+ * cross-reference against a log). The default truncation length is
+ * deliberately shorter than hashes because ids appear in denser lists.
+ */
+export function truncId(
+  s: string | null | undefined,
+  opts: { verbose?: boolean; length?: number } = {},
+): string {
+  if (!s) return '';
+  if (opts.verbose) return s;
+  const length = opts.length ?? ID_TRUNC_LENGTH;
+  if (s.length <= length) return s;
+  return s.slice(0, length) + ELLIPSIS;
+}
+
+/**
+ * Render a "before → after" diff line. Keeps every mutation response
+ * consistent: same arrow, same spacing, same "(unchanged)" annotation
+ * when the two sides are equal. The `change` argument is rendered in
+ * parentheses after the values; callers pass strings like "+2" / "-1" /
+ * "unchanged". Nothing clever — the value is whatever the caller wants
+ * next to the arrow.
+ */
+export function diffLine(
+  label: string,
+  before: string | number | null | undefined,
+  after: string | number | null | undefined,
+  change?: string,
+): string {
+  const b = before == null || before === '' ? '—' : String(before);
+  const a = after == null || after === '' ? '—' : String(after);
+  const suffix = change ? `   (${change})` : '';
+  return `  ${label}: ${b} ${ARROW} ${a}${suffix}`;
 }
 
 /**

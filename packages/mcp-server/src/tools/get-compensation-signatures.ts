@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName } from '../state.js';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 
@@ -38,8 +38,7 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
         id = resolved.id;
         displayName = resolved.displayName;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Error: ${msg}` }] };
+        return renderResolveError(err);
       }
 
       try {

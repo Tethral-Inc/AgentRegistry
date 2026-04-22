@@ -4,6 +4,43 @@ import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { stripSubComponents } from '../strip-sub-components.js';
 import { ensureRegistered, getAgentId } from '../state.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { diffLine, section, truncHash } from '../utils/style.js';
+
+/**
+ * Best-effort fetch of the current composition summary. Returns null
+ * on any failure — rendering a diff is nice-to-have, but the mutation
+ * itself must not block on this read. Operators who fire a blind update
+ * still get a sensible response even if the profile read 500s.
+ */
+async function fetchCurrentCompositionSummary(
+  apiUrl: string,
+  agentId: string,
+): Promise<{ hash?: string; skills: number; mcps: number; tools: number } | null> {
+  try {
+    const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${agentId}/profile`);
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      composition_hash?: string;
+      composition_summary?: { skill_count?: number; mcp_count?: number; tool_count?: number };
+    };
+    const s = data.composition_summary ?? {};
+    return {
+      hash: data.composition_hash,
+      skills: s.skill_count ?? 0,
+      mcps: s.mcp_count ?? 0,
+      tools: s.tool_count ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Render `+N` / `-N` / `unchanged` for a count delta. */
+function fmtDelta(before: number, after: number): string {
+  if (before === after) return 'unchanged';
+  const diff = after - before;
+  return diff > 0 ? `+${diff}` : `${diff}`;
+}
 
 // Component schema — matches shared/schemas/agent.ts CompositionSchema.
 // Kept local so we don't need to cross package boundaries for the Zod type.
@@ -67,6 +104,12 @@ export function updateCompositionTool(server: McpServer, apiUrl: string) {
           tool_components: stripSubComponents(composition.tool_components, deep),
         };
 
+        // Read the current composition before updating so the response
+        // can render a before→after diff. If the read fails we still
+        // perform the update — rendering a diff is nice-to-have, not a
+        // hard prerequisite.
+        const before = await fetchCurrentCompositionSummary(apiUrl, resolvedAgentId);
+
         const res = await fetchAuthed(`${apiUrl}/api/v1/composition/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -88,24 +131,55 @@ export function updateCompositionTool(server: McpServer, apiUrl: string) {
           };
         }
 
-        const skillCount = (composition.skills?.length ?? 0)
+        // Counts derived from what the caller *sent*. For the "after"
+        // view we trust the submitted payload — the server echoes the
+        // composition hash and we already sent the full composition.
+        const afterSkills = (composition.skills?.length ?? 0)
           + (composition.skill_hashes?.length ?? 0)
           + (composition.skill_components?.length ?? 0);
-        const toolCount = (composition.mcps?.length ?? 0)
-          + (composition.tools?.length ?? 0)
-          + (composition.mcp_components?.length ?? 0)
+        const afterMcps = (composition.mcps?.length ?? 0)
+          + (composition.mcp_components?.length ?? 0);
+        const afterTools = (composition.tools?.length ?? 0)
           + (composition.tool_components?.length ?? 0);
 
-        const deepNote = deep
-          ? ''
-          : '\n\n(Deep composition is disabled. Sub-components, if provided, were stripped before sending.)';
+        const hashBefore = before?.hash;
+        const hashAfter = data.composition_hash;
+        const hashChanged = hashBefore && hashAfter && hashBefore !== hashAfter;
 
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Composition updated successfully.\n\nComposition hash: ${data.composition_hash}\nSkills: ${skillCount}\nTools/MCPs: ${toolCount}\n\nYour agent identity (${resolvedAgentId}) is preserved.${deepNote}`,
-          }],
-        };
+        let text = 'Composition updated successfully.\n\n';
+        text += `${section('Diff')}\n`;
+        if (before) {
+          text += diffLine(
+            'Hash  ',
+            truncHash(hashBefore),
+            truncHash(hashAfter),
+            hashChanged ? 'changed' : (hashBefore && hashAfter ? 'unchanged' : undefined),
+          ) + '\n';
+          text += diffLine('Skills', before.skills, afterSkills, fmtDelta(before.skills, afterSkills)) + '\n';
+          text += diffLine('MCPs  ', before.mcps, afterMcps, fmtDelta(before.mcps, afterMcps)) + '\n';
+          text += diffLine('Tools ', before.tools, afterTools, fmtDelta(before.tools, afterTools)) + '\n';
+        } else {
+          // Couldn't read the before state. Render what we know now and
+          // flag that the "before" column is missing so the operator
+          // knows the absence is a read failure, not a no-op.
+          text += `  Hash:   ${truncHash(hashAfter)}\n`;
+          text += `  Skills: ${afterSkills}\n`;
+          text += `  MCPs:   ${afterMcps}\n`;
+          text += `  Tools:  ${afterTools}\n`;
+          text += `  (Previous composition could not be read — diff is after-only.)\n`;
+        }
+
+        if (before && hashBefore === hashAfter) {
+          text += '\nComposition unchanged. The payload matched what ACR already has on file.\n';
+        }
+
+        text += `\nAgent: ${resolvedAgentId} (identity preserved)\n`;
+
+        if (!deep) {
+          text += '\n(Deep composition is disabled. Sub-components, if provided, were stripped before sending.)\n';
+        }
+
+        return { content: [{ type: 'text' as const, text }] };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return { content: [{ type: 'text' as const, text: `Composition update error: ${msg}` }] };

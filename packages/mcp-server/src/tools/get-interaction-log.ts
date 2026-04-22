@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName } from '../state.js';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { fmtRatio, section } from '../utils/style.js';
 
@@ -44,8 +44,7 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
         id = resolved.id;
         resolvedDisplayName = resolved.displayName;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Error: ${msg}` }] };
+        return renderResolveError(err);
       }
 
       try {

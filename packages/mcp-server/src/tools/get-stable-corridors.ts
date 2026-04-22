@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
@@ -31,7 +31,7 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         id = resolved.id;
         displayName = resolved.displayName;
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return renderResolveError(err);
       }
 
       try {
@@ -66,7 +66,13 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         text += `\n${section(`Matches (${data.match_count !== undefined ? data.match_count : matches.length})`)}\n`;
 
         if (matches.length === 0) {
-          text += `  No stable corridors found for this period. This means no targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;
+          // Empty-state branch: state the criteria and point the
+          // operator at the lenses that explain why. The next-action
+          // footer below handles the general "log more interactions"
+          // case — this line explains the specific filter that blocked
+          // matches.
+          text += `  No stable corridors found for this period. No targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;
+          text += `  → Call \`get_friction_report\` to see which targets are churning and \`get_failure_registry\` for the failure sources blocking stability.\n`;
         } else {
           for (const m of matches) {
             const receiptCount = (m.receipt_count as number) ?? 0;

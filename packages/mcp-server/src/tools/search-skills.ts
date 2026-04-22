@@ -52,10 +52,16 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
         };
 
         if (data.skills.length === 0) {
+          // Empty-state branch: tell the operator how to widen the
+          // search. Don't dead-end on "nothing here."
+          const hasFilters = !!(source || category || min_agents != null || min_anomaly_signals != null);
+          const hint = hasFilters
+            ? 'Try again without source/category/min_agents/min_anomaly_signals filters.'
+            : 'Try a shorter or more generic query (e.g. the first word of the skill name).';
           return {
             content: [{
               type: 'text' as const,
-              text: `No skills found matching "${searchQuery}".`,
+              text: `No skills found matching "${searchQuery}". ${hint}`,
             }],
           };
         }

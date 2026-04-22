@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName } from '../state.js';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
@@ -30,7 +30,7 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
         id = resolved.id;
         displayName = resolved.displayName;
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return renderResolveError(err);
       }
 
       displayName = agent_name || getAgentName() || displayName;

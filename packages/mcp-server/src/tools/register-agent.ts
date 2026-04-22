@@ -4,7 +4,7 @@ import { setAgentId, setAgentName, setApiKey } from '../state.js';
 import { getActiveSession } from '../session-state.js';
 import { writeAcrStateFile } from '../acr-state-file.js';
 import { stripSubComponents } from '../strip-sub-components.js';
-import { truncHash } from '../utils/style.js';
+import { diffLine, section, truncHash } from '../utils/style.js';
 
 const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate anomaly signal notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
 
@@ -95,18 +95,55 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
         if (data.api_key) setApiKey(data.api_key);
         writeAcrStateFile(data.agent_id, apiUrl, data.api_key);
 
-        const briefing = data.environment_briefing;
-        let text = `Registered successfully.\n\nName: ${data.name}\nAgent ID: ${data.agent_id}\nComposition Hash: ${data.composition_hash}\n`;
+        // The server tells us whether this was a fresh record or a
+        // rebind of an existing agent. Missing flag → treat as initial
+        // (older servers didn't set it, and the only alternative is
+        // no-op rendering which is worse).
+        const isReRegistration = (data as { reregistered?: boolean }).reregistered === true;
+        const action = isReRegistration ? 'Re-registered' : 'Registered';
 
+        // Counts of what the caller submitted. This is the "after"
+        // state — for an initial registration the "before" is all
+        // zeros; for a re-registration we don't have the old counts
+        // without a second round trip, so we render the submission
+        // counts and flag the re-registration shape explicitly.
+        const skillCount = (skills?.length ?? 0)
+          + (skill_hashes?.length ?? 0)
+          + (skill_components?.length ?? 0);
+        const mcpCount = mcp_components?.length ?? 0;
+        const toolCount = tool_components?.length ?? 0;
+        const apiCount = api_components?.length ?? 0;
+
+        let text = `${action} successfully.\n\n`;
+        text += `Name: ${data.name}\n`;
+        text += `Agent ID: ${data.agent_id}\n`;
+
+        text += `\n${section(isReRegistration ? 'Diff (submitted)' : 'Initial state')}\n`;
+        if (isReRegistration) {
+          text += `  Hash:   ${truncHash(data.composition_hash)}   (updated)\n`;
+          text += `  Skills: ${skillCount} submitted\n`;
+          text += `  MCPs:   ${mcpCount} submitted\n`;
+          text += `  Tools:  ${toolCount} submitted\n`;
+          text += `  APIs:   ${apiCount} submitted\n`;
+          text += `  (Previous composition not fetched — call get_profile for the server-side view.)\n`;
+        } else {
+          text += diffLine('Hash  ', '—', truncHash(data.composition_hash)) + '\n';
+          text += diffLine('Skills', 0, skillCount, skillCount > 0 ? `+${skillCount}` : 'none submitted') + '\n';
+          text += diffLine('MCPs  ', 0, mcpCount, mcpCount > 0 ? `+${mcpCount}` : 'none submitted') + '\n';
+          text += diffLine('Tools ', 0, toolCount, toolCount > 0 ? `+${toolCount}` : 'none submitted') + '\n';
+          text += diffLine('APIs  ', 0, apiCount, apiCount > 0 ? `+${apiCount}` : 'none submitted') + '\n';
+        }
+
+        const briefing = data.environment_briefing;
         const systems = briefing?.connected_systems ?? [];
         if (systems.length > 0) {
-          text += `\nConnected Systems: ${systems.length}`;
+          text += `\nConnected Systems: ${systems.length}\n`;
         }
         const signals = briefing?.skill_signals ?? [];
         if (signals.length > 0) {
-          text += `\n\nSkills with anomaly signals: ${signals.length}`;
+          text += `\nSkills with anomaly signals: ${signals.length}\n`;
           for (const s of signals) {
-            text += `\n- ${s.skill_name || truncHash(s.skill_hash)} — ${s.anomaly_signal_count ?? 0} signals, ${s.agent_count ?? 0} reporters`;
+            text += `- ${s.skill_name || truncHash(s.skill_hash)} — ${s.anomaly_signal_count ?? 0} signals, ${s.agent_count ?? 0} reporters\n`;
           }
         }
 

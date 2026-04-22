@@ -1,3 +1,51 @@
+## 2.7.1 (2026-04-22)
+
+Response-shape hygiene. 2.7.0 resolved the front-door ambiguity but
+left four smaller inconsistencies visible across the tool surface:
+mutations didn't render a diff, empty-state branches dead-ended
+without a next step, IDs were inconsistently truncated, and
+registration failures surfaced as bare `Error: …` strings instead of
+the actionable `RegistrationFailedError.userMessage()`. 2.7.1 closes
+all four.
+
+Release H of the v2.5.0 – v2.9.0 roadmap.
+
+- **Mutation diffs on `register_agent` / `update_composition` /
+  `acknowledge_signal`.** Every mutation response now renders a
+  `── Diff ──` section with `before → after (change)` lines.
+  `update_composition` pre-fetches the current composition so the
+  diff is honest; if the read fails, the response falls through to
+  an after-only view and flags the missing "before" column so the
+  operator doesn't misread absence as a no-op.
+  `acknowledge_signal` shows the state transition
+  (`unacknowledged → acknowledged`) plus acknowledged-at, expiry,
+  optional reason, and truncated agent/notification IDs — the same
+  shape every mutation response now uses.
+- **Empty-state next-action on every no-data branch.**
+  `get_skill_tracker`, `search_skills`, `get_stable_corridors`,
+  `get_notifications`, `get_failure_registry` (and the previously
+  migrated lenses) now render either a `✓ Healthy` marker or a
+  next-action pointer on every empty-state branch. No empty
+  response dead-ends anymore.
+- **Truncated-ID render standard.** `truncId()` in `utils/style.ts`
+  with a 12-char default and a `verbose: true` opt-out. Applied to
+  dense inline contexts (notification lists, diff IDs) and left
+  header lines (`Agent ID: …`) full-length since operators copy
+  those values. Tools that surface truncated IDs now accept a
+  `verbose` param so the full value is one call away.
+- **`renderResolveError` centralizes registration-error rendering.**
+  Every `resolveAgentId` catch site (14 tools) routes through the
+  same helper, which unwraps `RegistrationFailedError` into its
+  HTTP-status-aware `userMessage()` and falls back to a generic
+  `Error: …` for everything else. Inline `ensureRegistered` catches
+  in `log_interaction`, `update_composition`, `get_notifications`,
+  `get_my_agent`, and `acknowledge_signal` already handled
+  `RegistrationFailedError` correctly — this release pulls the rest
+  of the surface up to the same bar.
+- **`diffLine(label, before, after, change?)`** in `utils/style.ts`
+  so mutation diffs read identically across tools without
+  per-handler string building.
+
 ## 2.7.0 (2026-04-22)
 
 Front-door consolidation + terminology alignment. Since 2.6.0

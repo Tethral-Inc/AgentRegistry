@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { section } from '../utils/style.js';
 
@@ -39,7 +39,7 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
         id = resolved.id;
         displayName = resolved.displayName;
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return renderResolveError(err);
       }
 
       const url = new URL(`${apiUrl}/api/v1/agent/${id}/composition-diff`);

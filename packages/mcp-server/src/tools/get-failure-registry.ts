@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
-import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
@@ -30,7 +30,7 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         id = resolved.id;
         displayName = resolved.displayName;
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return renderResolveError(err);
       }
 
       try {
@@ -60,7 +60,10 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         text += `Distinct failing targets: ${data.distinct_failing_targets}\n`;
 
         if (failures.length === 0) {
-          text += `\nNo failures recorded in this period.\n`;
+          // Explicit health marker so the operator sees at a glance
+          // that the empty output is good news, not a missing-data
+          // problem. The next-action footer still fires below.
+          text += `\n✓ Healthy — no failures recorded in this period.\n`;
         } else {
           for (const f of failures) {
             const totalCount = (f.total_count as number) ?? 0;

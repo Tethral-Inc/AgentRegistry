@@ -1,4 +1,5 @@
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.js';
+import { RegistrationFailedError } from '../session-state.js';
 
 /**
  * Canonical implementation of agent ID resolution.
@@ -42,4 +43,29 @@ export async function resolveAgentId(
   const id = agentId || getAgentId() || await ensureRegistered();
   const displayName = getAgentName() ?? id;
   return { id, displayName };
+}
+
+/**
+ * Standard catch-and-render for `resolveAgentId` errors. Every lens tool
+ * wraps its `resolveAgentId` call in a try/catch and needs to surface
+ * a sensible message — this helper keeps that boilerplate identical
+ * everywhere and ensures `RegistrationFailedError` gets its rich
+ * `userMessage()` (HTTP-status-aware, actionable) instead of a generic
+ * `Error: ...` dump.
+ */
+export function renderResolveError(err: unknown): {
+  content: [{ type: 'text'; text: string }];
+  isError: true;
+} {
+  if (err instanceof RegistrationFailedError) {
+    return {
+      content: [{ type: 'text' as const, text: err.userMessage() }],
+      isError: true,
+    };
+  }
+  const msg = err instanceof Error ? err.message : 'Unknown error';
+  return {
+    content: [{ type: 'text' as const, text: `Error: ${msg}` }],
+    isError: true,
+  };
 }
