@@ -8,24 +8,25 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createAcrServer } from './server.js';
-import { SessionState } from './session-state.js';
+import { SessionState, sessionContext } from './session-state.js';
 
 const PORT = parseInt(process.env.ACR_MCP_HTTP_PORT ?? '3001', 10);
 const AUTH_TOKEN = process.env.ACR_MCP_AUTH_TOKEN;
 const STATELESS = process.env.ACR_MCP_STATELESS === 'true';
 
-// Track active transports per session for cleanup
-const sessions = new Map<string, StreamableHTTPServerTransport>();
-
-function createTransport(): StreamableHTTPServerTransport {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: STATELESS ? undefined : () => randomUUID(),
-    onsessioninitialized: (sessionId) => {
-      sessions.set(sessionId, transport);
-    },
-  });
-  return transport;
+/**
+ * Per-session record. The transport carries the MCP protocol frames; the
+ * session is the per-agent state we enter into via `sessionContext.run`
+ * on every handleRequest call so tools and middleware read the correct
+ * SessionState without the tool factories having to thread it through.
+ */
+interface SessionEntry {
+  transport: StreamableHTTPServerTransport;
+  session: SessionState;
 }
+
+// Track active sessions for cleanup + per-request session lookup.
+const sessions = new Map<string, SessionEntry>();
 
 const httpServer = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
@@ -70,16 +71,25 @@ const httpServer = createServer(async (req, res) => {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
   if (sessionId && sessions.has(sessionId)) {
-    // Existing session — route to its transport
-    const transport = sessions.get(sessionId)!;
-    await transport.handleRequest(req, res);
+    // Existing session — route to its transport inside the session context
+    // so tools + middleware see the right SessionState via getActiveSession().
+    const entry = sessions.get(sessionId)!;
+    await sessionContext.run(entry.session, () => entry.transport.handleRequest(req, res));
     return;
   }
 
   if (req.method === 'POST' && !sessionId) {
-    // New session — create transport with its own session state, connect server
-    const transport = createTransport();
+    // New session — create transport with its own session state, connect server.
+    // The session is entered into `sessionContext` for the duration of this
+    // request so the initialize call and any tool call made on the same
+    // request read the correct session.
     const session = new SessionState('streamable-http');
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: STATELESS ? undefined : () => randomUUID(),
+      onsessioninitialized: (sid) => {
+        sessions.set(sid, { transport, session });
+      },
+    });
     const server = createAcrServer({ session });
 
     transport.onclose = () => {
@@ -89,15 +99,15 @@ const httpServer = createServer(async (req, res) => {
     };
 
     await server.connect(transport);
-    await transport.handleRequest(req, res);
+    await sessionContext.run(session, () => transport.handleRequest(req, res));
     return;
   }
 
   if (req.method === 'DELETE' && sessionId) {
     // Session cleanup
-    const transport = sessions.get(sessionId);
-    if (transport) {
-      await transport.close();
+    const entry = sessions.get(sessionId);
+    if (entry) {
+      await entry.transport.close();
       sessions.delete(sessionId);
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -120,8 +130,8 @@ httpServer.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.error('Shutting down...');
-  for (const transport of sessions.values()) {
-    transport.close().catch((err) => { console.error('Failed to close transport during shutdown', err); });
+  for (const entry of sessions.values()) {
+    entry.transport.close().catch((err) => { console.error('Failed to close transport during shutdown', err); });
   }
   httpServer.close();
 });

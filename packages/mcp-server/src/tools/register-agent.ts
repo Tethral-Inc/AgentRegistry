@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { setAgentId, setAgentName, setApiKey } from '../state.js';
-import { defaultSession } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 import { writeAcrStateFile } from '../acr-state-file.js';
 import { stripSubComponents } from '../strip-sub-components.js';
 
@@ -50,7 +50,7 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
       skill_components, mcp_components, api_components, tool_components,
     }) => {
       try {
-        const deep = defaultSession.deepComposition;
+        const deep = getActiveSession().deepComposition;
         const composition = {
           skills,
           skill_hashes,

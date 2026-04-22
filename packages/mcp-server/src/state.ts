@@ -1,9 +1,18 @@
 /**
  * Backwards-compatible state module.
- * Delegates to the defaultSession singleton from session-state.ts.
- * Tools continue to import from './state.js' without changes.
+ *
+ * Every getter and setter routes through `getActiveSession()`, which
+ * resolves to the per-request SessionState on HTTP transport (via the
+ * `sessionContext` AsyncLocalStorage) and to `defaultSession` on stdio.
+ * This lets the existing tool imports (getAgentId, getAuthHeaders, …)
+ * keep working while concurrent HTTP sessions stay isolated.
+ *
+ * New code should prefer importing `getActiveSession()` directly from
+ * `session-state.js` and calling `session.agentId` / `session.apiKey` —
+ * this module exists to keep the tool surface diff small across the
+ * Phase 1 migration.
  */
-import { defaultSession } from './session-state.js';
+import { getActiveSession } from './session-state.js';
 
 const ACR_API_URL = process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
 
@@ -12,36 +21,36 @@ export function getApiUrl(): string {
 }
 
 export function getAgentId(): string | null {
-  return defaultSession.agentId;
+  return getActiveSession().agentId;
 }
 
 export function getAgentName(): string | null {
-  return defaultSession.agentName;
+  return getActiveSession().agentName;
 }
 
 export function getApiKey(): string | null {
-  return defaultSession.apiKey;
+  return getActiveSession().apiKey;
 }
 
 export function setAgentId(id: string): void {
-  defaultSession.setAgentId(id);
+  getActiveSession().setAgentId(id);
 }
 
 export function setAgentName(name: string): void {
-  defaultSession.setAgentName(name);
+  getActiveSession().setAgentName(name);
 }
 
 export function setApiKey(key: string): void {
-  defaultSession.setApiKey(key);
+  getActiveSession().setApiKey(key);
 }
 
 /** Returns auth headers for per-agent API calls, or empty object if no key. */
 export function getAuthHeaders(): Record<string, string> {
-  const key = defaultSession.apiKey;
+  const key = getActiveSession().apiKey;
   if (!key) return {};
   return { Authorization: `Bearer ${key}` };
 }
 
 export async function ensureRegistered(): Promise<string> {
-  return defaultSession.ensureRegistered(ACR_API_URL);
+  return getActiveSession().ensureRegistered(ACR_API_URL);
 }

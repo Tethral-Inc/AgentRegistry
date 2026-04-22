@@ -114,9 +114,12 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   // the agent's own code sharing this process) becomes an observation
   // event. The observer bypasses its own receipt emissions via a host
   // match on apiUrl + an AsyncLocalStorage re-entrancy guard, and is
-  // idempotent if createAcrServer is called twice. Opt out with
+  // idempotent if createAcrServer is called twice. The wrapper itself
+  // is session-agnostic: it looks up the active session via
+  // `sessionContext.getStore()` on every observed fetch, so concurrent
+  // HTTP sessions all share the one wrapper safely. Opt out with
   // ACR_DISABLE_FETCH_OBSERVE=1.
-  installFetchObserver({ apiUrl, session });
+  installFetchObserver({ apiUrl });
 
   // Apply self-logging middleware before tool registration
   withSelfLogging(server, () => session, apiUrl);

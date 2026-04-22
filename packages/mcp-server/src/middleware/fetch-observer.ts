@@ -6,6 +6,13 @@
  * cooperation required. The agent does not need to call log_interaction;
  * the call is observed as it crosses the HTTP boundary.
  *
+ * Session resolution: the observer looks up the active session via
+ * `getActiveSession()` at call time, not at install time. Under HTTP
+ * transport each request runs inside `sessionContext.run(session, …)`,
+ * so concurrent sessions' fetches are correctly attributed to their own
+ * agent_id and transport_type. Under stdio the lookup falls back to the
+ * process-wide `defaultSession`, matching the single-session semantics.
+ *
  * Re-entrancy hazards — handled explicitly:
  *
  * 1. The observer itself posts receipts to the ACR API. Those posts use
@@ -23,13 +30,15 @@
  *    count (once at the tool-boundary by self-log, once at the HTTP
  *    boundary by this observer).
  *
- * 3. The installed observer is idempotent. Installing twice is a no-op.
+ * 3. The installed observer is idempotent. Installing twice is a no-op;
+ *    subsequent createAcrServer calls (HTTP transport with concurrent
+ *    sessions) all share the one wrapper, which is session-agnostic.
  *
  * Opt-out: ACR_DISABLE_FETCH_OBSERVE=1 in the environment skips install.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { SessionState } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 
 // Reference to the original fetch, captured before the wrapper is installed.
 // Callers that must bypass observation (probe emission, self-log emission,
@@ -50,17 +59,17 @@ export function getUnwrappedFetch(): typeof fetch {
 
 /**
  * Install the fetch observer. Returns true if installed, false if
- * disabled by env var or already installed.
+ * disabled by env var or already installed. The observer is session-
+ * agnostic at install time — it reads the active session via
+ * `getActiveSession()` on every observed call, so multiple
+ * createAcrServer invocations can safely share the one wrapper.
  */
-export function installFetchObserver(options: {
-  apiUrl: string;
-  session: SessionState;
-}): boolean {
+export function installFetchObserver(options: { apiUrl: string }): boolean {
   if ((process.env.ACR_DISABLE_FETCH_OBSERVE ?? '') === '1') return false;
   if (installed) return false;
   installed = true;
 
-  const { apiUrl, session } = options;
+  const { apiUrl } = options;
 
   // Capture the genuinely original fetch the first time.
   if (!originalFetch) originalFetch = globalThis.fetch.bind(globalThis);
@@ -122,9 +131,9 @@ export function installFetchObserver(options: {
     } finally {
       const duration_ms = Date.now() - start;
       const method = (init?.method ?? 'GET').toUpperCase();
-      // Fire-and-forget receipt emission, wrapped in the re-entrancy guard.
-      // Never awaited so the wrapped fetch returns at the same time the
-      // unwrapped one would have.
+      // Resolve the session at observation time, not at install time —
+      // HTTP concurrent sessions each run under their own sessionContext.
+      const session = getActiveSession();
       const agentId = session.agentId;
       if (agentId) {
         inEmission.run(true, () => {
@@ -132,6 +141,7 @@ export function installFetchObserver(options: {
             apiUrl,
             agentId,
             transportType: session.transportType,
+            providerClass: session.providerClass,
             host: host as string,
             method,
             duration_ms,
@@ -153,6 +163,7 @@ interface ObservedReceiptInput {
   apiUrl: string;
   agentId: string;
   transportType: string;
+  providerClass: string;
   host: string;
   method: string;
   duration_ms: number;
@@ -167,6 +178,7 @@ async function emitObservedReceipt(input: ObservedReceiptInput): Promise<void> {
     apiUrl,
     agentId,
     transportType,
+    providerClass,
     host,
     method,
     duration_ms,
@@ -184,7 +196,7 @@ async function emitObservedReceipt(input: ObservedReceiptInput): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        emitter: { agent_id: agentId, provider_class: 'unknown' },
+        emitter: { agent_id: agentId, provider_class: providerClass },
         target: { system_id: `api:${host}`, system_type: 'api' },
         interaction: {
           category: 'tool_call',

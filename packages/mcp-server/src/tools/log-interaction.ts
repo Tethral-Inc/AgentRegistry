@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
-import { defaultSession } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 import type { CorrelationWindow } from '../middleware/correlation-window.js';
 
 function inferSystemType(systemId: string): string {
@@ -73,6 +73,7 @@ export function logInteractionTool(
     },
     async (params) => {
       try {
+        const session = getActiveSession();
         const id = params.agent_id || getAgentId() || await ensureRegistered();
         const nowMs = Date.now();
 
@@ -88,7 +89,7 @@ export function logInteractionTool(
         let chainId = params.chain_id;
         let chainPosition = params.chain_position;
         if (!chainId) {
-          const ctx = defaultSession.nextChainContext(nowMs);
+          const ctx = session.nextChainContext(nowMs);
           chainId = ctx.chain_id;
           if (chainPosition === undefined) chainPosition = ctx.chain_position;
         }
@@ -121,7 +122,7 @@ export function logInteractionTool(
           body: JSON.stringify({
             emitter: {
               agent_id: id,
-              provider_class: defaultSession.providerClass,
+              provider_class: session.providerClass,
             },
             target: {
               system_id: params.target_system_id,
@@ -147,7 +148,7 @@ export function logInteractionTool(
               flagged: params.anomaly_flagged,
               detail: params.anomaly_detail,
             },
-            transport_type: defaultSession.transportType,
+            transport_type: session.transportType,
             source: 'agent' as const,
             chain_id: chainId,
             chain_position: chainPosition,

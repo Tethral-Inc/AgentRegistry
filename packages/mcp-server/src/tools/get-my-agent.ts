@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getApiKey, getAuthHeaders } from '../state.js';
-import { defaultSession } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
@@ -60,7 +60,7 @@ export function getMyAgentTool(server: McpServer) {
         const provider = agent?.provider_class ?? 'unknown';
 
         // Identity block
-        let text = renderUpgradeBanner(defaultSession.versionCheck);
+        let text = renderUpgradeBanner(getActiveSession().versionCheck);
         text += `${displayName} (${provider})\n`;
         text += `ID: ${id}\n`;
         if (apiKey) text += `Key: ${apiKey}\n`;

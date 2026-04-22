@@ -5,16 +5,25 @@
  *
  * Self-logged receipts use source='server' to distinguish from
  * LLM-initiated logs (source='agent').
+ *
+ * Re-entrancy guard: the self-log POST itself goes out through fetch,
+ * which would trip the tool-handler wrapper again if one tool call
+ * chained into another. We guard with AsyncLocalStorage instead of a
+ * module-level boolean so concurrent HTTP sessions don't race on a
+ * shared flag (a process-global boolean would let session A's
+ * selfLogging=true suppress session B's self-log and vice versa).
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { SessionState } from '../session-state.js';
-import { defaultSession } from '../session-state.js';
-import { getAuthHeaders } from '../state.js';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
 type ToolHandler = (params: Record<string, unknown>, extra: unknown) => Promise<ToolResult>;
 
-// Re-entrancy guard to prevent the self-log POST from triggering another self-log
-let selfLogging = false;
+// Per-async-context re-entrancy guard. True means "we are currently
+// emitting a self-log receipt; any nested tool-handler wrap should skip
+// emission to avoid a loop." Unlike a module boolean this is scoped to
+// the caller's async chain, so concurrent HTTP sessions don't collide.
+const inSelfLog = new AsyncLocalStorage<boolean>();
 
 /**
  * Wrap a tool handler with automatic interaction logging.
@@ -37,18 +46,27 @@ export function withSelfLog(
       status = 'failure';
       throw err;
     } finally {
-      // Fire-and-forget self-log (never block or fail the tool call)
-      if (!selfLogging) {
+      // Fire-and-forget self-log (never block or fail the tool call).
+      // Skip when we're already inside another self-log's emission path.
+      if (inSelfLog.getStore() !== true) {
         const durationMs = Date.now() - startMs;
         const state = getState();
-        // Tools currently store agentId on defaultSession (via state.ts compat layer).
-        // Check both the provided session and defaultSession as fallback.
-        const agentId = state.agentId ?? defaultSession.agentId;
+        const agentId = state.agentId;
 
         if (agentId) {
-          selfLogging = true;
-          fireAndForgetLog(apiUrl, agentId, toolName, status, durationMs, state.transportType, state.providerClass)
-            .finally(() => { selfLogging = false; });
+          const apiKey = state.apiKey;
+          inSelfLog.run(true, () => {
+            void fireAndForgetLog(
+              apiUrl,
+              agentId,
+              toolName,
+              status,
+              durationMs,
+              state.transportType,
+              state.providerClass,
+              apiKey,
+            );
+          });
         }
       }
     }
@@ -65,14 +83,18 @@ async function fireAndForgetLog(
   durationMs: number,
   transportType: string,
   providerClass: string,
+  apiKey: string | null,
 ): Promise<void> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
 
-    const res = await fetch(`${apiUrl}/api/v1/receipts`, {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    await fetch(`${apiUrl}/api/v1/receipts`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      headers,
       signal: controller.signal,
       body: JSON.stringify({
         emitter: {

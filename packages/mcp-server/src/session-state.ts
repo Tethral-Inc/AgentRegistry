@@ -2,6 +2,7 @@
  * Instance-based session state for the ACR MCP server.
  * Supports both stdio (single session) and HTTP (concurrent sessions).
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { detectEnvironment } from './env-detect.js';
@@ -167,3 +168,23 @@ export class SessionState {
 
 /** Default singleton session for stdio mode. */
 export const defaultSession = new SessionState('stdio');
+
+/**
+ * Per-request session context. HTTP transport runs each incoming request
+ * inside `sessionContext.run(session, ...)` so tools, middleware, and the
+ * fetch observer can look up the correct SessionState without the tool
+ * factories having to thread it through every call site.
+ *
+ * Stdio mode never enters the context, so `getActiveSession()` returns
+ * `defaultSession` there — which matches the single-session semantics of
+ * stdio (one process, one agent).
+ */
+export const sessionContext = new AsyncLocalStorage<SessionState>();
+
+/**
+ * Return the SessionState for the current async context, falling back to
+ * the stdio `defaultSession` when no HTTP request context is active.
+ */
+export function getActiveSession(): SessionState {
+  return sessionContext.getStore() ?? defaultSession;
+}

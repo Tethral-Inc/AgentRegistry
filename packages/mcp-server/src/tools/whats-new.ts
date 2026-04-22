@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
-import { defaultSession } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 
 export function whatsNewTool(server: McpServer, apiUrl: string) {
@@ -54,7 +54,7 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
         safeJson(todayRes),
       ]);
 
-      let text = renderUpgradeBanner(defaultSession.versionCheck);
+      let text = renderUpgradeBanner(getActiveSession().versionCheck);
       text += `What's New — ${displayName}\n${'='.repeat(30)}\n`;
 
       // ── Yesterday ──

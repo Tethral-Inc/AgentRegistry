@@ -30,9 +30,10 @@ process.env.ACR_STATE_FILE = '/tmp/acr-state-test.json';
 const { createAcrServer } = await import(
   '../../packages/mcp-server/src/server.js'
 );
-const { SessionState } = await import(
+const { SessionState, sessionContext, getActiveSession } = await import(
   '../../packages/mcp-server/src/session-state.js'
 );
+const stateModule = await import('../../packages/mcp-server/src/state.js');
 
 describe('createAcrServer — stdio happy path', () => {
   beforeAll(() => {
@@ -111,36 +112,104 @@ describe('createAcrServer — concurrent session construction', () => {
 });
 
 // ----------------------------------------------------------------------------
-// Phase 1 TDD anchor
+// HTTP session isolation — the invariant Phase 1 is about.
 // ----------------------------------------------------------------------------
-// Once the getSession factory split is done (Phase 1), drop `.skip` and
-// promote this to a regression guard. Today it would fail because most
-// tools import `defaultSession` directly — so invoking a tool on server B
-// reads server A's session when both run in the same process.
+// The real HTTP transport wraps each incoming request in
+// `sessionContext.run(session, …)` so tools + middleware + the fetch
+// observer resolve the right SessionState via getActiveSession() without
+// the tool factories having to thread it through. These tests exercise
+// that contract directly by entering the context ourselves — which is
+// exactly what http.ts does on every request.
 // ----------------------------------------------------------------------------
-describe.skip('createAcrServer — HTTP session isolation (Phase 1)', () => {
-  it('two concurrent HTTP sessions do not share agent identity through tool calls', () => {
-    // Scaffold:
-    //   const a = new SessionState('streamable-http');
-    //   const b = new SessionState('streamable-http');
-    //   a.setAgentId('agt_alpha');
-    //   b.setAgentId('agt_beta');
-    //   const serverA = createAcrServer({ session: a });
-    //   const serverB = createAcrServer({ session: b });
-    //   const [transportA, clientA] = inMemoryPair();
-    //   const [transportB, clientB] = inMemoryPair();
-    //   await serverA.connect(transportA);
-    //   await serverB.connect(transportB);
-    //   const resA = await clientA.callTool({ name: 'get_my_agent', arguments: {} });
-    //   const resB = await clientB.callTool({ name: 'get_my_agent', arguments: {} });
-    //   expect(text(resA)).toContain('agt_alpha');
-    //   expect(text(resB)).toContain('agt_beta');
-    expect(true).toBe(true);
+describe('createAcrServer — HTTP session isolation', () => {
+  beforeAll(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
   });
 
-  it('deep-composition preference is per-session, not process-global', () => {
-    // Same shape: turn off deep composition on session A, confirm B is
-    // unaffected when configure_deep_composition is called on A's server.
-    expect(true).toBe(true);
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('state.ts getters read the per-request session, not a process singleton', () => {
+    const a = new SessionState('streamable-http');
+    const b = new SessionState('streamable-http');
+    a.setAgentId('agt_alpha');
+    a.setApiKey('sk_alpha');
+    b.setAgentId('agt_beta');
+    b.setApiKey('sk_beta');
+
+    // Outside any context → falls back to defaultSession (stdio semantics).
+    // We don't assert its value — stdio's defaultSession may carry whatever
+    // an earlier test left on it. The isolation guarantee is what we test.
+
+    // Inside A's context → getters see A's data.
+    sessionContext.run(a, () => {
+      expect(stateModule.getAgentId()).toBe('agt_alpha');
+      expect(stateModule.getApiKey()).toBe('sk_alpha');
+      expect(stateModule.getAuthHeaders()).toEqual({ Authorization: 'Bearer sk_alpha' });
+      expect(getActiveSession()).toBe(a);
+    });
+
+    // Inside B's context → getters see B's data. A's mutations did not leak.
+    sessionContext.run(b, () => {
+      expect(stateModule.getAgentId()).toBe('agt_beta');
+      expect(stateModule.getApiKey()).toBe('sk_beta');
+      expect(stateModule.getAuthHeaders()).toEqual({ Authorization: 'Bearer sk_beta' });
+      expect(getActiveSession()).toBe(b);
+    });
+  });
+
+  it('writes through setAgentId land on the per-request session, not defaultSession', () => {
+    const a = new SessionState('streamable-http');
+    sessionContext.run(a, () => {
+      stateModule.setAgentId('agt_written_in_context');
+    });
+    // The write landed on A, not on whatever session defaultSession is.
+    expect(a.agentId).toBe('agt_written_in_context');
+  });
+
+  it('nested contexts resolve to the innermost session', () => {
+    const outer = new SessionState('streamable-http');
+    const inner = new SessionState('streamable-http');
+    outer.setAgentId('agt_outer');
+    inner.setAgentId('agt_inner');
+
+    sessionContext.run(outer, () => {
+      expect(getActiveSession()).toBe(outer);
+      sessionContext.run(inner, () => {
+        expect(getActiveSession()).toBe(inner);
+        expect(stateModule.getAgentId()).toBe('agt_inner');
+      });
+      // Back to outer once we leave the inner run.
+      expect(getActiveSession()).toBe(outer);
+      expect(stateModule.getAgentId()).toBe('agt_outer');
+    });
+  });
+
+  it('two sessions retain independent deep-composition preferences under their own contexts', () => {
+    const a = new SessionState('streamable-http');
+    const b = new SessionState('streamable-http');
+    sessionContext.run(a, () => a.setDeepComposition(false));
+    sessionContext.run(b, () => {
+      expect(b.deepComposition).toBe(true);
+      expect(getActiveSession().deepComposition).toBe(true);
+    });
+    sessionContext.run(a, () => {
+      expect(getActiveSession().deepComposition).toBe(false);
+    });
+  });
+
+  it('async tool work inside a session context propagates across awaits', async () => {
+    const a = new SessionState('streamable-http');
+    a.setAgentId('agt_async');
+    await sessionContext.run(a, async () => {
+      // Simulate a tool handler that awaits something — als context must
+      // ride the Promise chain, otherwise HTTP isolation breaks the moment
+      // any tool uses await (which is every tool).
+      await new Promise((r) => setTimeout(r, 1));
+      expect(stateModule.getAgentId()).toBe('agt_async');
+      await new Promise((r) => setImmediate(r));
+      expect(getActiveSession()).toBe(a);
+    });
   });
 });

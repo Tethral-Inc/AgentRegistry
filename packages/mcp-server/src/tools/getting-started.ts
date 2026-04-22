@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
-import { defaultSession } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 
 async function fetchJsonSafe(url: string, headers: Record<string, string>): Promise<Record<string, unknown> | null> {
@@ -65,7 +65,7 @@ export function gettingStartedTool(server: McpServer, apiUrl: string) {
 
       const displayName = (agentData?.name as string) ?? (profile?.name as string) ?? resolvedDisplayName;
 
-      let text = renderUpgradeBanner(defaultSession.versionCheck);
+      let text = renderUpgradeBanner(getActiveSession().versionCheck);
       text += `Getting Started with ACR\n${'='.repeat(24)}\n\n`;
 
       const nextActions: string[] = [];
