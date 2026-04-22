@@ -3,7 +3,7 @@
   "name": "io.github.Tethral-Inc/acr",
   "title": "ACR — Agent Composition Records",
   "description": "Interaction profile registry for AI agents. Log interactions, query behavioral lenses.",
-  "version": "2.7.0",
+  "version": "2.10.0",
   "websiteUrl": "https://acr.nfkey.ai",
   "repository": {
     "url": "https://github.com/Tethral-Inc/AgentRegistry",
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "@tethral/acr-mcp",
-      "version": "2.7.0",
+      "version": "2.10.0",
       "transport": {
         "type": "stdio"
       },
