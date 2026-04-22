@@ -1,3 +1,52 @@
+## 2.5.1 (2026-04-22)
+
+UX footers across every lens. Each lens output now starts with a silent
+unread-notification header when there's something waiting, ends with a
+concrete `→ Next action` line that routes based on the lens's own data,
+and finishes with a `Full view:` dashboard link at the exact range +
+source scope the lens just rendered. Operators stop hitting dead ends
+when a lens doesn't answer the question directly.
+
+Release B of the v2.5.0 – v2.9.0 roadmap.
+
+- **Notification header** (`utils/notification-header.ts`). Best-effort
+  fetch of `GET /api/v1/agent/<id>/notifications?read=false` in parallel
+  with the lens fetch — zero serial round trips. Renders a one-line
+  `!  N new signals since your last call — call get_notifications`
+  banner when `unread_count > 0`, silent empty string otherwise. Every
+  failure mode (network, parse, auth) returns `null` so a lens call
+  never errors because the notification probe failed. Singular / plural
+  chosen honestly ("1 new signal" vs "N new signals").
+- **Next-action footer** (`utils/next-action.ts`). Per-lens heuristics
+  for friction / trend / coverage / failure-registry / stable-corridors
+  / network-status / revealed-preference / compensation / whats-new /
+  summarize-my-agent / get-my-agent. Each reads the same response the
+  lens just rendered and picks a tool worth calling next, or honestly
+  says "nothing to chase this period" when the data is clean. Friction
+  routes network-wide failures to `get_network_status`, retry hotspots
+  to `get_skill_tracker`, wait hogs to `get_failure_registry`. Trend
+  routes degraded targets to `get_friction_report`, stable weeks to
+  `get_stable_corridors`. `summarize_my_agent` and `get_my_agent`
+  delegate to the strongest sub-lens signal.
+- **Dashboard-link footer** (`utils/dashboard-link.ts`). Every
+  agent-scoped lens appends `Full view:
+  https://dashboard.acr.nfkey.ai/agents/<id>/<lens>?range=<scope>&source=<src>`
+  so the operator can pivot from "I read the summary" to "let me drill
+  in" without hunting for the URL. `ACR_DASHBOARD_URL` env var overrides
+  the base URL for staging and self-hosted deployments, matching
+  `get_my_agent`'s existing dashboard-link behavior. Network-status is
+  network-wide and gets only the next-action footer (no agent-scoped
+  URL).
+- **11 lens tools wired**: `get_friction_report`, `get_trend`,
+  `get_coverage`, `get_failure_registry`, `get_stable_corridors`,
+  `get_network_status`, `get_profile`, `whats_new`, `summarize_my_agent`,
+  `get_my_agent`. Each tool fetches unread count in parallel with its
+  primary data fetch so the header adds no latency. `whats_new` and
+  `summarize_my_agent` reuse the unread count they already fetched —
+  literally zero extra work.
+
+No schema changes. Rebuild and republish only.
+
 ## 2.5.0 (2026-04-22)
 
 HTTP transport and attribution are correct — concurrent HTTP sessions

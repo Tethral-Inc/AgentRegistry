@@ -2,6 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 export function getProfileTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -27,7 +29,11 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/profile`, { headers: getAuthHeaders() });
+        const authHeaders = getAuthHeaders();
+        const [res, unreadCount] = await Promise.all([
+          fetch(`${apiUrl}/api/v1/agent/${id}/profile`, { headers: authHeaders }),
+          getUnreadNotificationCount(apiUrl, id, authHeaders),
+        ]);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Profile error: ${errText}` }] };
@@ -37,7 +43,8 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
         const c = data.counts as Record<string, unknown>;
         const comp = data.composition_summary as Record<string, unknown>;
 
-        let text = `Profile: ${displayName}\n${'='.repeat(30)}\n`;
+        let text = renderNotificationHeader(unreadCount);
+        text += `Profile: ${displayName}\n${'='.repeat(30)}\n`;
         text += `Agent ID: ${data.agent_id}\n`;
         if (data.provider_class) text += `Provider: ${data.provider_class}\n`;
         if (data.operational_domain) text += `Domain: ${data.operational_domain}\n`;
@@ -74,6 +81,11 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
           if (delta.last_observed_at) text += `  Last MCP observation: ${delta.last_observed_at}\n`;
           if (delta.last_reported_at) text += `  Last agent report: ${delta.last_reported_at}\n`;
         }
+
+        // Profile doesn't carry a routing signal strong enough to justify a
+        // next-action line — counts and composition are descriptive. The
+        // dashboard link still points at the profile view for drill-in.
+        text += renderDashboardFooter(id, 'profile');
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

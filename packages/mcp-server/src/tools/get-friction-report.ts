@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
+import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
+import { frictionNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 /** "1h 12m", "12m 4s", "4.2s" — picks the right unit for the magnitude. */
 function formatDuration(ms: number): string {
@@ -46,7 +49,13 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
 
       try {
         const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/friction?${params}`, { headers: getAuthHeaders() });
+        const authHeaders = getAuthHeaders();
+        // Fetch friction data + unread-notification count in parallel so the
+        // header doesn't add a serial round-trip.
+        const [res, unreadCount] = await Promise.all([
+          fetch(`${apiUrl}/api/v1/agent/${id}/friction?${params}`, { headers: authHeaders }),
+          getUnreadNotificationCount(apiUrl, id, authHeaders),
+        ]);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Friction report error: ${errText}` }] };
@@ -61,15 +70,15 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         displayName = data.name || agent_name || getAgentName() || displayName;
 
         if (s.total_interactions === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `No interactions recorded for ${displayName} (scope "${scope}", source "${source ?? 'agent'}"). Call log_interaction after each external tool call or API request to populate your friction data. If you're only emitting server self-log, pass source='all' or source='server' to see those.`,
-            }],
-          };
+          let emptyText = renderNotificationHeader(unreadCount);
+          emptyText += `No interactions recorded for ${displayName} (scope "${scope}", source "${source ?? 'agent'}"). Call log_interaction after each external tool call or API request to populate your friction data. If you're only emitting server self-log, pass source='all' or source='server' to see those.`;
+          emptyText += renderNextActionFooter(frictionNextAction({ total_interactions: 0 }));
+          emptyText += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
+          return { content: [{ type: 'text' as const, text: emptyText }] };
         }
 
-        let text = `Friction Report for ${displayName} (${scope})\n`;
+        let text = renderNotificationHeader(unreadCount);
+        text += `Friction Report for ${displayName} (${scope})\n`;
         text += `Agent ID: ${data.agent_id}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Source: ${source ?? 'agent'}\n`;
@@ -351,6 +360,19 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           text += `  ${data.population_comparison.total_agents_in_period} agents active in period\n`;
           text += `  ${data.population_comparison.baselines_available} baselines available\n`;
         }
+
+        // Next-action + dashboard footers. Next-action reads the same data
+        // the lens just rendered so the routing decision is honest; the
+        // dashboard link carries range + source so the operator lands on
+        // the exact view they just saw.
+        text += renderNextActionFooter(
+          frictionNextAction({
+            total_interactions: s.total_interactions,
+            top_targets: data.top_targets,
+            failure_breakdown: data.by_error_code,
+          }),
+        );
+        text += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

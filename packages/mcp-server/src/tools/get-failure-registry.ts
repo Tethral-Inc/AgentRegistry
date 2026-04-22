@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
+import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
+import { failureRegistryNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -31,7 +34,11 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
 
       try {
         const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/failure-registry?${params}`, { headers: getAuthHeaders() });
+        const authHeaders = getAuthHeaders();
+        const [res, unreadCount] = await Promise.all([
+          fetch(`${apiUrl}/api/v1/agent/${id}/failure-registry?${params}`, { headers: authHeaders }),
+          getUnreadNotificationCount(apiUrl, id, authHeaders),
+        ]);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Failure registry error: ${errText}` }] };
@@ -41,7 +48,8 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
 
         const failures = data.failures as Array<Record<string, unknown>> ?? [];
 
-        let text = `Failure Registry for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
+        let text = renderNotificationHeader(unreadCount);
+        text += `Failure Registry for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'agent'}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
         text += `Total interactions: ${data.total_interactions}\n`;
@@ -75,6 +83,27 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
             }
           }
         }
+
+        // Build the by_error_code summary the next-action heuristic expects.
+        // Failure-registry doesn't pre-aggregate by error code across targets,
+        // so we synthesize from per-target breakdowns.
+        const byErrorCode: Array<{ error_code?: string; count?: number; top_target?: string }> = [];
+        for (const f of failures) {
+          const errors = f.error_codes as Record<string, number> | undefined;
+          if (!errors) continue;
+          for (const [code, count] of Object.entries(errors)) {
+            byErrorCode.push({ error_code: code, count, top_target: f.target_system_id as string });
+          }
+        }
+        byErrorCode.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+
+        text += renderNextActionFooter(
+          failureRegistryNextAction({
+            total_failures: data.total_failures as number | undefined,
+            by_error_code: byErrorCode,
+          }),
+        );
+        text += renderDashboardFooter(id, 'failure-registry', { range: scope, source: source ?? 'agent' });
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

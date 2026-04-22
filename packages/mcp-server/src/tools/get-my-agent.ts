@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getApiKey, getAuthHeaders } from '../state.js';
 import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
+import { myAgentNextAction, renderNextActionFooter } from '../utils/next-action.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
 
@@ -148,6 +149,32 @@ export function getMyAgentTool(server: McpServer) {
         }
 
         text += `\n${TOOL_MENU}\n`;
+
+        // Next-action footer. get-my-agent already carries an explicit
+        // dashboard URL in its identity block (line ~78), so we don't add
+        // a second dashboard footer — only the routing line.
+        const unreadTotal = (notifData?.unread_count as number | undefined) ?? 0;
+        const frictionSummary = frictionData && !frictionData.error
+          ? {
+              total_interactions: (frictionData.summary as Record<string, unknown>)?.total_interactions as number | undefined,
+              top_targets: frictionData.top_targets as Array<Record<string, unknown>> | undefined,
+            }
+          : null;
+        const coverageSummary = coverageData && !coverageData.error
+          ? {
+              rules: ((coverageData.rules as Array<{ signal: string; triggered: boolean }>) ?? []).map((r) => ({
+                signal: r.signal,
+                triggered: r.triggered,
+              })),
+            }
+          : null;
+        text += renderNextActionFooter(
+          myAgentNextAction({
+            friction: frictionSummary,
+            coverage: coverageSummary,
+            unread_notifications: unreadTotal,
+          }),
+        );
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

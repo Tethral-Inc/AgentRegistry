@@ -2,6 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
+import { summarizeNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 async function fetchJSON(url: string): Promise<Record<string, unknown> | null> {
   try {
@@ -36,16 +39,20 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
         return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
       }
 
-      // Fetch all three in parallel (scope=day for friction initially)
-      const [profile, frictionDay, coverage] = await Promise.all([
+      // Fetch all four in parallel — the unread count piggy-backs on the
+      // same round trip as the lenses it summarizes.
+      const authHeaders = getAuthHeaders();
+      const [profile, frictionDay, coverage, unreadCount] = await Promise.all([
         fetchJSON(`${apiUrl}/api/v1/agent/${id}/profile`),
         fetchJSON(`${apiUrl}/api/v1/agent/${id}/friction?scope=day`),
         fetchJSON(`${apiUrl}/api/v1/agent/${id}/coverage`),
+        getUnreadNotificationCount(apiUrl, id, authHeaders),
       ]);
 
       const displayName = (profile?.name as string) || agent_name || getAgentName() || resolvedDisplayName;
 
-      let text = `Agent Summary: ${displayName}\n${'='.repeat(40)}\n`;
+      let text = renderNotificationHeader(unreadCount);
+      text += `Agent Summary: ${displayName}\n${'='.repeat(40)}\n`;
 
       // Profile section
       if (profile === null) {
@@ -134,6 +141,28 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
           text += `\n-- Coverage --\n  No coverage data available.\n`;
         }
       }
+
+      // summarize_my_agent is a cross-lens snapshot. Defer to friction
+      // first (where shadow tax shows up); coverage second. Dashboard
+      // link points at the overview view.
+      const summaryFriction = friction && !friction.error
+        ? {
+            total_interactions: (friction.summary as Record<string, unknown>)?.total_interactions as number | undefined,
+            top_targets: friction.top_targets as Array<Record<string, unknown>> | undefined,
+          }
+        : null;
+      const summaryCoverage = coverage && !coverage.error
+        ? {
+            rules: ((coverage.rules as Array<{ signal: string; triggered: boolean }>) ?? []).map((r) => ({
+              signal: r.signal,
+              triggered: r.triggered,
+            })),
+          }
+        : null;
+      text += renderNextActionFooter(
+        summarizeNextAction({ friction: summaryFriction, coverage: summaryCoverage }),
+      );
+      text += renderDashboardFooter(id, 'overview');
 
       return { content: [{ type: 'text' as const, text }] };
     },

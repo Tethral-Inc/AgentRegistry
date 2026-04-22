@@ -4,6 +4,9 @@ import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
+import { renderNotificationHeader } from '../utils/notification-header.js';
+import { whatsNewNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 export function whatsNewTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -54,7 +57,14 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
         safeJson(todayRes),
       ]);
 
+      // The notification header at the very top uses the same unread count
+      // whats_new already fetches in parallel — zero extra round trip.
+      const unreadCount = notifData
+        ? ((notifData.unread_count as number | undefined) ?? null)
+        : null;
+
       let text = renderUpgradeBanner(getActiveSession().versionCheck);
+      text += renderNotificationHeader(unreadCount);
       text += `What's New — ${displayName}\n${'='.repeat(30)}\n`;
 
       // ── Yesterday ──
@@ -133,6 +143,21 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
           text += `  ${unread} unread — call get_notifications to read them\n`;
         }
       }
+
+      // Build a whats-new items summary the next-action heuristic expects.
+      // We treat degraded targets + unread notifications as items worth
+      // acknowledging — if there's nothing, whatsNewNextAction routes to
+      // get_friction_report for a fresh read.
+      const weekTargets = (trendData?.per_target as Array<Record<string, unknown>> | undefined) ?? [];
+      const degradedCount = weekTargets.filter((t) => {
+        const delta = t.failure_rate_delta as number | null | undefined;
+        return delta != null && delta > 0;
+      }).length;
+      const unreadForAction = (notifData?.unread_count as number | undefined) ?? 0;
+      const whatsNewItems = Array.from({ length: degradedCount + unreadForAction });
+
+      text += renderNextActionFooter(whatsNewNextAction({ items: whatsNewItems }));
+      text += renderDashboardFooter(id, 'overview');
 
       return { content: [{ type: 'text' as const, text }] };
     },

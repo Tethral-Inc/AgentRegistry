@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
+import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
+import { stableCorridorsNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -31,7 +34,11 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
 
       try {
         const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/stable-corridors?${params}`, { headers: getAuthHeaders() });
+        const authHeaders = getAuthHeaders();
+        const [res, unreadCount] = await Promise.all([
+          fetch(`${apiUrl}/api/v1/agent/${id}/stable-corridors?${params}`, { headers: authHeaders }),
+          getUnreadNotificationCount(apiUrl, id, authHeaders),
+        ]);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Stable corridors error: ${errText}` }] };
@@ -42,7 +49,8 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         const matches = data.matches as Array<Record<string, unknown>> ?? [];
         const filter = data.filter_applied as Record<string, unknown>;
 
-        let text = `Stable Corridors for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
+        let text = renderNotificationHeader(unreadCount);
+        text += `Stable Corridors for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'agent'}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
 
@@ -65,6 +73,16 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
             text += `    cv: ${typeof m.coefficient_of_variation === 'number' ? (m.coefficient_of_variation as number).toFixed(3) : 'N/A'}\n`;
           }
         }
+
+        text += renderNextActionFooter(
+          stableCorridorsNextAction({
+            corridors: matches.map((m) => ({
+              target: m.target_system_id as string | undefined,
+              stability_score: m.coefficient_of_variation as number | undefined,
+            })),
+          }),
+        );
+        text += renderDashboardFooter(id, 'stable-corridors', { range: scope, source: source ?? 'agent' });
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

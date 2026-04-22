@@ -4,6 +4,9 @@ import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
 import { formatLatencyChangeFraction, formatFailureRateDelta } from '../utils/format-delta.js';
+import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
+import { trendNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 export function getTrendTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -32,7 +35,11 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
 
       try {
         const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/trend?${params}`, { headers: getAuthHeaders() });
+        const authHeaders = getAuthHeaders();
+        const [res, unreadCount] = await Promise.all([
+          fetch(`${apiUrl}/api/v1/agent/${id}/trend?${params}`, { headers: authHeaders }),
+          getUnreadNotificationCount(apiUrl, id, authHeaders),
+        ]);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Trend error: ${errText}` }] };
@@ -45,7 +52,8 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
         const currentPeriod = data.current_period as { start: string; end: string } | undefined;
         const previousPeriod = data.comparison_period as { start: string; end: string } | undefined;
 
-        let text = `Trend for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
+        let text = renderNotificationHeader(unreadCount);
+        text += `Trend for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'agent'}\n`;
         if (currentPeriod) text += `Current: ${currentPeriod.start} to ${currentPeriod.end}\n`;
         if (previousPeriod) text += `Previous: ${previousPeriod.start} to ${previousPeriod.end}\n`;
@@ -84,6 +92,17 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
           text += `  ${rules.target_included_if}\n`;
           if (rules.previous_window != null) text += `  Previous window: ${rules.previous_window}\n`;
         }
+
+        text += renderNextActionFooter(
+          trendNextAction({
+            per_target: targets.map((t) => ({
+              target: t.target as string | undefined,
+              latency_change_ratio: t.latency_change_ratio as number | null | undefined,
+              failure_rate_delta: t.failure_rate_delta as number | null | undefined,
+            })),
+          }),
+        );
+        text += renderDashboardFooter(id, 'trend', { range: scope, source: source ?? 'agent' });
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

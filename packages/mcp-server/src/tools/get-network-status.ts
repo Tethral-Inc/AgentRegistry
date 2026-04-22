@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { confidence } from '../utils/confidence.js';
+import { networkStatusNextAction, renderNextActionFooter } from '../utils/next-action.js';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -90,6 +91,19 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
             text += `    Detected: ${e.detected_at}\n`;
           }
         }
+
+        // Network-status has no agent-scoped dashboard view — the tool is
+        // network-wide, not agent-local — so only the next-action footer
+        // is appended here. Notification header is skipped for the same
+        // reason (no agent id in scope).
+        text += renderNextActionFooter(
+          networkStatusNextAction({
+            degraded_systems: (systems as Array<Record<string, unknown>>).map((sys) => ({
+              system_id: sys.system_id as string | undefined,
+              failure_rate: sys.failure_rate as number | undefined,
+            })).filter((sys) => (sys.failure_rate ?? 0) > 0.05),
+          }),
+        );
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {
