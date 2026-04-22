@@ -9,10 +9,11 @@ import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createAcrServer } from './server.js';
 import { SessionState, sessionContext } from './session-state.js';
+import { envBool, envInt } from './utils/env.js';
 
-const PORT = parseInt(process.env.ACR_MCP_HTTP_PORT ?? '3001', 10);
+const PORT = envInt('ACR_MCP_HTTP_PORT', 3001);
 const AUTH_TOKEN = process.env.ACR_MCP_AUTH_TOKEN;
-const STATELESS = process.env.ACR_MCP_STATELESS === 'true';
+const STATELESS = envBool('ACR_MCP_STATELESS', false);
 
 /**
  * Per-session record. The transport carries the MCP protocol frames; the
@@ -95,6 +96,10 @@ const httpServer = createServer(async (req, res) => {
     transport.onclose = () => {
       const sid = transport.sessionId;
       if (sid) sessions.delete(sid);
+      // Abort any in-flight background promises tied to this session
+      // (environmental probe, version check) before the MCP server is
+      // torn down, so they don't write to a freshly-disposed session.
+      session.close();
       server.close().catch((err) => { console.error('Failed to close MCP server on session end', err); });
     };
 
@@ -104,9 +109,11 @@ const httpServer = createServer(async (req, res) => {
   }
 
   if (req.method === 'DELETE' && sessionId) {
-    // Session cleanup
+    // Session cleanup — mirror the onclose path so DELETE and transport
+    // drops follow the same abort ordering.
     const entry = sessions.get(sessionId);
     if (entry) {
+      entry.session.close();
       await entry.transport.close();
       sessions.delete(sessionId);
     }
@@ -127,10 +134,13 @@ httpServer.listen(PORT, () => {
   if (AUTH_TOKEN) console.error('  Auth: bearer token required');
 });
 
-// Graceful shutdown
+// Graceful shutdown — abort every session's background work before
+// closing its transport so in-flight probes/version checks don't try
+// to write against sessions that are already being torn down.
 process.on('SIGTERM', () => {
   console.error('Shutting down...');
   for (const entry of sessions.values()) {
+    entry.session.close();
     entry.transport.close().catch((err) => { console.error('Failed to close transport during shutdown', err); });
   }
   httpServer.close();

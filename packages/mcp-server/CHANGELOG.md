@@ -1,3 +1,57 @@
+## 2.7.2 (2026-04-22)
+
+Config / env-var / background-work hygiene. Three small things were
+drifting independently: boolean env vars parsed three different ways
+across the codebase, HTTP sessions each re-hit the npm registry for
+the version check on startup, and background promises (version check,
+environmental probe) could keep writing to a `SessionState` after its
+transport had been torn down. 2.7.2 unifies the first, memoizes the
+second, and wires a cooperative abort through the third.
+
+Release I of the v2.5.0 – v2.9.0 roadmap.
+
+- **`envBool` / `envInt` helpers** in `utils/env.ts` replace ad-hoc
+  `process.env.X === '1'` / `=== 'true'` / default-true opt-out
+  checks. Truthy set: `1`, `true`, `yes`, `on` (case-insensitive,
+  trimmed). Falsy set: `0`, `false`, `no`, `off`. Anything else —
+  including empty string — falls back to the caller's default, so a
+  shell that exports an empty var can't silently flip a default-true
+  flag. Applied at every existing env-var read site
+  (`ACR_DEEP_COMPOSITION`, `ACR_DISABLE_FETCH_OBSERVE`,
+  `ACR_DISABLE_ENV_PROBE`, `ACR_DISABLE_VERSION_CHECK`,
+  `ACR_MCP_HTTP_PORT`, `ACR_MCP_STATELESS`) with no observable
+  behavior change at defaults.
+- **Version-check memoization across sessions.** New
+  `version-check-cache.ts` persists the most recent successful check
+  at `~/.claude/.acr-version-check.json` with a 6h TTL. Cache hits
+  require `current` to match the running package version, so a local
+  upgrade invalidates the entry automatically (which is the point of
+  having a version check at all). Fail results (`latest: null`) are
+  intentionally not persisted — a cache miss re-tries on the next
+  session instead of inheriting a failure for the whole TTL window.
+  Previously, every fresh `SessionState` under HTTP transport re-hit
+  npm on startup.
+- **`SessionState` abort on close.** `SessionState.close()` sets
+  `isClosed`, flips `abortController` to aborted, and is called from
+  every teardown path: `transport.onclose`, explicit `DELETE /mcp`,
+  and SIGTERM in both stdio and HTTP entry points. Background IIFEs
+  in `server.ts` (version check, environmental probe) now check
+  `session.isClosed` at every async hop and bail silently if the
+  session is gone, so in-flight probes/version checks don't write
+  state back into a disposed session.
+- **`server` device-class bucket** in `env-detect.ts`. Promotes a
+  Linux host with ≥16 GB RAM and no `DISPLAY` / `WAYLAND_DISPLAY` to
+  `server` (previously classified as `desktop`). Also respects
+  explicit `ACR_IS_SERVER=1` and `CI=true` as force-set signals. The
+  existing `sbc` / `mobile` / `desktop` / `unknown` buckets are
+  unchanged.
+- **Documented env vars in the README.** New Configuration section
+  lists every env var the server reads, grouped into Endpoints,
+  Behavior toggles, HTTP transport, and Environment detection
+  overrides. Calls out the shared truthy/falsy semantics from
+  `envBool` so operators don't have to read the source to learn what
+  a flag accepts.
+
 ## 2.7.1 (2026-04-22)
 
 Response-shape hygiene. 2.7.0 resolved the front-door ambiguity but

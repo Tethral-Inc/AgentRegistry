@@ -39,6 +39,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getActiveSession } from '../session-state.js';
+import { envBool } from '../utils/env.js';
 
 // Reference to the original fetch, captured before the wrapper is installed.
 // Callers that must bypass observation (probe emission, self-log emission,
@@ -65,7 +66,7 @@ export function getUnwrappedFetch(): typeof fetch {
  * createAcrServer invocations can safely share the one wrapper.
  */
 export function installFetchObserver(options: { apiUrl: string }): boolean {
-  if ((process.env.ACR_DISABLE_FETCH_OBSERVE ?? '') === '1') return false;
+  if (envBool('ACR_DISABLE_FETCH_OBSERVE', false)) return false;
   if (installed) return false;
   installed = true;
 

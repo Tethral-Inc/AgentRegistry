@@ -13,6 +13,26 @@ export interface EnvironmentContext {
   transport_type: 'stdio' | 'streamable-http';
 }
 
+/**
+ * Infer the device class from memory, platform, and display signals.
+ *
+ * The class is coarse on purpose — ACR uses it for cohort bucketing
+ * ("how do I compare to other servers?"), not for capability detection.
+ * The buckets:
+ *
+ *   - `sbc`     — <2 GB RAM. Raspberry Pi class.
+ *   - `mobile`  — <4 GB RAM. Phone / low-end ARM tablet.
+ *   - `server`  — Linux, ≥16 GB RAM, no DISPLAY/WAYLAND_DISPLAY, or
+ *                 explicit PRODUCTION/CI hint. A long-running,
+ *                 headless deployment that should cohort-align with
+ *                 other servers rather than developer laptops.
+ *   - `desktop` — everything else. The default for interactive
+ *                 developer environments.
+ *
+ * `ACR_DEVICE_CLASS` overrides the inference entirely — operators who
+ * know their environment better than we do can set one of the four
+ * strings above (or "unknown") and the probe will respect it.
+ */
 function inferDeviceClass(): EnvironmentContext['device_class'] {
   const override = process.env.ACR_DEVICE_CLASS;
   if (override) return override as EnvironmentContext['device_class'];
@@ -20,6 +40,17 @@ function inferDeviceClass(): EnvironmentContext['device_class'] {
   const memGB = totalmem() / (1024 ** 3);
   if (memGB < 2) return 'sbc';
   if (memGB < 4) return 'mobile';
+
+  // Server bucket: Linux + ≥16 GB RAM + no graphical session, OR an
+  // explicit production/CI signal. We deliberately avoid `NODE_ENV`
+  // as the sole signal — it's overloaded and agents on dev laptops
+  // routinely set it to 'production' for testing. Require platform +
+  // memory + headless to corroborate.
+  const isLinux = (process.env.ACR_PLATFORM ?? process.platform) === 'linux';
+  const headless = !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
+  const explicit = process.env.ACR_IS_SERVER === '1' || process.env.CI === 'true';
+  if ((isLinux && headless && memGB >= 16) || explicit) return 'server';
+
   return 'desktop';
 }
 

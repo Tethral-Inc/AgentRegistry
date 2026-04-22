@@ -19,6 +19,7 @@
  */
 
 import type { SessionState } from '../session-state.js';
+import { envBool } from '../utils/env.js';
 
 /**
  * Default probe targets. Chosen because they're (a) the systems agents
@@ -150,7 +151,7 @@ export async function runEnvironmentalProbe(options: {
   /** Inject the raw unwrapped fetch to avoid the observer re-entering itself. */
   unwrappedFetch?: typeof fetch;
 }): Promise<ProbeResult[]> {
-  if ((process.env.ACR_DISABLE_ENV_PROBE ?? '') === '1') return [];
+  if (envBool('ACR_DISABLE_ENV_PROBE', false)) return [];
 
   const { apiUrl, session } = options;
   const unwrappedFetch = options.unwrappedFetch ?? fetch;

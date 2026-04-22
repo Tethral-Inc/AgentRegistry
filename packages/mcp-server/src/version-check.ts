@@ -20,6 +20,8 @@
  *  - Opt-out: `ACR_DISABLE_VERSION_CHECK=1` skips entirely.
  */
 
+import { envBool } from './utils/env.js';
+
 const PACKAGE_NAME = '@tethral/acr-mcp';
 const REGISTRY_URL = `https://registry.npmjs.org/${encodeURIComponent(PACKAGE_NAME)}/latest`;
 const REQUEST_TIMEOUT_MS = 2000;
@@ -96,7 +98,7 @@ export async function checkLatestVersion(
     checkedAt,
   });
 
-  if (process.env.ACR_DISABLE_VERSION_CHECK === '1') return fail();
+  if (envBool('ACR_DISABLE_VERSION_CHECK', false)) return fail();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

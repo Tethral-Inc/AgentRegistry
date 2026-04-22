@@ -8,6 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { detectEnvironment } from './env-detect.js';
 import { writeAcrStateFile, readAcrStateFile } from './acr-state-file.js';
 import type { VersionCheckResult } from './version-check.js';
+import { envBool } from './utils/env.js';
 
 const CLIENT_TO_PROVIDER: Record<string, string> = {
   'claude-code': 'anthropic',
@@ -39,7 +40,7 @@ export class SessionState {
   private _registering = false;
   private _transportType: 'stdio' | 'streamable-http';
   private _clientType: string | null = null;
-  private _deepComposition: boolean = (process.env.ACR_DEEP_COMPOSITION ?? 'true') !== 'false';
+  private _deepComposition: boolean = envBool('ACR_DEEP_COMPOSITION', true);
 
   // Session-scoped chain state. The MCP observes session structure
   // directly — the agent never needs to pass chain_id or chain_position.
@@ -53,6 +54,15 @@ export class SessionState {
   // at all if ACR_DISABLE_VERSION_CHECK=1 or the check fails). Entry-point
   // tools can read this to surface an upgrade banner.
   private _versionCheck: VersionCheckResult | null = null;
+
+  // Abort signal for background work tied to this session (environmental
+  // probes, version check, any future long-running IIFE in server.ts).
+  // Fired when the session closes so a dropped HTTP connection doesn't
+  // leave receipts or writes in flight against a session that's about to
+  // be garbage-collected. Consumers read `session.abortSignal` and pass
+  // it to fetch/setTimeout/etc.; they must not abort it themselves.
+  private _abortController: AbortController = new AbortController();
+  private _closed: boolean = false;
 
   constructor(transportType: 'stdio' | 'streamable-http' = 'stdio') {
     this._transportType = transportType;
@@ -105,7 +115,33 @@ export class SessionState {
   setMcpServer(server: McpServer): void { this._mcpServer = server; }
 
   get versionCheck(): VersionCheckResult | null { return this._versionCheck; }
-  setVersionCheck(result: VersionCheckResult): void { this._versionCheck = result; }
+  setVersionCheck(result: VersionCheckResult): void {
+    // Don't stash results if the session has already closed — the
+    // state would be written but never read, and in tests it can
+    // trigger unexpected-write assertions.
+    if (this._closed) return;
+    this._versionCheck = result;
+  }
+
+  /**
+   * Abort signal for in-flight background work tied to this session.
+   * Pass to fetch calls, setTimeout, etc. so session close cancels them.
+   */
+  get abortSignal(): AbortSignal { return this._abortController.signal; }
+
+  /** True after `close()` has been called. Check this before scheduling new work. */
+  get isClosed(): boolean { return this._closed; }
+
+  /**
+   * Cancel all background work tied to this session. Idempotent —
+   * calling twice is a no-op. HTTP transport wiring fires this on
+   * transport close; stdio calls it during SIGTERM graceful shutdown.
+   */
+  close(): void {
+    if (this._closed) return;
+    this._closed = true;
+    this._abortController.abort();
+  }
 
   /** Infer provider_class from the MCP client name (e.g. "claude-code" → "anthropic"). */
   get providerClass(): string { return this.inferProviderClass(); }

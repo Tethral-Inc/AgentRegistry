@@ -159,12 +159,44 @@ The [public leaderboard](https://dashboard.acr.nfkey.ai/leaderboard) shows anony
 
 ## Configuration
 
+All boolean env vars accept `1`/`true`/`yes`/`on` (truthy) or `0`/`false`/`no`/`off` (falsy), case-insensitive. Anything else falls back to the default.
+
+### Endpoints
+
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `ACR_API_URL` | `https://acr.nfkey.ai` | API endpoint |
-| `ACR_RESOLVER_URL` | Same as API URL | Resolver endpoint |
-| `ACR_DEEP_COMPOSITION` | `true` | Set to `false` to disable sub-component capture |
-| `ACR_DASHBOARD_URL` | `https://dashboard.acr.nfkey.ai` | Dashboard URL shown in get_my_agent |
+| `ACR_API_URL` | `https://acr.nfkey.ai` | ACR API endpoint |
+| `ACR_RESOLVER_URL` | Same as `ACR_API_URL` | Skill resolver endpoint |
+| `ACR_DASHBOARD_URL` | `https://dashboard.acr.nfkey.ai` | Dashboard URL shown in `get_my_agent` |
+
+### Behavior toggles
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `ACR_DEEP_COMPOSITION` | `true` | Capture sub-components of skills/MCPs. Disable to send only top-level composition. |
+| `ACR_DISABLE_FETCH_OBSERVE` | `false` | Disable the transport-boundary fetch observer (no passive receipt emission). |
+| `ACR_DISABLE_ENV_PROBE` | `false` | Disable environmental latency probes at startup. |
+| `ACR_DISABLE_VERSION_CHECK` | `false` | Skip the background npm version check. |
+| `ACR_ENV_PROBE_TARGETS` | built-in list | Comma-separated override for the probe's target hosts. |
+
+### HTTP transport (only used by `acr-mcp-http`)
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `ACR_MCP_HTTP_PORT` | `3001` | HTTP listen port. |
+| `ACR_MCP_AUTH_TOKEN` | _unset_ | If set, clients must present `Authorization: Bearer <token>`. |
+| `ACR_MCP_STATELESS` | `false` | Run without per-session state (each request is independent). |
+
+### Environment detection overrides
+
+These override the auto-detected environment tags stored with the agent registration. Set them when the defaults misclassify your deployment.
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `ACR_DEVICE_CLASS` | auto | One of `sbc` / `mobile` / `desktop` / `server` / `unknown`. |
+| `ACR_PLATFORM` | `process.platform` | Override the detected OS platform. |
+| `ACR_ARCH` | `process.arch` | Override the detected CPU architecture. |
+| `ACR_IS_SERVER` | _unset_ | Set to `1` to force the `server` device class without memory/platform checks. |
 
 ## Registering your composition
 

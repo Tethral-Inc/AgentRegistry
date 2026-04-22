@@ -37,6 +37,7 @@ import { installFetchObserver, getUnwrappedFetch } from './middleware/fetch-obse
 import { runEnvironmentalProbe } from './probes/environmental.js';
 import { defaultSession, SessionState } from './session-state.js';
 import { checkLatestVersion } from './version-check.js';
+import { readCachedVersionCheck, writeCachedVersionCheck } from './version-check-cache.js';
 
 declare const __PACKAGE_VERSION__: string;
 
@@ -160,10 +161,13 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   // look like when nothing is wrong?" against which to compare the
   // agent's real interactions. Errors are swallowed: baseline is a
   // nice-to-have, never a startup blocker. Opt out with
-  // ACR_DISABLE_ENV_PROBE=1.
+  // ACR_DISABLE_ENV_PROBE=1. Bails early if the session has closed
+  // between startup and the probe actually running.
   void (async () => {
     try {
+      if (session.isClosed) return;
       await session.ensureRegistered(apiUrl);
+      if (session.isClosed) return;
       await runEnvironmentalProbe({
         apiUrl,
         session,
@@ -174,16 +178,28 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
     }
   })();
 
-  // Background check for a newer published version. Runs once per
-  // process against the public npm registry, caches the result on the
-  // session, and lets entry-point tools surface an upgrade banner. The
-  // check uses the unwrapped fetch so it is not observed into a
-  // receipt. All failures (network, timeout, parse) are silent. Opt
-  // out with ACR_DISABLE_VERSION_CHECK=1.
+  // Background check for a newer published version. The check is
+  // memoized on disk at `~/.claude/.acr-version-check.json` with a
+  // 6-hour TTL so bursty HTTP sessions (each one spawns a fresh
+  // SessionState) don't each re-hit npm. Cache hit only when the
+  // cached `current` matches the running package version — an
+  // in-place upgrade invalidates automatically. On miss the check
+  // uses the unwrapped fetch so it is not observed into a receipt.
+  // All failures (network, timeout, parse, cache I/O) are silent.
+  // Opt out entirely with ACR_DISABLE_VERSION_CHECK=1. Skips if the
+  // session closed before the async gap ran.
   void (async () => {
     try {
+      if (session.isClosed) return;
+      const cached = readCachedVersionCheck(__PACKAGE_VERSION__);
+      if (cached) {
+        session.setVersionCheck(cached);
+        return;
+      }
       const result = await checkLatestVersion(__PACKAGE_VERSION__, getUnwrappedFetch());
+      if (session.isClosed) return;
       session.setVersionCheck(result);
+      writeCachedVersionCheck(result);
     } catch {
       // Silent drop — a failed version check must never affect tool calls.
     }
