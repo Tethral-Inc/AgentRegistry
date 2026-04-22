@@ -4,6 +4,7 @@ import { getAgentName } from '../state.js';
 import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 
 const TOOL_DESCRIPTION = `Query the compensation-signatures lens: how stereotyped is your chain-shape behavior, and which chain patterns dominate vs which are exploratory?
 
@@ -92,6 +93,15 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
             text += `    fleet: ${desc}\n`;
           }
         }
+
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'compensation',
+          query: { window: window ?? 'week' },
+          resultText: text,
+        });
+        text += `\n${renderSnapshotFooter(snapshot)}`;
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

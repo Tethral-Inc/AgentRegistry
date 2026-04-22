@@ -15,7 +15,8 @@
     { "path": "/api/cron/friction-baseline-compute", "schedule": "15 2 * * *" },
     { "path": "/api/cron/agent-expiration", "schedule": "30 3 * * *" },
     { "path": "/api/cron/data-archival", "schedule": "45 4 * * *" },
-    { "path": "/api/cron/pattern-detection", "schedule": "7 * * * *" }
+    { "path": "/api/cron/pattern-detection", "schedule": "7 * * * *" },
+    { "path": "/api/cron/watch-evaluation", "schedule": "22 * * * *" }
   ],
   "rewrites": [
     { "source": "/lookup", "destination": "/lookup.html" },

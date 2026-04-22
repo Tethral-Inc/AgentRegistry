@@ -7,6 +7,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { frictionNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { isThinSample, renderCohortBaselineHeader } from '../utils/cohort-baseline.js';
 import {
   LOCAL_MIN_INTERACTIONS,
@@ -376,6 +377,18 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           }),
         );
         text += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
+
+        // Shareable-snapshot footer. Freezes the rendered view under a
+        // short public URL so the operator can paste it to a teammate
+        // without sharing their agent ID. Silent-failure: null = no footer.
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'friction',
+          query: { scope, source: source ?? 'agent' },
+          resultText: text,
+        });
+        text += renderSnapshotFooter(snapshot);
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

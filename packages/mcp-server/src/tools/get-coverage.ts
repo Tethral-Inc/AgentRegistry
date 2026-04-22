@@ -6,6 +6,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { coverageNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
 
 export function getCoverageTool(server: McpServer, apiUrl: string) {
@@ -84,6 +85,15 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           }),
         );
         text += renderDashboardFooter(id, 'coverage', { source: source ?? 'agent' });
+
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'coverage',
+          query: { source: source ?? 'agent' },
+          resultText: text,
+        });
+        text += renderSnapshotFooter(snapshot);
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

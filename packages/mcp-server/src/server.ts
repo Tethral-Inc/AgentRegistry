@@ -32,6 +32,7 @@ import { orientMeTool } from './tools/orient-me.js';
 import { whatsNewTool } from './tools/whats-new.js';
 import { getCompositionDiffTool } from './tools/get-composition-diff.js';
 import { dismissPatternTool } from './tools/dismiss-pattern.js';
+import { setWatchTool, listWatchesTool } from './tools/set-watch.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { installFetchObserver, getUnwrappedFetch } from './middleware/fetch-observer.js';
@@ -156,6 +157,8 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   whatsNewTool(server, apiUrl);
   getCompositionDiffTool(server, apiUrl);
   dismissPatternTool(server, apiUrl);
+  setWatchTool(server, apiUrl);
+  listWatchesTool(server, apiUrl);
 
   // Fire the environmental probe in the background. We register the
   // agent first (if needed) then fire probes to common public targets

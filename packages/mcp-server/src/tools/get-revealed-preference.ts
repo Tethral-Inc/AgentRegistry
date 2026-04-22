@@ -4,6 +4,7 @@ import { getAgentName } from '../state.js';
 import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 
 const TOOL_DESCRIPTION = `Query the revealed-preference lens: what the agent *declared* in its composition vs what it *actually called* during the window. Only ACR can see both — so this is the view no self-report and no server log can produce alone.
 
@@ -116,6 +117,15 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
         renderGroup('Called but unbound', 'called_unbound', 'Called without being declared — your composition does not describe reality.');
         renderGroup('Bound but underused', 'bound_underused', 'Declared, called fewer than 3 times — possibly low-value, possibly just task-gated.');
         renderGroup('Bound and active', 'bound_active', 'Declared and used meaningfully — healthy.');
+
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'revealed_preference',
+          query: { scope: scope ?? 'yesterday', source: source ?? 'agent' },
+          resultText: text,
+        });
+        text += `\n${renderSnapshotFooter(snapshot)}`;
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

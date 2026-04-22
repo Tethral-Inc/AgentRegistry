@@ -21,6 +21,7 @@ const TOOL_MENU = `
   Logging:       log_interaction
   Your profile:  get_profile · get_friction_report · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_revealed_preference · get_compensation_signatures · get_composition_diff
   Patterns:      dismiss_pattern
+  Watches:       set_watch · list_watches
   Notifications: get_notifications · acknowledge_signal · acknowledge_threat (deprecated)
   Network:       get_network_status · check_environment · check_entity
   Registry:      search_skills · get_skill_tracker · get_skill_versions`.trimStart();

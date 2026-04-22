@@ -7,6 +7,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { stableCorridorsNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
@@ -91,6 +92,15 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
           }),
         );
         text += renderDashboardFooter(id, 'stable-corridors', { range: scope, source: source ?? 'agent' });
+
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'stable_corridors',
+          query: { scope, source: source ?? 'agent' },
+          resultText: text,
+        });
+        text += renderSnapshotFooter(snapshot);
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

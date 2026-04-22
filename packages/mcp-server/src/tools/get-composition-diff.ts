@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
 
 type DeclaredUsed = { kind: string; id: string; name?: string; target: string; interaction_count: number };
@@ -129,6 +130,15 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
         } else if (c.declared_but_unused > 0 && c.declared_and_used === 0) {
           text += `\nNothing declared has been used. Check that receipts carry the expected target_system_id (e.g. 'mcp:github' not 'github-mcp').\n`;
         }
+
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'composition_diff',
+          query: { window_days: window_days ?? 7 },
+          resultText: text,
+        });
+        text += `\n${renderSnapshotFooter(snapshot)}`;
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {

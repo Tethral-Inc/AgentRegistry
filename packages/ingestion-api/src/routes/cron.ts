@@ -16,6 +16,7 @@ import {
   agentBaselineCompute,
   agentAnomalyDetect,
   patternDetection,
+  watchEvaluation,
 } from '@acr/intelligence';
 
 const log = createLogger({ name: 'cron' });
@@ -64,5 +65,11 @@ app.get('/cron/agent-anomaly-detect', wrapJob('agent-anomaly-detect', agentAnoma
 // active agent hourly; MCP tools read from `agent_patterns` and render
 // a "Things we noticed" section.
 app.get('/cron/pattern-detection', wrapJob('pattern-detection', patternDetection));
+
+// Phase K: Watch evaluation. Evaluates enabled watches every hour,
+// writes notifications on fresh threshold crossings. Runs off the
+// same `interaction_receipts` table the lenses read so the metric
+// the watch sees matches what the operator sees in MCP.
+app.get('/cron/watch-evaluation', wrapJob('watch-evaluation', watchEvaluation));
 
 export { app as cronRoute };

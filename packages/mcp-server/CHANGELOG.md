@@ -1,3 +1,64 @@
+## 2.9.0 (2026-04-22)
+
+Shareable insights + watches. The lens suite stays raw, but two
+things the operator couldn't do before now work: a teammate who
+doesn't have an agent ID can open a URL and see the exact view the
+operator saw, and the operator can register "tell me when X crosses
+Y" on a specific target and get notified when it does.
+
+Final release of the v2.5.0 – v2.9.0 roadmap.
+
+- **Shareable snapshots on every lens.** Each of the eight lens
+  tools (friction, trend, coverage, stable corridors, failure
+  registry, revealed-preference, compensation signatures,
+  composition-diff) now POSTs its rendered output to a new
+  `snapshots` endpoint at the end of the handler and appends a
+  `Share this view: <URL>` footer. The URL points at
+  `{DASHBOARD_URL}/s/<short_id>` — public read, authed write, 30-
+  day expiry. Short IDs are 10 chars of base62 (~60 bits of
+  entropy). A snapshot POST failure renders as "no Share footer"
+  instead of failing the whole tool — lens output is already
+  correct, the share link is additive.
+- **New `snapshots` table** (migration 000021) with `short_id` as
+  the primary key, `agent_id` + `lens` + `query` JSONB + the
+  frozen `result_text`, default 30-day expiry. Two indexes: agent
+  lookup and the expiry scan for future TTL cleanup.
+- **New `watches` table** holds one row per `(agent_id, lens,
+  target_system_id, metric, condition)`. UPSERT on POST so a
+  second `set_watch` with the same tuple updates the threshold in
+  place — matches the operator's "move the line" intent.
+- **`set_watch` MCP tool.** `(lens, target_system_id, metric,
+  threshold, condition)` with narrow enums:
+  `lens ∈ {friction, trend}`, `metric ∈ {failure_rate,
+  proportion_of_wait, failure_rate_delta}`, `condition ∈ {above,
+  below}`. Other lens/metric combos are rejected up front rather
+  than at eval time. Response follows the mutation-diff
+  convention.
+- **`list_watches` MCP tool.** Shows every registered watch with
+  the threshold, last-evaluated, and last-matched timestamps so
+  the operator can see what's being watched before registering
+  more.
+- **`/api/cron/watch-evaluation` hourly at `:22`.** Bulk-computes
+  the three supported metrics per (agent, target) pair over the
+  last 7 days in SQL, runs `evaluateWatch` against each watch,
+  and writes a notification on a fresh threshold crossing.
+  Persistent breaches don't spam — a 24h cooldown via
+  `last_matched_at` means one notification per crossing per day.
+- **Notifications flow reuses the existing channel.** Migration
+  000021 drops `NOT NULL` on `skill_notifications.skill_hash` and
+  adds a `source` column (default `'skill'`). Watch matches write
+  rows with `source = 'watch'` + `notification_type =
+  'watch_match'`, so `get_notifications` picks them up alongside
+  anomaly signals without a second endpoint.
+- **Pure `evaluateWatch` decision function** in
+  `@acr/intelligence/watches/evaluate.ts`. Three outcomes
+  (`match_new`, `match_ongoing`, `no_match`), cooldown boundary
+  tested at exactly 24h, strict inequality on the threshold
+  (a value at the threshold doesn't fire). 12 unit tests cover
+  the decision logic in isolation from I/O.
+- **Tool count: 29 → 31.** `set_watch` + `list_watches` slot into
+  a new "Watches" group in the `get_my_agent` menu.
+
 ## 2.8.0 (2026-04-22)
 
 Proactive pattern surfacing. The lens suite (friction, coverage,

@@ -8,6 +8,7 @@ import { formatLatencyChangeFraction, formatFailureRateDelta } from '../utils/fo
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { trendNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 
 export function getTrendTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -104,6 +105,15 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
           }),
         );
         text += renderDashboardFooter(id, 'trend', { range: scope, source: source ?? 'agent' });
+
+        const snapshot = await createSnapshot({
+          apiUrl,
+          agentId: id,
+          lens: 'trend',
+          query: { scope, source: source ?? 'agent' },
+          resultText: text,
+        });
+        text += renderSnapshotFooter(snapshot);
 
         return { content: [{ type: 'text' as const, text }] };
       } catch (err) {
