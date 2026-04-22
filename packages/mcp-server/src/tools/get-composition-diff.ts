@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { section } from '../utils/style.js';
 
 type DeclaredUsed = { kind: string; id: string; name?: string; target: string; interaction_count: number };
 type DeclaredUnused = { kind: string; id: string; name?: string; target: string };
@@ -77,7 +78,7 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
         }
 
         const c = data.counts;
-        text += `\n-- Counts --\n`;
+        text += `\n${section('Counts')}\n`;
         text += `  Declared total: ${c.declared_total}\n`;
         text += `  Used (distinct targets): ${c.used_total}\n`;
         text += `  ✓ Declared and used: ${c.declared_and_used}\n`;
@@ -85,7 +86,7 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
         text += `  ! Used but undeclared: ${c.used_but_undeclared}\n`;
 
         if (data.declared_and_used.length > 0) {
-          text += `\n-- Declared and used (top 10 by traffic) --\n`;
+          text += `\n${section('Declared and used (top 10 by traffic)')}\n`;
           const sorted = [...data.declared_and_used].sort((a, b) => b.interaction_count - a.interaction_count).slice(0, 10);
           for (const d of sorted) {
             const label = d.name ?? d.id;
@@ -94,7 +95,7 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
         }
 
         if (data.declared_but_unused.length > 0) {
-          text += `\n-- Declared but unused --\n`;
+          text += `\n${section('Declared but unused')}\n`;
           text += `  These are declared in your composition but no receipts reference them in the window.\n`;
           text += `  Either the feature is dormant, or receipts don't carry the expected target_system_id.\n`;
           for (const d of data.declared_but_unused.slice(0, 15)) {
@@ -107,7 +108,7 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
         }
 
         if (data.used_but_undeclared.length > 0) {
-          text += `\n-- Used but undeclared (shadow dependencies) --\n`;
+          text += `\n${section('Used but undeclared (shadow dependencies)')}\n`;
           text += `  These targets appear in your receipts but aren't in your declared composition.\n`;
           text += `  Consider adding them via update_composition so they participate in network anomaly rollups.\n`;
           const sorted = [...data.used_but_undeclared].sort((a, b) => b.interaction_count - a.interaction_count).slice(0, 15);

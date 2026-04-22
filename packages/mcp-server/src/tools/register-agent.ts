@@ -4,6 +4,7 @@ import { setAgentId, setAgentName, setApiKey } from '../state.js';
 import { getActiveSession } from '../session-state.js';
 import { writeAcrStateFile } from '../acr-state-file.js';
 import { stripSubComponents } from '../strip-sub-components.js';
+import { truncHash } from '../utils/style.js';
 
 const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate anomaly signal notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
 
@@ -105,7 +106,7 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
         if (signals.length > 0) {
           text += `\n\nSkills with anomaly signals: ${signals.length}`;
           for (const s of signals) {
-            text += `\n- ${s.skill_name || s.skill_hash?.substring(0, 16) + '...'} — ${s.anomaly_signal_count ?? 0} signals, ${s.agent_count ?? 0} reporters`;
+            text += `\n- ${s.skill_name || truncHash(s.skill_hash)} — ${s.anomaly_signal_count ?? 0} signals, ${s.agent_count ?? 0} reporters`;
           }
         }
 

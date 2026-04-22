@@ -6,6 +6,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { coverageNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { section } from '../utils/style.js';
 
 export function getCoverageTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -52,7 +53,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
         text += `Coverage Report for ${displayName}\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'agent'}\n`;
 
-        text += `\n-- Signal Counts --\n`;
+        text += `\n${section('Signal Counts')}\n`;
         for (const [key, value] of Object.entries(signals)) {
           text += `  ${key}: ${value}\n`;
         }
@@ -62,7 +63,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           const ok = rules.filter((r) => !r.triggered);
 
           if (triggered.length > 0) {
-            text += `\n-- Coverage Gaps (${triggered.length}) --\n`;
+            text += `\n${section(`Coverage Gaps (${triggered.length})`)}\n`;
             for (const r of triggered) {
               text += `  ${r.signal}: ${r.rule}\n`;
               text += `    observed: ${JSON.stringify(r.observed)}\n`;
@@ -70,7 +71,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           }
 
           if (ok.length > 0) {
-            text += `\n-- Covered (${ok.length}) --\n`;
+            text += `\n${section(`Covered (${ok.length})`)}\n`;
             for (const r of ok) {
               text += `  ${r.signal}: ${r.rule} — OK\n`;
             }

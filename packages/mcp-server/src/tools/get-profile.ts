@@ -5,6 +5,7 @@ import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { section } from '../utils/style.js';
 
 export function getProfileTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -53,7 +54,7 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
         text += `Registered: ${data.registered_at}\n`;
         text += `Last active: ${data.last_active_at}\n`;
 
-        text += `\n-- Counts --\n`;
+        text += `\n${section('Counts')}\n`;
         text += `  Total receipts: ${c.total_receipts}\n`;
         text += `  Last 24h: ${c.receipts_last_24h}\n`;
         text += `  Distinct targets: ${c.distinct_targets}\n`;
@@ -63,7 +64,7 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
         if (c.first_signal_at) text += `  First signal: ${c.first_signal_at}\n`;
         if (c.last_signal_at) text += `  Last signal: ${c.last_signal_at}\n`;
 
-        text += `\n-- Composition --\n`;
+        text += `\n${section('Composition')}\n`;
         text += `  Skills: ${comp.skill_count ?? 0}\n`;
         text += `  MCPs: ${comp.mcp_count ?? 0}\n`;
         text += `  Tools: ${comp.tool_count ?? 0}\n`;
@@ -73,7 +74,7 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
           const mcpOnly = delta.mcp_only as string[];
           const agentOnly = delta.agent_only as string[];
           if (mcpOnly.length > 0 || agentOnly.length > 0) {
-            text += `\n-- Composition Delta (MCP-observed vs agent-reported) --\n`;
+            text += `\n${section('Composition Delta (MCP-observed vs agent-reported)')}\n`;
             if (mcpOnly.length > 0) text += `  MCP sees but agent didn't report: ${mcpOnly.join(', ')}\n`;
             if (agentOnly.length > 0) text += `  Agent reported but MCP doesn't see: ${agentOnly.join(', ')}\n`;
           } else {

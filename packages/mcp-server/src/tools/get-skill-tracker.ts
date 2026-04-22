@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { fmtRatio, truncHash } from '../utils/style.js';
 
 export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -13,11 +14,12 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
         min_anomaly_signals: z.number().optional().describe('Only show skills with at least this many anomaly signals'),
         sort: z.enum(['agent_count', 'interaction_count', 'anomaly_signal_rate']).optional().default('agent_count').describe('Sort field'),
         limit: z.number().min(1).max(100).optional().default(20).describe('Max skills to show'),
+        cursor: z.string().optional().describe('Opaque cursor from a previous response\'s next_cursor. Pass unchanged to fetch the next page.'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.5 },
     },
-    async ({ skill_hash, min_anomaly_signals, sort, limit }) => {
+    async ({ skill_hash, min_anomaly_signals, sort, limit, cursor }) => {
       try {
         // Deep-dive mode
         if (skill_hash) {
@@ -35,6 +37,7 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
         if (min_anomaly_signals != null) params.set('min_anomaly_signals', String(min_anomaly_signals));
         if (sort) params.set('sort', sort);
         if (limit) params.set('limit', String(limit));
+        if (cursor) params.set('cursor', cursor);
 
         const res = await fetchAuthed(`${apiUrl}/api/v1/network/skills?${params}`);
         if (!res.ok) {
@@ -51,17 +54,24 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
 
         for (const s of data.skills) {
           const interactionCount = (s.interaction_count as number) ?? 0;
-          text += `${s.skill_name || (s.skill_hash as string).substring(0, 16) + '...'}\n`;
+          text += `${s.skill_name || truncHash(s.skill_hash as string)}\n`;
           text += `  ${s.agent_count} agents | ${interactionCount} interactions`;
           const sigRate = s.anomaly_signal_rate as number;
           if (sigRate > 0) {
-            text += ` | ${s.anomaly_signal_count} anomaly signals (${(sigRate * 100).toFixed(2)}% ${confidence(interactionCount)})`;
+            // Confidence is a tag on the denominator (interactions), not
+            // on the anomaly count. Rendered next to the denominator so
+            // the reader doesn't misread it as "N anomaly samples" —
+            // that was AUDIT.md's complaint.
+            text += ` | ${s.anomaly_signal_count} anomaly signals — ${fmtRatio(sigRate)} over ${interactionCount} interactions ${confidence(interactionCount)}`;
           }
           text += '\n\n';
         }
 
         if (data.next_cursor) {
-          text += `... more skills available. Use filters or cursor to paginate.\n`;
+          // Opaque cursor surfaced verbatim so the caller can paginate
+          // without guessing at the server's internal sort key shape.
+          text += `next_cursor: ${data.next_cursor}\n`;
+          text += `More skills available — call get_skill_tracker again with cursor="${data.next_cursor}" to fetch the next page.\n`;
         }
 
         return { content: [{ type: 'text' as const, text }] };
@@ -82,7 +92,9 @@ function formatSkillDetail(skill: Record<string, unknown>): string {
 
   const sigCount = skill.anomaly_signal_count as number;
   const sigRate = skill.anomaly_signal_rate as number;
-  text += `  Anomaly rate: ${(sigRate * 100).toFixed(2)}% (${sigCount} signals) ${confidence(interactionCount)}\n`;
+  // Confidence tag sits next to the denominator (interaction count) so
+  // the reader sees exactly what sample size was used to compute the rate.
+  text += `  Anomaly rate: ${fmtRatio(sigRate)} (${sigCount} signals over ${interactionCount} interactions) ${confidence(interactionCount)}\n`;
   text += `  First seen: ${skill.first_seen} | Last updated: ${skill.last_updated}\n`;
 
   // Provider breakdown

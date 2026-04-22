@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAgentName } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { fmtRatio, section } from '../utils/style.js';
 
 const STATUS_TRANSLATIONS: Record<string, string> = {
   success: 'success',
@@ -30,11 +31,12 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
         status: z.string().optional().describe('Filter by status (success, failure, timeout, partial)'),
         anomaly_only: z.boolean().optional().default(false).describe('Show only anomaly-flagged interactions'),
         since: z.string().optional().describe('Show interactions after this ISO timestamp'),
+        cursor: z.string().optional().describe('Opaque cursor from a previous response\'s next_cursor. Pass unchanged to fetch the next page.'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
     },
-    async ({ agent_id, agent_name, receipt_id, mode, limit, target, category, status, anomaly_only, since }) => {
+    async ({ agent_id, agent_name, receipt_id, mode, limit, target, category, status, anomaly_only, since, cursor }) => {
       let id: string;
       let resolvedDisplayName: string;
       try {
@@ -56,6 +58,7 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
         if (status) params.set('status', status);
         if (anomaly_only) params.set('anomaly', 'true');
         if (since) params.set('since', since);
+        if (cursor) params.set('cursor', cursor);
 
         const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${id}/receipts?${params}`);
         if (!res.ok) {
@@ -126,7 +129,12 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
         }
 
         if (data.next_cursor) {
-          text += `\n... more interactions available. Use since/target/category filters or cursor to paginate.`;
+          // Surface the opaque cursor verbatim so the caller can paginate
+          // deterministically. The receipts API uses created_at of the
+          // last returned row as its cursor, but we don't expose that
+          // shape — the cursor is opaque by contract.
+          text += `\nnext_cursor: ${data.next_cursor}\n`;
+          text += `More interactions available — call get_interaction_log again with cursor="${data.next_cursor}" to fetch the next page.`;
         }
 
         return { content: [{ type: 'text' as const, text }] };
@@ -198,9 +206,9 @@ function formatDetail(data: Record<string, unknown>, displayName: string): strin
 
   // Network context
   if (ctx) {
-    text += `\n-- Network Context --\n`;
-    text += `${r.target_system_id} — failure ${((ctx.failure_rate as number) * 100).toFixed(1)}%`;
-    text += `, anomaly ${((ctx.anomaly_rate as number) * 100).toFixed(1)}%`;
+    text += `\n${section('Network Context')}\n`;
+    text += `${r.target_system_id} — failure ${fmtRatio(ctx.failure_rate as number)}`;
+    text += `, anomaly ${fmtRatio(ctx.anomaly_rate as number)}`;
     text += `, ${ctx.distinct_agent_count} agents observed\n`;
     if (ctx.median_duration_ms != null) {
       text += `Network median: ${ctx.median_duration_ms}ms`;

@@ -7,6 +7,7 @@ import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/n
 import { summarizeNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { isThinSample, renderCohortBaselineHeader } from '../utils/cohort-baseline.js';
+import { fmtRatio, section } from '../utils/style.js';
 
 async function fetchJSON(url: string): Promise<Record<string, unknown> | null> {
   try {
@@ -68,13 +69,13 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
 
       // Profile section
       if (profile === null) {
-        text += `\n-- Profile --\n  Error: could not fetch profile (agent may not be registered or API unavailable)\n`;
+        text += `\n${section('Profile')}\n  Error: could not fetch profile (agent may not be registered or API unavailable)\n`;
       } else if (profile.error) {
-        text += `\n-- Profile --\n  Error: ${(profile.error as Record<string, unknown>)?.message ?? String(profile.error)}\n`;
+        text += `\n${section('Profile')}\n  Error: ${(profile.error as Record<string, unknown>)?.message ?? String(profile.error)}\n`;
       } else {
         const c = profile.counts as Record<string, unknown>;
         const comp = profile.composition_summary as Record<string, unknown>;
-        text += `\n-- Profile --\n`;
+        text += `\n${section('Profile')}\n`;
         text += `  ${c.total_receipts} receipts across ${c.distinct_targets} targets over ${c.days_active} day(s)\n`;
         text += `  Last 24h: ${c.receipts_last_24h} receipts\n`;
         text += `  Composition: ${comp?.skill_count ?? 0} skills, ${comp?.mcp_count ?? 0} MCPs, ${comp?.tool_count ?? 0} tools\n`;
@@ -111,16 +112,19 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
       }
 
       if (friction === null) {
-        text += `\n-- Friction --\n  Error: could not fetch friction data (API unavailable)\n`;
+        text += `\n${section('Friction')}\n  Error: could not fetch friction data (API unavailable)\n`;
       } else if (friction.error) {
-        text += `\n-- Friction --\n  Error: ${(friction.error as Record<string, unknown>)?.message ?? String(friction.error)}\n`;
+        text += `\n${section('Friction')}\n  Error: ${(friction.error as Record<string, unknown>)?.message ?? String(friction.error)}\n`;
       } else {
         const s = friction.summary as Record<string, unknown>;
-        text += `\n-- Friction (${frictionScope}) --\n`;
+        text += `\n${section(`Friction (${frictionScope})`)}\n`;
         if (frictionNote) text += `  Note: ${frictionNote}\n`;
         if (s && (s.total_interactions as number) > 0) {
+          // friction_percentage is already a 0..100 value (not a ratio) —
+          // matches the shape rendered by get-friction-report. Don't run
+          // it through fmtRatio or we'd double-convert.
           text += `  ${s.total_interactions} interactions | ${((s.friction_percentage as number) ?? 0).toFixed(1)}% friction\n`;
-          text += `  ${s.total_failures} failures (${((s.failure_rate as number) * 100).toFixed(1)}%)\n`;
+          text += `  ${s.total_failures} failures (${fmtRatio(s.failure_rate as number)})\n`;
 
           const targets = friction.top_targets as Array<Record<string, unknown>>;
           if (targets && targets.length > 0) {
@@ -136,21 +140,21 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
 
       // Coverage section — name the specific gaps (CHANGE 3)
       if (coverage === null) {
-        text += `\n-- Coverage --\n  Error: could not fetch coverage data (API unavailable)\n`;
+        text += `\n${section('Coverage')}\n  Error: could not fetch coverage data (API unavailable)\n`;
       } else if (coverage.error) {
-        text += `\n-- Coverage --\n  Error: ${(coverage.error as Record<string, unknown>)?.message ?? String(coverage.error)}\n`;
+        text += `\n${section('Coverage')}\n  Error: ${(coverage.error as Record<string, unknown>)?.message ?? String(coverage.error)}\n`;
       } else {
         const rules = coverage.rules as Array<{ signal: string; triggered: boolean }>;
         if (rules) {
           const gaps = rules.filter((r) => r.triggered);
           const covered = rules.filter((r) => !r.triggered);
-          text += `\n-- Coverage --\n`;
+          text += `\n${section('Coverage')}\n`;
           text += `  ${covered.length}/${rules.length} signals covered\n`;
           if (gaps.length > 0) {
             text += `  Gaps: ${gaps.map((g) => g.signal).join(', ')}\n`;
           }
         } else {
-          text += `\n-- Coverage --\n  No coverage data available.\n`;
+          text += `\n${section('Coverage')}\n  No coverage data available.\n`;
         }
       }
 

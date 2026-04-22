@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { fmtRatio, truncHash } from '../utils/style.js';
 
 export function searchSkillsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -14,11 +15,12 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
         min_agents: z.number().min(0).optional().describe('Only return skills observed being used by at least N agents'),
         min_anomaly_signals: z.number().min(0).optional().describe('Only return skills with at least N observed anomaly signals'),
         limit: z.number().min(1).max(50).optional().default(10).describe('Max results to return'),
+        cursor: z.string().optional().describe('Opaque cursor from a previous response\'s next_cursor. Pass unchanged to fetch the next page.'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.6 },
     },
-    async ({ query: searchQuery, source, category, min_agents, min_anomaly_signals, limit }) => {
+    async ({ query: searchQuery, source, category, min_agents, min_anomaly_signals, limit, cursor }) => {
       try {
         const params = new URLSearchParams({ q: searchQuery });
         if (source) params.set('source', source);
@@ -26,6 +28,7 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
         if (min_agents != null) params.set('min_agents', String(min_agents));
         if (min_anomaly_signals != null) params.set('min_anomaly_signals', String(min_anomaly_signals));
         if (limit) params.set('limit', String(limit));
+        if (cursor) params.set('cursor', cursor);
 
         const res = await fetchAuthed(`${apiUrl}/api/v1/skill-catalog/search?${params}`);
         const data = await res.json() as {
@@ -45,6 +48,7 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
             content_changed_at: string | null;
           }>;
           total: number;
+          next_cursor?: string | null;
         };
 
         if (data.skills.length === 0) {
@@ -73,18 +77,21 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
             signals.push(`${skill.anomaly_signal_count} anomaly signals`);
           }
           if (skill.anomaly_signal_rate != null && skill.anomaly_signal_rate > 0) {
-            signals.push(`${(skill.anomaly_signal_rate * 100).toFixed(1)}% anomaly rate`);
+            signals.push(`${fmtRatio(skill.anomaly_signal_rate)} anomaly rate`);
           }
           if (signals.length > 0) {
             text += `\n    Signals: ${signals.join(', ')}`;
           }
 
-          if (skill.current_hash) text += `\n    Hash: ${skill.current_hash.slice(0, 16)}...`;
+          if (skill.current_hash) text += `\n    Hash: ${truncHash(skill.current_hash)}`;
           text += '\n';
         }
 
-        if (data.total > data.skills.length) {
-          text += `\n... and ${data.total - data.skills.length} more. Increase limit to see more.`;
+        if (data.next_cursor) {
+          text += `\nnext_cursor: ${data.next_cursor}\n`;
+          text += `More skills match "${searchQuery}" — call search_skills again with cursor="${data.next_cursor}" to fetch the next page.`;
+        } else if (data.total > data.skills.length) {
+          text += `\n… and ${data.total - data.skills.length} more. Increase limit to see more.`;
         }
 
         return { content: [{ type: 'text' as const, text }] };

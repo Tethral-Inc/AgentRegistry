@@ -7,6 +7,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { stableCorridorsNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { section } from '../utils/style.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -56,13 +57,13 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
 
         if (filter) {
-          text += `\n-- Filter Applied --\n`;
+          text += `\n${section('Filter Applied')}\n`;
           for (const [key, value] of Object.entries(filter)) {
             text += `  ${key}: ${value}\n`;
           }
         }
 
-        text += `\n-- Matches (${data.match_count !== undefined ? data.match_count : matches.length}) --\n`;
+        text += `\n${section(`Matches (${data.match_count !== undefined ? data.match_count : matches.length})`)}\n`;
 
         if (matches.length === 0) {
           text += `  No stable corridors found for this period. This means no targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;

@@ -1,3 +1,43 @@
+## 2.6.1 (2026-04-22)
+
+Mechanical hygiene. No new behavior — the 2.6.0 release surfaced how
+visually inconsistent the tool outputs had drifted across lenses, and
+2.6.1 pays that debt down so future surface changes don't fight three
+divider styles and two hash-truncation shapes. Also closes an
+outstanding AUDIT.md complaint about confidence-tag denominators, adds
+cursor pagination on every list-returning tool, and guards both the
+style and tool-description surface from regressions with CI tests.
+
+Release F of the v2.5.0 – v2.9.0 roadmap.
+
+- **Style module (`utils/style.ts`).** One source of truth for
+  dividers (`── Title ──`), arrows (`→`), ellipses (`…`), and hash
+  truncation (`truncHash(s, 16)`). Replaces three divider styles
+  (`--`, `==`, `──`), two arrows (`->`, `→`), and two hash shapes
+  (`.slice(0, 16) + '...'`, `.substring(0, 16) + '...'`) that had
+  accumulated across 10+ tools. Also exports `fmtRatio` / `fmtDate` /
+  `fmtDuration` so `"12.3%"` and `"2026-04-22"` render the same way
+  everywhere.
+- **Cursor pagination on list tools.** `get_interaction_log`,
+  `get_skill_tracker`, and `search_skills` now accept a `cursor` input
+  and surface the response's `next_cursor` verbatim. Paginating is a
+  deterministic "copy the string, call again" — no more guessing at
+  how far back the `since` filter reaches or what the server's
+  internal sort key looks like.
+- **Confidence-tag denominator clarity.** Closes the AUDIT.md
+  complaint that `3 anomaly signals (1.2% N=250)` reads as "3
+  anomalies sampled from 250" when the 250 is actually the
+  interactions denominator. Now renders as
+  `3 anomaly signals — 1.2% over 250 interactions [N=250]` so the
+  sample-size tag sits next to the denominator name. Applies to
+  `get_skill_tracker` list + detail views.
+- **CI guards.** `tests/unit/style.test.ts` grep-guards flag any tool
+  that re-introduces a legacy divider or hash shape.
+  `tests/unit/tool-descriptions.test.ts` enforces every tool has a
+  non-trivial description (40-char floor), rejects placeholder text
+  (`TODO`/`FIXME`/`TBD`), and catches descriptions that reference
+  tools no longer registered (shape-matched by verb prefix).
+
 ## 2.6.0 (2026-04-22)
 
 First-value onboarding. A brand-new MCP install against a brand-new

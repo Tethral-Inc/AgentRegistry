@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { confidence } from '../utils/confidence.js';
 import { networkStatusNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { fmtRatio, section, truncHash } from '../utils/style.js';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -33,23 +34,22 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         }
 
         // Totals
-        text += `\n-- Totals (24h) --\n`;
+        text += `\n${section('Totals (24h)')}\n`;
         text += `  Active agents: ${t.active_agents ?? 0}`;
         text += ` | Systems: ${t.active_systems ?? 0}`;
         text += ` | Interactions: ${(t.interactions_24h ?? 0).toLocaleString()}\n`;
-        const anomalyPct = ((t.anomaly_rate_24h ?? 0) * 100).toFixed(1);
-        text += `  Anomaly rate: ${anomalyPct}%\n`;
+        text += `  Anomaly rate: ${fmtRatio(t.anomaly_rate_24h ?? 0)}\n`;
 
         // Systems
         const systems = data.systems ?? [];
         if (systems.length > 0) {
-          text += `\n-- Systems (${systems.length}, worst-first) --\n`;
+          text += `\n${section(`Systems (${systems.length}, worst-first)`)}\n`;
           for (const s of systems.slice(0, 20)) {
             const totalN = s.total_interactions ?? 0;
             let line = `  ${s.system_id}`;
             line += ` — ${s.agent_count ?? 0} agents`;
-            if (s.failure_rate > 0) line += `, ${(s.failure_rate * 100).toFixed(1)}% failure`;
-            if (s.anomaly_rate > 0) line += `, ${(s.anomaly_rate * 100).toFixed(1)}% anomaly`;
+            if (s.failure_rate > 0) line += `, ${fmtRatio(s.failure_rate)} failure`;
+            if (s.anomaly_rate > 0) line += `, ${fmtRatio(s.anomaly_rate)} anomaly`;
             if (s.median_duration_ms != null) line += `, ${s.median_duration_ms}ms median`;
             if (s.p95_duration_ms != null) line += `, p95 ${s.p95_duration_ms}ms`;
             if (s.total_interactions != null) line += `, ${totalN} interactions ${confidence(totalN)}`;
@@ -59,26 +59,26 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
             text += `  ... and ${systems.length - 20} more systems\n`;
           }
         } else {
-          text += `\n-- Systems --\n  No system health data available.\n`;
+          text += `\n${section('Systems')}\n  No system health data available.\n`;
         }
 
         // Skills with anomaly signals
         const threats = data.threats ?? [];
         if (threats.length > 0) {
-          text += `\n-- Skill Anomaly Signals (${threats.length}) --\n`;
+          text += `\n${section(`Skill Anomaly Signals (${threats.length})`)}\n`;
           for (const th of threats) {
-            text += `  ${th.skill_name || th.skill_hash.substring(0, 16) + '...'}`;
+            text += `  ${th.skill_name || truncHash(th.skill_hash)}`;
             text += ` — ${th.anomaly_signal_count} signals, ${th.agent_count} reporters`;
             text += '\n';
           }
         } else {
-          text += `\n-- Skill Anomaly Signals --\n  No elevated anomaly signals observed.\n`;
+          text += `\n${section('Skill Anomaly Signals')}\n  No elevated anomaly signals observed.\n`;
         }
 
         // Escalations
         const escalations = data.recent_escalations ?? [];
         if (escalations.length > 0) {
-          text += `\n-- Recent Escalations (${escalations.length}) --\n`;
+          text += `\n${section(`Recent Escalations (${escalations.length})`)}\n`;
           for (const e of escalations) {
             text += `  ${e.target} — ${e.agents_affected} agents`;
             if (e.providers_affected?.length > 0) {

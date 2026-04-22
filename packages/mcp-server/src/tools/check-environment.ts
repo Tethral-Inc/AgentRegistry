@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { truncHash } from '../utils/style.js';
 
 export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolverUrl: string) {
   server.registerTool(
@@ -27,7 +28,7 @@ export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolver
         if (Array.isArray(threats) && threats.length > 0) {
           text += `\nSkills with elevated anomaly signals: ${threats.length}\n`;
           for (const t of threats) {
-            text += `- ${t.skill_name || t.skill_hash.substring(0, 16) + '...'} — ${t.anomaly_signal_count} signals, ${t.agent_count ?? 0} reporters\n`;
+            text += `- ${t.skill_name || truncHash(t.skill_hash)} — ${t.anomaly_signal_count} signals, ${t.agent_count ?? 0} reporters\n`;
           }
         } else {
           text += '\nNo elevated anomaly signals observed.';
