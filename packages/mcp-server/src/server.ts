@@ -19,7 +19,7 @@ import { searchSkillsTool } from './tools/search-skills.js';
 import { getSkillVersionsTool } from './tools/get-skill-versions.js';
 import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
-import { acknowledgeThreatTool } from './tools/acknowledge-threat.js';
+import { acknowledgeSignalTool, acknowledgeThreatTool } from './tools/acknowledge-threat.js';
 import { disableDeepCompositionTool } from './tools/configure-deep-composition.js';
 import { getProfileTool } from './tools/get-profile.js';
 import { getCoverageTool } from './tools/get-coverage.js';
@@ -140,7 +140,8 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getSkillVersionsTool(server, apiUrl, resolverUrl);
   updateCompositionTool(server, apiUrl);
   getNotificationsTool(server, apiUrl);
-  acknowledgeThreatTool(server, apiUrl);
+  acknowledgeSignalTool(server, apiUrl);
+  acknowledgeThreatTool(server, apiUrl); // deprecated alias — removed no earlier than v2.7.0 + 90 days
   disableDeepCompositionTool(server);
   getProfileTool(server, apiUrl);
   getCoverageTool(server, apiUrl);

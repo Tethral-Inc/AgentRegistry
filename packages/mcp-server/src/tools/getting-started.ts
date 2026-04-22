@@ -35,13 +35,16 @@ export function gettingStartedTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'getting_started',
     {
-      description: 'Step-by-step setup checklist. Shows your registration status, whether you\'re logging interactions, composition completeness, and signal coverage — with the next action you should take. Call this if you\'re unsure where to start.',
+      description: 'DEPRECATED since v2.7.0 — call `orient_me` instead. The checklist still runs for back-compat, but `orient_me` gives a state-sensitive next step plus cohort baseline framing that a static four-step list cannot. This shim will be removed no earlier than v2.9.0.',
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
-      _meta: { priorityHint: 0.9 },
+      // Priority dropped from 0.9 to 0.2 so hosts that sort tools by
+      // priority surface orient_me (priorityHint 1.0) as the true front
+      // door. The checklist is still callable, just not recommended.
+      _meta: { priorityHint: 0.2, deprecated: true, replacedBy: 'orient_me', deprecatedSince: '2.7.0' },
     },
     async ({ agent_id, agent_name }) => {
       let id: string;
@@ -66,6 +69,11 @@ export function gettingStartedTool(server: McpServer, apiUrl: string) {
       const displayName = (agentData?.name as string) ?? (profile?.name as string) ?? resolvedDisplayName;
 
       let text = renderUpgradeBanner(getActiveSession().versionCheck);
+      // Deprecation banner: we don't silently redirect because the
+      // operator may have wired `getting_started` into their own
+      // scripts — breaking it mid-flight is worse than showing a
+      // pointer to the replacement and running the old logic anyway.
+      text += `NOTE: getting_started is deprecated since v2.7.0. Call \`orient_me\` for a state-sensitive next step.\n\n`;
       text += `Getting Started with ACR\n${'='.repeat(24)}\n\n`;
 
       const nextActions: string[] = [];

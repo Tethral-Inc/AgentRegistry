@@ -1,3 +1,42 @@
+## 2.7.0 (2026-04-22)
+
+Front-door consolidation + terminology alignment. Since 2.6.0
+introduced `orient_me` as a state-sensitive replacement for the
+static `getting_started` checklist, the two tools have been
+competing for the same attention. 2.7.0 resolves that: `orient_me`
+is the front door, `getting_started` is a deprecated shim. On the
+notification side, `acknowledge_threat` is renamed to
+`acknowledge_signal` — a vocabulary fix that aligns the tool surface
+with how the rest of the codebase already talks ("anomaly_signal",
+"skill_signals", never "threat").
+
+Release G of the v2.5.0 – v2.9.0 roadmap.
+
+- **`getting_started` deprecated; `orient_me` is the front door.**
+  Description rewritten to point at the replacement. Output
+  prepends a one-line deprecation banner. Priority drops from
+  `priorityHint 0.9` → `0.2` so hosts that sort by priority
+  surface `orient_me` (1.0) first. Shim removal scheduled no
+  earlier than v2.9.0 — long enough that anyone wired into
+  `getting_started` explicitly has a full release cycle to switch.
+- **`acknowledge_threat` → `acknowledge_signal` (dual-registered).**
+  Both names work in 2.7.0. The new name matches the rest of the
+  codebase (`anomaly_signal_count`, `skill_signals`,
+  `anomaly_rate`), unwinding a synthetic "threat" verdict that
+  never belonged in the tool surface — ACR records observations,
+  not verdicts. `acknowledge_threat` stamps a deprecation banner
+  on success and drops priority to `0.1`. Shim removal scheduled
+  no earlier than v2.7.0 + 90 days.
+- **Shared handler, zero behavior drift.** Both tools route to the
+  same `acknowledgeHandler` — the rename is purely vocabulary. No
+  semantic divergence is possible because there's literally one
+  path.
+- **TOOL_MENU annotations.** Deprecated tools are listed with an
+  inline `(deprecated)` marker so anyone reading the menu sees
+  which calls are on their way out. The tool-menu test denylists
+  `deprecated` so the annotation doesn't register as a fake tool
+  name.
+
 ## 2.6.1 (2026-04-22)
 
 Mechanical hygiene. No new behavior — the 2.6.0 release surfaced how

@@ -61,7 +61,9 @@ function collectMenuTools(menu: string): Set<string> {
   // Remove non-tool tokens that happen to look like tool names.
   // The menu header ("Available Tools") and group labels are filtered
   // by the colon-slice above, but defensively drop common words.
-  const denylist = ['available', 'tools'];
+  // `deprecated` is an inline annotation — `acknowledge_threat
+  // (deprecated)` — not a tool id.
+  const denylist = ['available', 'tools', 'deprecated'];
   for (const d of denylist) found.delete(d);
   return found;
 }
