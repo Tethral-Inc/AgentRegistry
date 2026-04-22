@@ -54,24 +54,30 @@ jobs:
   # Migrations: manual only via workflow_dispatch with explicit input.
   # Applying DDL on every push is too aggressive — you want a human in the loop.
   migrations:
+    # Uses the in-repo node runner (scripts/run-migration.mjs) instead of
+    # golang-migrate — the latter's pg_advisory_lock() isn't implemented
+    # by CockroachDB, so it fails on the first SQL call. The node runner
+    # is the same tool used locally and has no advisory-lock dependency.
     if: github.event_name == 'workflow_dispatch' && inputs.run_migrations
     runs-on: ubuntu-latest
     env:
-      COCKROACH_URL: ${{ secrets.COCKROACH_CONNECTION_STRING }}
+      COCKROACH_CONNECTION_STRING: ${{ secrets.COCKROACH_CONNECTION_STRING }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
       - name: Check cockroach secret configured
         run: |
-          if [ -z "$COCKROACH_URL" ]; then
+          if [ -z "$COCKROACH_CONNECTION_STRING" ]; then
             echo "::error::COCKROACH_CONNECTION_STRING not set — cannot run migrations"
             exit 1
           fi
-      - name: Install migrate
-        run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xz
-          sudo mv migrate /usr/local/bin/
-      - name: Run migrations
-        run: migrate -database "$COCKROACH_URL" -path migrations up
+      - run: pnpm install --frozen-lockfile
+      - name: Show pending migrations
+        run: node scripts/run-migration.mjs status
+      - name: Run migrations up
+        run: node scripts/run-migration.mjs up
 
   # Services: auto-deploy app code on push. Does not depend on infra/migrations —
   # those are managed separately. App code is safe to ship on every push.
