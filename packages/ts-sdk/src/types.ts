@@ -28,7 +28,16 @@ export type AnomalyCategory =
 // --- Registration ---
 
 export interface RegistrationRequest {
+  /** base64url-encoded raw 32-byte Ed25519 public key (43 chars). */
   public_key: string;
+  /** Unix-ms when the client signed the payload. Must be within 5 min of server time. */
+  registration_timestamp_ms: number;
+  /**
+   * base64url-encoded raw 64-byte Ed25519 signature over
+   * `register:v1:${public_key}:${registration_timestamp_ms}`. The
+   * `signRegistrationRequest` helper produces this for you.
+   */
+  signature: string;
   provider_class: ProviderClass;
   composition?: {
     mcps?: string[];
@@ -38,6 +47,18 @@ export interface RegistrationRequest {
   };
   operational_domain?: string;
   system_prompt_hash?: string;
+}
+
+/** Unsigned body — caller passes this to `signRegistrationRequest` along with a private key. */
+export type UnsignedRegistrationRequest = Omit<
+  RegistrationRequest,
+  'registration_timestamp_ms' | 'signature'
+>;
+
+/** base64url-encoded Ed25519 keypair (raw 32-byte values). */
+export interface AgentKeypair {
+  publicKey: string;
+  privateKey: string;
 }
 
 export interface RegistrationResponse {

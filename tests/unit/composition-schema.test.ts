@@ -127,8 +127,14 @@ describe('McpComponentSchema', () => {
 });
 
 describe('RegistrationRequestSchema with composition_source', () => {
+  // Proof-of-possession fields are required — public_key is a base64url
+  // 43-char Ed25519 key and signature is an 86-char Ed25519 signature.
+  // These tests only exercise schema validation, so the signature bytes
+  // don't need to be cryptographically valid here.
   const validBase = {
-    public_key: 'p'.repeat(40),
+    public_key: 'p'.repeat(43),
+    registration_timestamp_ms: Date.now(),
+    signature: 's'.repeat(86),
     provider_class: 'anthropic' as const,
   };
 
@@ -160,6 +166,42 @@ describe('RegistrationRequestSchema with composition_source', () => {
   it('accepts request without composition_source (backwards compat)', () => {
     const result = RegistrationRequestSchema.safeParse(validBase);
     expect(result.success).toBe(true);
+  });
+
+  it('rejects request missing signature', () => {
+    const { signature: _sig, ...rest } = validBase;
+    const result = RegistrationRequestSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects request missing registration_timestamp_ms', () => {
+    const { registration_timestamp_ms: _ts, ...rest } = validBase;
+    const result = RegistrationRequestSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects public_key that is not 43 base64url chars', () => {
+    const result = RegistrationRequestSchema.safeParse({
+      ...validBase,
+      public_key: 'x'.repeat(40),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects public_key with non-base64url characters', () => {
+    const result = RegistrationRequestSchema.safeParse({
+      ...validBase,
+      public_key: '!'.repeat(43),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects signature that is not 86 base64url chars', () => {
+    const result = RegistrationRequestSchema.safeParse({
+      ...validBase,
+      signature: 's'.repeat(85),
+    });
+    expect(result.success).toBe(false);
   });
 });
 

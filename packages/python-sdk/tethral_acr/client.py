@@ -8,6 +8,12 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .pop import (
+    AgentKeypair,
+    generate_agent_keypair,
+    sign_registration_request,
+)
+
 
 class ACRError(Exception):
     """Error returned by the ACR API."""
@@ -69,22 +75,50 @@ class ACRClient:
 
     def register(
         self,
-        public_key: str,
+        keypair: AgentKeypair,
         provider_class: str,
         skills: list[str] | None = None,
         skill_hashes: list[str] | None = None,
         operational_domain: str | None = None,
     ) -> dict[str, Any]:
-        """Register an agent with the ACR network."""
-        body: dict[str, Any] = {
-            "public_key": public_key,
-            "provider_class": provider_class,
-        }
+        """Register an agent with the ACR network.
+
+        Requires an Ed25519 keypair for proof-of-possession — the server
+        rejects unsigned requests. Call ``generate_agent_keypair()`` to
+        mint one on first use and persist the result; reuse the same
+        keypair on every subsequent registration (the keypair IS the
+        agent's identity).
+        """
+        body: dict[str, Any] = {"provider_class": provider_class}
         if skills or skill_hashes:
             body["composition"] = {"skills": skills, "skill_hashes": skill_hashes}
         if operational_domain:
             body["operational_domain"] = operational_domain
-        return self._post("/api/v1/register", body)
+        signed = sign_registration_request(body, keypair)
+        return self._post("/api/v1/register", signed)
+
+    def register_new_agent(
+        self,
+        provider_class: str,
+        skills: list[str] | None = None,
+        skill_hashes: list[str] | None = None,
+        operational_domain: str | None = None,
+    ) -> tuple[AgentKeypair, dict[str, Any]]:
+        """Generate a fresh Ed25519 keypair, register with it, and return both.
+
+        Use for brand-new agents that don't yet have a persisted identity.
+        The caller MUST persist the returned keypair — losing the private
+        key means the agent identity is unrecoverable.
+        """
+        keypair = generate_agent_keypair()
+        response = self.register(
+            keypair=keypair,
+            provider_class=provider_class,
+            skills=skills,
+            skill_hashes=skill_hashes,
+            operational_domain=operational_domain,
+        )
+        return keypair, response
 
     def submit_receipt(self, receipt: dict[str, Any]) -> dict[str, Any]:
         """Submit a single interaction receipt."""

@@ -4,6 +4,7 @@ import { setAgentId, setAgentName, setApiKey } from '../state.js';
 import { getActiveSession } from '../session-state.js';
 import { writeAcrStateFile } from '../acr-state-file.js';
 import { stripSubComponents } from '../strip-sub-components.js';
+import { signRegistration } from '../utils/pop-client.js';
 import { diffLine, section, truncHash } from '../utils/style.js';
 
 const DATA_NOTICE = ' ACR collects interaction metadata (target names, timing, status) to build your interaction profile — queryable through behavioral lenses (friction and more) — and to propagate anomaly signal notifications. No request/response content is collected. We do not track the agent owner. Terms: https://acr.nfkey.ai/terms';
@@ -27,9 +28,8 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'register_agent',
     {
-      description: 'Register an agent with the ACR network. Optional — agents are auto-registered on first tool call.' + DATA_NOTICE,
+      description: 'Register an agent with the ACR network. Optional — agents are auto-registered on first tool call. The MCP owns the Ed25519 keypair used for proof-of-possession; the agent never handles keys directly.' + DATA_NOTICE,
       inputSchema: {
-        public_key: z.string().min(32).describe('Agent public key or unique identifier (min 32 chars)'),
         provider_class: z.enum([
           'anthropic', 'openai', 'google', 'openclaw', 'langchain',
           'crewai', 'autogen', 'custom', 'unknown',
@@ -47,11 +47,12 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
       _meta: { priorityHint: 0.6 },
     },
     async ({
-      public_key, provider_class, name, skills, skill_hashes, operational_domain,
+      provider_class, name, skills, skill_hashes, operational_domain,
       skill_components, mcp_components, api_components, tool_components,
     }) => {
       try {
-        const deep = getActiveSession().deepComposition;
+        const session = getActiveSession();
+        const deep = session.deepComposition;
         const composition = {
           skills,
           skill_hashes,
@@ -67,11 +68,21 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
           || api_components || tool_components
         );
 
+        // PoP: MCP owns the Ed25519 keypair. The agent never sees it —
+        // removing public_key from the tool input also removes any way
+        // for a prompt-injection attacker to convince the agent to
+        // register against a different key.
+        const { publicKey, privateKey } = session.ensureKeypair(apiUrl);
+        const timestampMs = Date.now();
+        const signature = signRegistration(privateKey, publicKey, timestampMs);
+
         const res = await fetch(`${apiUrl}/api/v1/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            public_key,
+            public_key: publicKey,
+            registration_timestamp_ms: timestampMs,
+            signature,
             provider_class,
             name,
             composition: hasComposition ? composition : undefined,
@@ -93,7 +104,13 @@ export function registerAgentTool(server: McpServer, apiUrl: string) {
         setAgentId(data.agent_id);
         if (data.name) setAgentName(data.name);
         if (data.api_key) setApiKey(data.api_key);
-        writeAcrStateFile(data.agent_id, apiUrl, data.api_key);
+        writeAcrStateFile({
+          agent_id: data.agent_id,
+          api_url: apiUrl,
+          api_key: data.api_key,
+          public_key: publicKey,
+          private_key: privateKey,
+        });
 
         // The server tells us whether this was a fresh record or a
         // rebind of an existing agent. Missing flag → treat as initial

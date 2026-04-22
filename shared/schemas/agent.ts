@@ -88,7 +88,23 @@ export const CompositionSchema = z.object({
 });
 
 export const RegistrationRequestSchema = z.object({
-  public_key: z.string().min(32, 'public_key must be at least 32 characters'),
+  // Proof-of-possession: base64url-encoded raw Ed25519 public key (43 chars).
+  // Before PoP was enforced, `public_key` was a free-form string — anything
+  // over 32 chars was accepted. That meant anyone who knew someone's key
+  // could call /register and get a credential minted for it. Now the
+  // caller must also supply `signature` + `registration_timestamp_ms`
+  // proving they hold the matching private key (see shared/crypto/pop.ts).
+  public_key: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{43}$/, 'public_key must be base64url-encoded raw Ed25519 key (43 chars)'),
+  // Unix-ms when the client signed the payload. Server rejects any
+  // timestamp more than 5 min off its own clock to neutralize replay.
+  registration_timestamp_ms: z.number().int().positive('registration_timestamp_ms must be a positive integer'),
+  // base64url-encoded raw 64-byte Ed25519 signature over
+  // `register:v1:${public_key}:${registration_timestamp_ms}`.
+  signature: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{86}$/, 'signature must be base64url-encoded raw Ed25519 sig (86 chars)'),
   provider_class: ProviderClass,
   name: z.string().max(64).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, 'name must be lowercase alphanumeric with hyphens').optional(),
   composition: CompositionSchema.optional(),

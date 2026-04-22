@@ -13,6 +13,9 @@ import {
   query,
   makeError,
   createLogger,
+  verifyRegistrationSignature,
+  isTimestampFresh,
+  POP_TIMESTAMP_WINDOW_MS,
 } from '@acr/shared';
 import {
   parseRegisterChurnThreshold,
@@ -30,6 +33,12 @@ const CHURN_CHECK_ENABLED = process.env.REGISTER_CHURN_CHECK_ENABLED !== 'false'
 const CHURN_THRESHOLD = parseRegisterChurnThreshold(
   process.env.REGISTER_CHURN_THRESHOLD_PER_IP_HOUR,
 );
+
+// Proof-of-possession is mandatory. The env flag exists only as a local
+// dev/test escape hatch — production must leave it at default (true).
+// Without PoP, anyone who knew a public_key could mint a credential for
+// it, so disabling this is a security regression.
+const POP_REQUIRED = process.env.REGISTER_POP_REQUIRED !== 'false';
 
 type ExistingAgentRow = {
   agent_id: string;
@@ -105,6 +114,57 @@ app.post('/register', async (c) => {
   }
 
   const data = parsed.data;
+
+  // Proof-of-possession: reject the request if the caller can't prove
+  // they hold the private key matching `public_key`. This runs before
+  // any DB work so an unsigned flood costs only a signature verify.
+  //
+  // Order of checks inside the PoP block:
+  //   1. Timestamp freshness — cheap, gives callers a clear error when
+  //      their clock is skewed rather than a generic "bad signature".
+  //   2. Signature — the expensive check (Ed25519 verify). Done last so
+  //      obvious client bugs (missing header/skew) don't waste CPU.
+  if (POP_REQUIRED) {
+    if (!isTimestampFresh(data.registration_timestamp_ms)) {
+      log.warn(
+        {
+          event: 'register_pop_stale_timestamp',
+          clientTs: data.registration_timestamp_ms,
+          serverTs: Date.now(),
+          windowMs: POP_TIMESTAMP_WINDOW_MS,
+        },
+        'Registration timestamp outside freshness window',
+      );
+      return c.json(
+        makeError(
+          'INVALID_INPUT',
+          `registration_timestamp_ms must be within ${POP_TIMESTAMP_WINDOW_MS / 1000}s of server time`,
+        ),
+        400,
+      );
+    }
+    const sigOk = verifyRegistrationSignature(
+      data.public_key,
+      data.registration_timestamp_ms,
+      data.signature,
+    );
+    if (!sigOk) {
+      log.warn(
+        {
+          event: 'register_pop_bad_signature',
+          publicKeyPrefix: data.public_key.slice(0, 8),
+        },
+        'Registration signature verification failed',
+      );
+      return c.json(
+        makeError(
+          'UNAUTHORIZED',
+          'signature did not validate against public_key',
+        ),
+        401,
+      );
+    }
+  }
 
   // Per-IP churn check — fail fast before any crypto/DB work.
   // Skipped when disabled or when no IP header is present (caller is

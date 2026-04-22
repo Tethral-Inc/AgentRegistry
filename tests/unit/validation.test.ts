@@ -99,9 +99,18 @@ describe('InteractionReceiptSchema', () => {
 });
 
 describe('RegistrationRequestSchema', () => {
+  // PoP-required fields. These tests exercise schema shape only — the
+  // signature bytes don't need to cryptographically verify. End-to-end
+  // sig verification is covered in tests/integration/register.test.ts.
+  const popFields = {
+    public_key: 'a'.repeat(43),
+    registration_timestamp_ms: 1_700_000_000_000,
+    signature: 's'.repeat(86),
+  };
+
   it('accepts valid registration', () => {
     const result = RegistrationRequestSchema.safeParse({
-      public_key: 'a'.repeat(32),
+      ...popFields,
       provider_class: 'openclaw',
     });
     expect(result.success).toBe(true);
@@ -109,6 +118,7 @@ describe('RegistrationRequestSchema', () => {
 
   it('rejects short public_key', () => {
     const result = RegistrationRequestSchema.safeParse({
+      ...popFields,
       public_key: 'short',
       provider_class: 'openclaw',
     });
@@ -117,7 +127,7 @@ describe('RegistrationRequestSchema', () => {
 
   it('rejects invalid provider_class', () => {
     const result = RegistrationRequestSchema.safeParse({
-      public_key: 'a'.repeat(32),
+      ...popFields,
       provider_class: 'invalid',
     });
     expect(result.success).toBe(false);
@@ -125,7 +135,7 @@ describe('RegistrationRequestSchema', () => {
 
   it('rejects operational_domain over 200 chars', () => {
     const result = RegistrationRequestSchema.safeParse({
-      public_key: 'a'.repeat(32),
+      ...popFields,
       provider_class: 'openclaw',
       operational_domain: 'x'.repeat(201),
     });
@@ -134,7 +144,7 @@ describe('RegistrationRequestSchema', () => {
 
   it('accepts optional composition', () => {
     const result = RegistrationRequestSchema.safeParse({
-      public_key: 'a'.repeat(32),
+      ...popFields,
       provider_class: 'openclaw',
       composition: {
         skills: ['skill1'],

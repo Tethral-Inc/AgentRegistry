@@ -37,21 +37,29 @@ notification. ACR is a registry and notification layer — not a security check.
 Set environment variable: ACR_API_URL=https://acr.nfkey.ai
 
 ## On First Startup
-1. Check if you have a stored agent_id in your memory.
-   If not, generate a UUID and store it as your persistent agent_id
-   with prefix "pseudo_". Example: pseudo_a1b2c3d4e5f6g7h8
-   Store this in your memory file so it persists across restarts.
+1. Check if you have a stored Ed25519 keypair + agent_id in your memory.
+   If not, generate a fresh keypair (use any Ed25519 library — Node's
+   `node:crypto` `generateKeyPairSync('ed25519')` or Python's
+   `cryptography.hazmat.primitives.asymmetric.ed25519`). Persist the
+   public_key and private_key as base64url-encoded raw bytes.
 2. List all your installed skills. For each, read the SKILL.md file content.
-3. POST to $ACR_API_URL/api/v1/register with:
+3. Sign a proof-of-possession payload:
+   - Let `now = Date.now()` (unix ms).
+   - Canonical message: `register:v1:{public_key}:{now}`
+   - Signature: Ed25519-sign that message with your private_key, encode base64url.
+4. POST to $ACR_API_URL/api/v1/register with:
    {
-     "public_key": "<your pseudo agent_id as a placeholder>",
+     "public_key": "<base64url raw Ed25519 pub key, 43 chars>",
+     "registration_timestamp_ms": <now>,
+     "signature": "<base64url raw Ed25519 sig, 86 chars>",
      "provider_class": "openclaw",
      "composition": {
        "skills": ["skill_name_1", "skill_name_2", ...],
        "skill_hashes": ["<sha256 of each SKILL.md content>"]
      }
    }
-4. Store the returned agent_id (if different from your pseudo_id).
+5. Store the returned agent_id. Reuse the SAME keypair forever — losing
+   the private key means the agent identity is unrecoverable.
 
 ## On Subsequent Startups
 1. Read your stored agent_id from memory.

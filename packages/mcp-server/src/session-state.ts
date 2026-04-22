@@ -9,6 +9,7 @@ import { detectEnvironment } from './env-detect.js';
 import { writeAcrStateFile, readAcrStateFile } from './acr-state-file.js';
 import type { VersionCheckResult } from './version-check.js';
 import { envBool } from './utils/env.js';
+import { generateAgentKeypair, signRegistration } from './utils/pop-client.js';
 
 const CLIENT_TO_PROVIDER: Record<string, string> = {
   'claude-code': 'anthropic',
@@ -36,6 +37,11 @@ export class SessionState {
   private _agentId: string | null = null;
   private _agentName: string | null = null;
   private _apiKey: string | null = null;
+  // Persistent Ed25519 keypair (base64url strings). Generated on first
+  // registration so /register can verify proof-of-possession. Reused
+  // forever after — rotating the key means a new agent identity.
+  private _publicKey: string | null = null;
+  private _privateKey: string | null = null;
   private _mcpServer: McpServer | null = null;
   private _registering = false;
   private _transportType: 'stdio' | 'streamable-http';
@@ -105,6 +111,8 @@ export class SessionState {
   get agentId(): string | null { return this._agentId; }
   get agentName(): string | null { return this._agentName; }
   get apiKey(): string | null { return this._apiKey; }
+  get publicKey(): string | null { return this._publicKey; }
+  get privateKey(): string | null { return this._privateKey; }
   get transportType(): 'stdio' | 'streamable-http' { return this._transportType; }
   get clientType(): string | null { return this._clientType; }
 
@@ -113,6 +121,30 @@ export class SessionState {
   setApiKey(key: string): void { this._apiKey = key; }
   setClientType(type: string): void { this._clientType = type; }
   setMcpServer(server: McpServer): void { this._mcpServer = server; }
+
+  /**
+   * Return the agent's Ed25519 keypair, generating + persisting one on
+   * first access. Callers signing a /register request must use this so
+   * the same public_key is offered consistently across sessions.
+   */
+  ensureKeypair(apiUrl: string): { publicKey: string; privateKey: string } {
+    if (this._publicKey && this._privateKey) {
+      return { publicKey: this._publicKey, privateKey: this._privateKey };
+    }
+    const { publicKey, privateKey } = generateAgentKeypair();
+    this._publicKey = publicKey;
+    this._privateKey = privateKey;
+    // Persist immediately so a crash between keypair generation and
+    // successful /register doesn't leak the identity.
+    writeAcrStateFile({
+      agent_id: this._agentId ?? '',
+      api_url: apiUrl,
+      api_key: this._apiKey ?? undefined,
+      public_key: publicKey,
+      private_key: privateKey,
+    });
+    return { publicKey, privateKey };
+  }
 
   get versionCheck(): VersionCheckResult | null { return this._versionCheck; }
   setVersionCheck(result: VersionCheckResult): void {
@@ -161,7 +193,18 @@ export class SessionState {
       if (saved?.agent_id && !saved.agent_id.startsWith('pseudo_')) {
         this._agentId = saved.agent_id;
         if (saved.api_key) this._apiKey = saved.api_key;
+        // Hydrate keypair too — otherwise the next /register would mint
+        // a fresh key and attach this agent_id to a stranger identity.
+        if (saved.public_key) this._publicKey = saved.public_key;
+        if (saved.private_key) this._privateKey = saved.private_key;
         return this._agentId;
+      }
+      // Even without a persisted agent_id, hoist any existing keypair
+      // so a partial state file (keypair written but registration never
+      // completed) isn't silently discarded.
+      if (saved?.public_key && saved?.private_key) {
+        this._publicKey = saved.public_key;
+        this._privateKey = saved.private_key;
       }
     }
 
@@ -181,15 +224,23 @@ export class SessionState {
     let httpStatus: number | null = null;
     let errorBody: string | null = null;
     try {
-      const pseudoKey = `pseudo_${randomBytes(16).toString('hex')}`;
       const env = detectEnvironment(this._transportType);
       if (this._clientType) env.client_type = this._clientType;
+
+      // PoP: sign a fresh timestamp with the session's Ed25519 key.
+      // ensureKeypair generates + persists one if this is our first
+      // run — subsequent sessions reuse the persisted identity.
+      const { publicKey, privateKey } = this.ensureKeypair(apiUrl);
+      const timestampMs = Date.now();
+      const signature = signRegistration(privateKey, publicKey, timestampMs);
 
       const res = await fetch(`${apiUrl}/api/v1/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          public_key: pseudoKey,
+          public_key: publicKey,
+          registration_timestamp_ms: timestampMs,
+          signature,
           provider_class: this.inferProviderClass(),
           environment: env,
         }),
@@ -200,7 +251,13 @@ export class SessionState {
         this._agentId = data.agent_id;
         this._agentName = data.name;
         if (data.api_key) this._apiKey = data.api_key;
-        writeAcrStateFile(this._agentId, apiUrl, this._apiKey ?? undefined);
+        writeAcrStateFile({
+          agent_id: this._agentId,
+          api_url: apiUrl,
+          api_key: this._apiKey ?? undefined,
+          public_key: publicKey,
+          private_key: privateKey,
+        });
         return this._agentId;
       }
 

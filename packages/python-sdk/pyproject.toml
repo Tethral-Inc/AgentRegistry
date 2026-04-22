@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tethral-acr"
-version = "0.3.0"
+version = "0.4.0"
 description = "Python SDK for the ACR (Agent Composition Records) network. Register agents, log interactions, and query behavioral profiles through lenses: friction, coverage, stable corridors, failure registry, and trend. Raw signals, no synthetic labels."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
-dependencies = ["httpx>=0.27.0"]
+dependencies = ["httpx>=0.27.0", "cryptography>=42.0.0"]
 keywords = ["acr", "agent", "composition", "registry", "tethral", "friction"]
 classifiers = [
     "Development Status :: 3 - Alpha",

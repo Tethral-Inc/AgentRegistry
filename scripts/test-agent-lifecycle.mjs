@@ -10,11 +10,31 @@
  *   node scripts/test-agent-lifecycle.mjs --api-url https://acr.nfkey.ai
  */
 
+import { generateKeyPairSync, createPrivateKey, sign as nodeSign } from 'node:crypto';
+
 const API_URL = process.argv.find(a => a.startsWith('--api-url='))?.split('=')[1]
   ?? process.env.ACR_API_URL
   ?? 'https://acr.nfkey.ai';
 
 const RESOLVER_URL = API_URL;
+
+// PoP: generate a fresh Ed25519 keypair for this lifecycle run.
+// Canonical message must match shared/crypto/pop.ts — update in lockstep.
+function generateKeypair() {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const pubJwk = publicKey.export({ format: 'jwk' });
+  const privJwk = privateKey.export({ format: 'jwk' });
+  return { publicKey: pubJwk.x, privateKey: privJwk.d };
+}
+
+function signRegistration(privBase64url, pubBase64url, timestampMs) {
+  const priv = createPrivateKey({
+    key: { kty: 'OKP', crv: 'Ed25519', d: privBase64url, x: '' },
+    format: 'jwk',
+  });
+  const msg = Buffer.from(`register:v1:${pubBase64url}:${timestampMs}`, 'utf8');
+  return nodeSign(null, msg, priv).toString('base64url');
+}
 
 // Test skills: mix of clean, warned, and blocked
 const TEST_SKILLS = {
@@ -66,8 +86,13 @@ async function run() {
   // ── Step 1: Register ──
   step(1, 'Register agent with skills');
   try {
+    const keypair = generateKeypair();
+    const timestampMs = Date.now();
+    const signature = signRegistration(keypair.privateKey, keypair.publicKey, timestampMs);
     const result = await post('/api/v1/register', {
-      public_key: `test_harness_${Date.now()}_abcdefghijklmnopqrstuvwxyz1234`,
+      public_key: keypair.publicKey,
+      registration_timestamp_ms: timestampMs,
+      signature,
       provider_class: 'anthropic',
       name: `test-harness-${Date.now()}`,
       composition: {

@@ -8,7 +8,10 @@ import type {
   SkillVersionHistory,
   SkillSearchResult,
   SkillNotification,
+  UnsignedRegistrationRequest,
+  AgentKeypair,
 } from './types.js';
+import { generateAgentKeypair, signRegistrationRequest } from './pop.js';
 
 export type {
   RegistrationRequest, RegistrationResponse, InteractionReceipt,
@@ -18,7 +21,10 @@ export type {
   SkillCatalogEntry, SkillVersionEntry, SkillVersionHistory, SkillSearchResult,
   SkillNotification,
   ChainAnalysis, DirectionalPair, RetryOverhead, PopulationDrift,
+  UnsignedRegistrationRequest, AgentKeypair,
 } from './types.js';
+
+export { generateAgentKeypair, signRegistrationRequest } from './pop.js';
 
 export interface ACRClientConfig {
   apiUrl?: string;
@@ -53,8 +59,39 @@ export class ACRClient {
     return data as T;
   }
 
+  /**
+   * Register an agent. The request must already carry a valid
+   * Ed25519 `signature` over `register:v1:${public_key}:${registration_timestamp_ms}`
+   * — call `signRegistrationRequest(unsigned, keypair)` first, or use
+   * the `registerWithKeypair` convenience below.
+   */
   async register(request: RegistrationRequest): Promise<RegistrationResponse> {
     return this.post('/api/v1/register', request);
+  }
+
+  /**
+   * Convenience wrapper: sign `unsigned` with `keypair` and POST it.
+   * The keypair's `publicKey` wins if the unsigned body's public_key
+   * (if any) disagrees — mismatched keys fail server-side verification.
+   */
+  async registerWithKeypair(
+    unsigned: UnsignedRegistrationRequest,
+    keypair: AgentKeypair,
+  ): Promise<RegistrationResponse> {
+    return this.register(signRegistrationRequest(unsigned, keypair));
+  }
+
+  /**
+   * Generate a fresh Ed25519 keypair, register with it, and return
+   * both the keypair (for the caller to persist) and the server response.
+   * Use when onboarding a brand-new agent that has no persisted identity.
+   */
+  async registerNewAgent(
+    unsigned: UnsignedRegistrationRequest,
+  ): Promise<{ keypair: AgentKeypair; response: RegistrationResponse }> {
+    const keypair = generateAgentKeypair();
+    const response = await this.registerWithKeypair(unsigned, keypair);
+    return { keypair, response };
   }
 
   async submitReceipt(receipt: Omit<InteractionReceipt, 'receipt_id'>): Promise<{ accepted: number; receipt_ids: string[] }> {
