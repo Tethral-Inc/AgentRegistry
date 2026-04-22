@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
+import { ensureRegistered, getAgentId } from '../state.js';
 import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import type { CorrelationWindow } from '../middleware/correlation-window.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 /**
  * Resolve an agent id for this call, transparently retrying registration
@@ -148,9 +149,9 @@ export function logInteractionTool(
         if (params.data_shape) categories.data_shape = params.data_shape;
         if (params.criticality) categories.criticality = params.criticality;
 
-        const res = await fetch(`${apiUrl}/api/v1/receipts`, {
+        const res = await fetchAuthed(`${apiUrl}/api/v1/receipts`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             emitter: {
               agent_id: id,

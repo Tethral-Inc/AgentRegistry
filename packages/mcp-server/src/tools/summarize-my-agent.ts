@@ -2,13 +2,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { summarizeNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
 async function fetchJSON(url: string): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(url, { headers: getAuthHeaders() });
+    const res = await fetchAuthed(url);
     if (!res.ok) return null;
     return await res.json() as Record<string, unknown>;
   } catch {

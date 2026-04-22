@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function searchSkillsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -26,7 +27,7 @@ export function searchSkillsTool(server: McpServer, apiUrl: string) {
         if (min_anomaly_signals != null) params.set('min_anomaly_signals', String(min_anomaly_signals));
         if (limit) params.set('limit', String(limit));
 
-        const res = await fetch(`${apiUrl}/api/v1/skill-catalog/search?${params}`);
+        const res = await fetchAuthed(`${apiUrl}/api/v1/skill-catalog/search?${params}`);
         const data = await res.json() as {
           skills: Array<{
             skill_name: string;

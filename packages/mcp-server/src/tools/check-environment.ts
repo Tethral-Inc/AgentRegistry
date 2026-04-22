@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolverUrl: string) {
   server.registerTool(
@@ -11,8 +12,11 @@ export function checkEnvironmentTool(server: McpServer, apiUrl: string, resolver
     async () => {
       try {
         const [threatsRes, healthRes] = await Promise.all([
+          // Resolver is public / unauthed — stays on raw fetch.
           fetch(`${resolverUrl}/v1/threats/active`),
-          fetch(`${apiUrl}/api/v1/health`),
+          // Health endpoint routes through fetchAuthed for consistency;
+          // auth is optional here but never a liability.
+          fetchAuthed(`${apiUrl}/api/v1/health`),
         ]);
 
         const threats = await threatsRes.json();

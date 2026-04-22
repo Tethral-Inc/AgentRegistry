@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 type DeclaredUsed = { kind: string; id: string; name?: string; target: string; interaction_count: number };
 type DeclaredUnused = { kind: string; id: string; name?: string; target: string };
@@ -45,7 +45,7 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
       if (window_days) url.searchParams.set('window_days', String(window_days));
 
       try {
-        const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+        const res = await fetchAuthed(url.toString());
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Composition diff error: ${errText}` }] };

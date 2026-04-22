@@ -1,7 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
+import { ensureRegistered, getAgentId } from '../state.js';
 import { RegistrationFailedError } from '../session-state.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function acknowledgeThreatTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -31,9 +32,9 @@ export function acknowledgeThreatTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const res = await fetch(`${apiUrl}/api/v1/agent/${resolvedId}/notifications/${notification_id}/acknowledge`, {
+        const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${resolvedId}/notifications/${notification_id}/acknowledge`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reason }),
         });
 

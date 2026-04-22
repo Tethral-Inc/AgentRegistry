@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getApiKey, getAuthHeaders } from '../state.js';
 import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 import { myAgentNextAction, renderNextActionFooter } from '../utils/next-action.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
@@ -70,7 +71,7 @@ export function getMyAgentTool(server: McpServer) {
       try {
         // Fetch agent record + health data in parallel
         const [agentRes, frictionData, notifData, coverageData, profileData] = await Promise.all([
-          fetch(`${apiUrl}/api/v1/agent/${encodeURIComponent(id)}`, { headers: authHeaders }),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${encodeURIComponent(id)}`),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/friction?scope=week`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/coverage`, authHeaders),

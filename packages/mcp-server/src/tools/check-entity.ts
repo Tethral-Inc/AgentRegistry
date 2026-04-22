@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: string) {
   server.registerTool(
@@ -36,7 +37,7 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
             // Try to find similar skills via catalog search
             let similarText = '';
             try {
-              const searchRes = await fetch(`${apiUrl}/api/v1/skill-catalog/search?q=${encodeURIComponent(entity_id.slice(0, 16))}&limit=3`);
+              const searchRes = await fetchAuthed(`${apiUrl}/api/v1/skill-catalog/search?q=${encodeURIComponent(entity_id.slice(0, 16))}&limit=3`);
               if (searchRes.ok) {
                 const searchData = await searchRes.json() as { skills: Array<{ skill_name: string; skill_source: string; description?: string }> };
                 if (searchData.skills.length > 0) {
@@ -104,12 +105,34 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
           if (!data.found) {
             return { content: [{ type: 'text' as const, text: `Agent ${entity_id} not found in the network.` }] };
           }
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Agent found.\n\nStatus: ${data.status}\nProvider: ${data.provider_class}\nRegistered: ${data.registered}\nLast active: ${data.last_active}`,
-            }],
-          };
+
+          // Agent signals — raw observed data. Same shape as the skill
+          // branch: identity header, then a `── Network signals ──`
+          // block with raw counts. No synthetic risk/health verdict.
+          let text = `Agent found: ${entity_id}\n`;
+          if (data.name) text += `Name: ${data.name}\n`;
+          if (data.provider_class) text += `Provider: ${data.provider_class}\n`;
+          if (data.status) text += `Status: ${data.status}\n`;
+          if (data.registered) text += `Registered: ${data.registered}\n`;
+          if (data.last_active) text += `Last active: ${data.last_active}\n`;
+
+          text += `\n── Network signals ──\n`;
+          if (data.interaction_count != null) text += `  Total interactions logged: ${data.interaction_count}\n`;
+          if (data.skill_count != null) text += `  Skills in composition: ${data.skill_count}\n`;
+          if (data.system_count != null) text += `  Target systems touched: ${data.system_count}\n`;
+          if (data.failure_rate != null) text += `  Failure rate: ${(data.failure_rate * 100).toFixed(1)}%\n`;
+          if (data.anomaly_signal_count != null) text += `  Anomaly signals reported: ${data.anomaly_signal_count}\n`;
+          if (data.anomaly_rate != null) text += `  Anomaly rate: ${(data.anomaly_rate * 100).toFixed(1)}%\n`;
+
+          // Provenance — if the resolver surfaces a composition hash or
+          // version, show it so the operator can spot drift. Descriptive,
+          // no "stale/fresh" verdict.
+          if (data.composition_hash) {
+            text += `\n── Composition ──\n  Hash: ${String(data.composition_hash).slice(0, 16)}...\n`;
+            if (data.composition_updated_at) text += `  Updated: ${data.composition_updated_at}\n`;
+          }
+
+          return { content: [{ type: 'text' as const, text }] };
         }
 
         // system
@@ -119,14 +142,24 @@ export function checkEntityTool(server: McpServer, apiUrl: string, resolverUrl: 
         // Raw network signals for the target system. No synthetic
         // health_status label — client reads the rates and decides.
         let sysText = `System found: ${entity_id}\n`;
-        sysText += `Type: ${data.system_type}\n\n`;
-        sysText += `── Network signals ──\n`;
+        if (data.system_type) sysText += `Type: ${data.system_type}\n`;
+        if (data.first_seen) sysText += `First seen: ${data.first_seen}\n`;
+        if (data.last_active) sysText += `Last active: ${data.last_active}\n`;
+
+        sysText += `\n── Network signals ──\n`;
         sysText += `  Total interactions observed: ${data.total_interactions ?? 0}\n`;
         sysText += `  Distinct agents using this system: ${data.distinct_agents ?? 0}\n`;
         sysText += `  Failure rate: ${((data.failure_rate ?? 0) * 100).toFixed(1)}%\n`;
         sysText += `  Anomaly rate: ${((data.anomaly_rate ?? 0) * 100).toFixed(1)}%\n`;
         if (data.median_duration_ms != null) sysText += `  Median duration: ${data.median_duration_ms}ms\n`;
         if (data.p95_duration_ms != null) sysText += `  p95 duration: ${data.p95_duration_ms}ms\n`;
+
+        // Error-code distribution — parity with skill's anomaly pattern
+        // categories. Raw tags, no severity.
+        if (data.top_error_codes && Array.isArray(data.top_error_codes) && data.top_error_codes.length > 0) {
+          sysText += `  Top error codes: ${data.top_error_codes.join(', ')}\n`;
+        }
+
         return {
           content: [{
             type: 'text' as const,

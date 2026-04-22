@@ -1,7 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
+import { ensureRegistered, getAgentId } from '../state.js';
 import { RegistrationFailedError } from '../session-state.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function getNotificationsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -29,12 +30,10 @@ export function getNotificationsTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const authHeaders = getAuthHeaders();
-
         // Fetch notifications and profile in parallel to detect empty composition
         const [notifRes, profileRes] = await Promise.all([
-          fetch(`${apiUrl}/api/v1/agent/${resolvedId}/notifications?read=false`, { headers: authHeaders }),
-          fetch(`${apiUrl}/api/v1/agent/${resolvedId}/profile`, { headers: authHeaders }).catch(() => null),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${resolvedId}/notifications?read=false`),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${resolvedId}/profile`).catch(() => null),
         ]);
 
         const data = await notifRes.json() as {

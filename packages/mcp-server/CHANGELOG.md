@@ -1,3 +1,42 @@
+## 2.5.3 (2026-04-22)
+
+Auth harmonization across every tier-gated tool. Previously the resolver
+and network-lookup endpoints (`check_entity`, `check_environment`,
+`get_skill_versions`, `get_skill_tracker`, `search_skills`) called their
+ACR API paths with a bare `fetch(url)` — the server's tier gates saw an
+anonymous request and returned the stripped view. The agent's API key
+was sitting right there in session state; it just wasn't being sent.
+Fixed, and guarded by CI so it can't drift back.
+
+Release D of the v2.5.0 – v2.9.0 roadmap.
+
+- **`utils/fetch-authed.ts`** is the one place API auth happens. A thin
+  wrapper over `fetch` that merges `getAuthHeaders()` from the active
+  session with any caller-supplied headers, returns the raw `Response`,
+  and lets callers keep their existing `res.ok` / `res.json()` patterns.
+  Every `${apiUrl}/api/v1/...` call in `src/tools/` now routes through
+  it — lens tools, registry tools, tier-gated network lookups, POST
+  endpoints (`log_interaction`, `update_composition`,
+  `acknowledge_threat`), and `get_composition_diff`. The resolver
+  (`${resolverUrl}/v1/...`) stays unauthed (public by design) and so do
+  the two intentional exceptions: `register_agent`'s pre-registration
+  POST and `get_network_status`'s network-wide rollup.
+- **CI grep-guard** (`tests/unit/no-bare-fetch-api.test.ts`). Scans
+  every `src/tools/*.ts` for `fetch(`-shaped lines that reference
+  `/api/v1/` and fails the build if any skip `fetchAuthed`. Explicit
+  allowlist for the two public endpoints. A second sanity-check
+  assertion confirms the scraper actually finds `fetchAuthed` calls —
+  so a broken regex can't silently pass.
+- **`check_entity` agent + system render parity with skill**. The
+  agent branch now emits the same `── Network signals ──` block as the
+  skill branch (interaction count, skill count, system count, failure
+  rate, anomaly rate, optional composition hash) instead of the old
+  four-line status sketch. The system branch adds first-seen /
+  last-active and a top-error-codes line, parity with the skill's
+  anomaly-pattern categories.
+
+No schema changes. Rebuild and republish only.
+
 ## 2.5.2 (2026-04-22)
 
 Verdicts show their math; descriptions match behavior. Operators no

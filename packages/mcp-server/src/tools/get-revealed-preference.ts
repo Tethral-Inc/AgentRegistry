@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAgentName, getAuthHeaders } from '../state.js';
+import { getAgentName } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 const TOOL_DESCRIPTION = `Query the revealed-preference lens: what the agent *declared* in its composition vs what it *actually called* during the window. Only ACR can see both — so this is the view no self-report and no server log can produce alone.
 
@@ -47,9 +48,7 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
           scope: scope ?? 'yesterday',
           source: source ?? 'agent',
         });
-        const res = await fetch(`${apiUrl}/api/v1/agent/${id}/revealed-preference?${params}`, {
-          headers: getAuthHeaders(),
-        });
+        const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${id}/revealed-preference?${params}`);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Revealed-preference error: ${errText}` }] };

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { confidence } from '../utils/confidence.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -20,7 +21,7 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
       try {
         // Deep-dive mode
         if (skill_hash) {
-          const res = await fetch(`${apiUrl}/api/v1/network/skills/${encodeURIComponent(skill_hash)}`);
+          const res = await fetchAuthed(`${apiUrl}/api/v1/network/skills/${encodeURIComponent(skill_hash)}`);
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             return { content: [{ type: 'text' as const, text: `Error: ${(data as Record<string, unknown>).message ?? 'Skill not found'}` }] };
@@ -35,7 +36,7 @@ export function getSkillTrackerTool(server: McpServer, apiUrl: string) {
         if (sort) params.set('sort', sort);
         if (limit) params.set('limit', String(limit));
 
-        const res = await fetch(`${apiUrl}/api/v1/network/skills?${params}`);
+        const res = await fetchAuthed(`${apiUrl}/api/v1/network/skills?${params}`);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Skill tracker error: ${errText}` }] };

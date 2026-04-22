@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAgentName, getAuthHeaders } from '../state.js';
+import { getAgentName } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 const TOOL_DESCRIPTION = `Query the compensation-signatures lens: how stereotyped is your chain-shape behavior, and which chain patterns dominate vs which are exploratory?
 
@@ -43,10 +44,7 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
 
       try {
         const params = new URLSearchParams({ window: window ?? 'week' });
-        const res = await fetch(
-          `${apiUrl}/api/v1/agent/${id}/compensation?${params}`,
-          { headers: getAuthHeaders() },
-        );
+        const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${id}/compensation?${params}`);
         if (!res.ok) {
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Compensation error: ${errText}` }] };

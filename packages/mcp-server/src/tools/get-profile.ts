@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 
@@ -31,7 +32,7 @@ export function getProfileTool(server: McpServer, apiUrl: string) {
       try {
         const authHeaders = getAuthHeaders();
         const [res, unreadCount] = await Promise.all([
-          fetch(`${apiUrl}/api/v1/agent/${id}/profile`, { headers: authHeaders }),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${id}/profile`),
           getUnreadNotificationCount(apiUrl, id, authHeaders),
         ]);
         if (!res.ok) {

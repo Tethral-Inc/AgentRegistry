@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 
 export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolverUrl: string) {
   server.registerTool(
@@ -56,7 +57,7 @@ export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolver
         // We need the skill_id, which we can get by searching
         if (skillData.skill_name) {
           try {
-            const searchRes = await fetch(
+            const searchRes = await fetchAuthed(
               `${apiUrl}/api/v1/skill-catalog/search?q=${encodeURIComponent(skillData.skill_name)}&limit=1`,
             );
             const searchData = await searchRes.json() as {
@@ -64,7 +65,7 @@ export function getSkillVersionsTool(server: McpServer, apiUrl: string, resolver
             };
 
             if (searchData.skills.length > 0) {
-              const versionsRes = await fetch(
+              const versionsRes = await fetchAuthed(
                 `${apiUrl}/api/v1/skill-catalog/${searchData.skills[0]!.skill_id}/versions`,
               );
               const versionsData = await versionsRes.json() as {

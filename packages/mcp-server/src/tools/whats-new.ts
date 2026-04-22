@@ -1,9 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAgentName, getAuthHeaders } from '../state.js';
+import { getAgentName } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
+import { fetchAuthed } from '../utils/fetch-authed.js';
 import { renderNotificationHeader } from '../utils/notification-header.js';
 import { whatsNewNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
@@ -32,15 +33,14 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
         return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
       }
 
-      const authHeaders = getAuthHeaders();
       displayName = agent_name || getAgentName() || displayName;
 
       // Fetch all four endpoints in parallel
       const [yesterdayRes, weekTrendRes, notifRes, todayRes] = await Promise.allSettled([
-        fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=yesterday`, { headers: authHeaders }),
-        fetch(`${apiUrl}/api/v1/agent/${id}/trend?scope=week`, { headers: authHeaders }),
-        fetch(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`, { headers: authHeaders }),
-        fetch(`${apiUrl}/api/v1/agent/${id}/friction?scope=day`, { headers: authHeaders }),
+        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/friction?scope=yesterday`),
+        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/trend?scope=week`),
+        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`),
+        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/friction?scope=day`),
       ]);
 
       async function safeJson(settled: PromiseSettledResult<Response>): Promise<Record<string, unknown> | null> {
