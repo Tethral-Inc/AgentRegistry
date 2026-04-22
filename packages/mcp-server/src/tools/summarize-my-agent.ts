@@ -6,6 +6,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { summarizeNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { isThinSample, renderCohortBaselineHeader } from '../utils/cohort-baseline.js';
 
 async function fetchJSON(url: string): Promise<Record<string, unknown> | null> {
   try {
@@ -52,7 +53,17 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
 
       const displayName = (profile?.name as string) || agent_name || getAgentName() || resolvedDisplayName;
 
+      // Thin-sample framing: if the agent is new (few/no receipts),
+      // prepend cohort typical performance so the summary isn't a wall
+      // of "0 this, 0 that". We decide off total_receipts from profile,
+      // or fall back to zero if the profile didn't load.
+      const totalReceipts = typeof (profile?.counts as Record<string, unknown> | undefined)?.total_receipts === 'number'
+        ? (profile!.counts as Record<string, unknown>).total_receipts as number
+        : 0;
       let text = renderNotificationHeader(unreadCount);
+      if (isThinSample(totalReceipts)) {
+        text += await renderCohortBaselineHeader(apiUrl);
+      }
       text += `Agent Summary: ${displayName}\n${'='.repeat(40)}\n`;
 
       // Profile section

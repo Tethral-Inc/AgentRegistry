@@ -30,6 +30,17 @@ const DEFAULT_TARGETS: Array<{ system_id: string; url: string }> = [
   { system_id: 'api:anthropic.com', url: 'https://api.anthropic.com/' },
   { system_id: 'api:openai.com', url: 'https://api.openai.com/' },
   { system_id: 'api:github.com', url: 'https://api.github.com/' },
+  // Google's public Gemini endpoint — HEAD returns 404/405 but the TCP
+  // round-trip is what we're measuring.
+  { system_id: 'api:googleapis.com', url: 'https://generativelanguage.googleapis.com/' },
+  // AWS Bedrock runtime region endpoint. us-east-1 chosen because it's
+  // the most common default; users can override via ACR_ENV_PROBE_TARGETS
+  // if they run a different region.
+  { system_id: 'api:bedrock.amazonaws.com', url: 'https://bedrock-runtime.us-east-1.amazonaws.com/' },
+  // Azure OpenAI shared endpoint. Resolves globally; the underlying host
+  // varies by subscription but the shared `azure.com` front-door is
+  // reachable for a baseline latency measurement.
+  { system_id: 'api:azure.com', url: 'https://management.azure.com/' },
 ];
 
 const PROBE_TIMEOUT_MS = 3000;

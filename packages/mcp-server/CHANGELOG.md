@@ -1,3 +1,47 @@
+## 2.6.0 (2026-04-22)
+
+First-value onboarding. A brand-new MCP install against a brand-new
+agent used to land on "pre-signal — thin sample" for the first ~10
+interactions. Every lens was empty, every verdict was withheld, and
+the operator saw a black hole with no framing. Now the first call
+renders the cohort's typical performance — keyed on the caller's
+`provider_class` — so there's always something useful to look at.
+
+Release E of the v2.5.0 – v2.9.0 roadmap.
+
+- **New tool `orient_me`.** State-aware router: reads profile +
+  coverage + notifications and returns the single most useful next step
+  for the caller's current state (NEW / SOME_DATA / STEADY). Unread
+  signals win over everything; otherwise NEW gets "log your first
+  interaction + here's cohort typical performance," SOME_DATA gets
+  "keep logging, N receipts to go," STEADY gets routed to the lens
+  that fits their current shape. Replaces `getting_started` as the
+  recommended front-door tool (the old one stays registered for now;
+  it'll be absorbed in 2.7.0).
+- **Server-side cohort baseline endpoint.**
+  `GET /api/v1/baselines/cohort?provider_class=...` returns typical
+  median / p95 / failure / anomaly per target across the caller's
+  provider-class cohort over the last 7 days (configurable up to 30).
+  Public — no agent ID, no API key — because the thin-sample prepend
+  runs before the agent has activity of its own. Privacy: `cohort_size
+  >= 3` enforced at both the cohort and per-target level; environmental
+  probe receipts excluded by default so synthetic baselines don't
+  dilute "what real agent calls look like."
+- **Thin-sample prepend across lenses.** `get_friction_report` and
+  `summarize_my_agent` now prepend a "Your cohort's typical performance
+  —" section whenever the agent's own sample is below 10 interactions.
+  Framing, not substitution: the thin own-data section still renders
+  underneath. Baseline failures are non-fatal — a missing cohort never
+  blocks a lens.
+- **Environmental probe coverage doubled.** `probes/environmental.ts`
+  default targets now include Google (Gemini), AWS Bedrock, and Azure
+  alongside the original Anthropic / OpenAI / GitHub. Six provider
+  families instead of three, so the baseline latency picture covers
+  the full modern model-provider footprint. Users can still override
+  via `ACR_ENV_PROBE_TARGETS`.
+
+No schema changes. Rebuild and republish only.
+
 ## 2.5.3 (2026-04-22)
 
 Auth harmonization across every tier-gated tool. Previously the resolver

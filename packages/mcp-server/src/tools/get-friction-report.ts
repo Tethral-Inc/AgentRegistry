@@ -7,6 +7,7 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { frictionNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { isThinSample, renderCohortBaselineHeader } from '../utils/cohort-baseline.js';
 import {
   LOCAL_MIN_INTERACTIONS,
   hasEnoughSampleForVerdict,
@@ -77,6 +78,9 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
 
         if (s.total_interactions === 0) {
           let emptyText = renderNotificationHeader(unreadCount);
+          // Even with zero interactions, the cohort baseline gives a
+          // fresh agent something to look at on first call.
+          emptyText += await renderCohortBaselineHeader(apiUrl);
           emptyText += `No interactions recorded for ${displayName} (scope "${scope}", source "${source ?? 'agent'}"). Call log_interaction after each external tool call or API request to populate your friction data. If you're only emitting server self-log, pass source='all' or source='server' to see those.`;
           emptyText += renderNextActionFooter(frictionNextAction({ total_interactions: 0 }));
           emptyText += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
@@ -84,6 +88,13 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         }
 
         let text = renderNotificationHeader(unreadCount);
+        // Thin-sample prepend: if the agent's own data is below the
+        // threshold, show cohort typical performance so the operator
+        // has framing before the own numbers land. Their thin own-data
+        // section follows — this is framing, not a substitute.
+        if (isThinSample(s.total_interactions)) {
+          text += await renderCohortBaselineHeader(apiUrl);
+        }
         text += `Friction Report for ${displayName} (${scope})\n`;
         text += `Agent ID: ${data.agent_id}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;

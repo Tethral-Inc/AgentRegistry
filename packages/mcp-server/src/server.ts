@@ -28,6 +28,7 @@ import { getFailureRegistryTool } from './tools/get-failure-registry.js';
 import { getTrendTool } from './tools/get-trend.js';
 import { summarizeMyAgentTool } from './tools/summarize-my-agent.js';
 import { gettingStartedTool } from './tools/getting-started.js';
+import { orientMeTool } from './tools/orient-me.js';
 import { whatsNewTool } from './tools/whats-new.js';
 import { getCompositionDiffTool } from './tools/get-composition-diff.js';
 import { withSelfLog } from './middleware/self-log.js';
@@ -148,6 +149,7 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getTrendTool(server, apiUrl);
   summarizeMyAgentTool(server, apiUrl);
   gettingStartedTool(server, apiUrl);
+  orientMeTool(server, apiUrl);
   whatsNewTool(server, apiUrl);
   getCompositionDiffTool(server, apiUrl);
 

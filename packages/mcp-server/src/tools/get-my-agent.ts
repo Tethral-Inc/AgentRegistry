@@ -16,7 +16,7 @@ const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nf
 const TOOL_MENU = `
 ── Available Tools ──
   Your agent:    get_my_agent · register_agent · update_composition · configure_deep_composition
-  Onboarding:    getting_started · whats_new · summarize_my_agent
+  Onboarding:    orient_me · getting_started · whats_new · summarize_my_agent
   Logging:       log_interaction
   Your profile:  get_profile · get_friction_report · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_revealed_preference · get_compensation_signatures · get_composition_diff
   Notifications: get_notifications · acknowledge_threat
