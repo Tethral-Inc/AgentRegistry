@@ -1,3 +1,73 @@
+## 2.8.0 (2026-04-22)
+
+Proactive pattern surfacing. The lens suite (friction, coverage,
+stable corridors, failure registry, trend, revealed-preference,
+compensation signatures, composition diff) is all pull: operators
+have to ask before ACR tells them anything. 2.8.0 flips one narrow
+slice to push — a "Things we noticed" section on `get_my_agent` and
+`whats_new` that renders server-computed patterns above a confidence
+threshold, with a dismiss path so operator decisions stick.
+
+Release J of the v2.5.0 – v2.9.0 roadmap.
+
+- **Four named patterns**, each a pure function over a pre-built
+  `DetectionInput`:
+  - `composition_staleness` — composition ≥4 days old and at least
+    one target with ≥3 calls that isn't in the declared set.
+    Confidence scales 0.55 → 0.70 → 0.85 as 1 / 2 / 3+ undeclared
+    targets appear.
+  - `retry_burst` — a target with ≥10 calls, ≥5 retries, and ≥30%
+    retry share. Confidence scales 0.65 / 0.80 / 0.92 at 30–50% /
+    50–70% / ≥70%. Reports the worst offender when multiple qualify.
+  - `lens_call_spike` — current-period lens calls ≥2× the prior
+    period, with absolute floors (this ≥5, prior ≥3) so a quiet
+    agent's first real use doesn't fire. Confidence 0.65 / 0.80 /
+    0.90 at 2–3× / 3–5× / ≥5×.
+  - `skill_version_drift` — any declared skill whose `skill_hash`
+    doesn't match `current_hash_in_network`. Fires at 0.80; null
+    network hashes are treated as "unknown, don't fire" so
+    private/fresh skills don't false-positive.
+- **Server-side detection cron.** New `/api/cron/pattern-detection`
+  handler (hourly at `:07`) runs each detector against active agents
+  from the last 7 days, UPSERTs matches into the new
+  `agent_patterns` table, and deletes non-dismissed rows for
+  pattern types that didn't fire this pass. Dismissed rows are
+  always preserved so the cron can't resurrect a pattern the
+  operator already told us to shut up about. Runs in
+  `@acr/intelligence`, isolated from the MCP tool-call path so
+  detection latency never reaches the operator.
+- **`agent_patterns` table** (migration 000020) with UNIQUE
+  (agent_id, pattern_type), a 30-day default expiry, and
+  `dismissed_at` / `dismiss_reason` columns. Two indexes cover the
+  only read paths (active by agent, expired for cleanup).
+- **Surface threshold: 0.6.** Detectors compute raw confidence; the
+  render layer filters at 0.6 and caps the section at 3 lines. Raw
+  rows above 0.55 still persist so a dashboard view can see the
+  sub-threshold signal.
+- **"Things we noticed" rendering** on `get_my_agent` (between
+  Health and the tool menu) and `whats_new` (between "Degraded this
+  week" and "Today so far"). Empty section renders as an empty
+  string — zero clutter on the common case. Each line carries a
+  dismiss footer with the exact tool call: `dismiss_pattern
+  (pattern_type=...)`.
+- **New `dismiss_pattern` MCP tool** — enum-gated on the four
+  pattern types, 404-graceful (treats "already dismissed" as a
+  clean no-op), optional `reason` for future calibration signal.
+  Response follows the Phase H mutation-diff convention
+  (`state: active → dismissed`, truncated IDs).
+- **Silent-failure fetch pattern** for `fetchActivePatterns`. A
+  `/patterns` endpoint hiccup renders as "nothing to notice" in the
+  enclosing tool — patterns are additive context, never a blocker
+  for the friction/coverage/health data that `get_my_agent` and
+  `whats_new` are actually about.
+- **Unit tests** (`tests/unit/pattern-detectors.test.ts`, 29 tests)
+  cover each detector's fire / don't-fire gates, confidence
+  boundaries, and metadata shape. Every detector is a pure function
+  over `DetectionInput`, so tests build the input in-line and
+  assert on the single return value — no DB fixtures, no mocks.
+- **Tool count: 28 → 29.** `dismiss_pattern` slots into a new
+  "Patterns" group in the `get_my_agent` tool menu.
+
 ## 2.7.2 (2026-04-22)
 
 Config / env-var / background-work hygiene. Three small things were

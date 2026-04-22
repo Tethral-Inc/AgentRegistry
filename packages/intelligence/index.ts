@@ -9,3 +9,4 @@ export { handler as agentExpiration } from './maintenance/agent-expiration.js';
 export { handler as dataArchival } from './maintenance/data-archival.js';
 export { handler as agentBaselineCompute } from './anomaly/agent-baseline-compute.js';
 export { handler as agentAnomalyDetect } from './anomaly/agent-anomaly-detect.js';
+export { handler as patternDetection } from './patterns/index.js';

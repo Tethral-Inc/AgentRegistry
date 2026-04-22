@@ -14,7 +14,8 @@
     { "path": "/api/cron/skill-threat-update", "schedule": "*/30 * * * *" },
     { "path": "/api/cron/friction-baseline-compute", "schedule": "15 2 * * *" },
     { "path": "/api/cron/agent-expiration", "schedule": "30 3 * * *" },
-    { "path": "/api/cron/data-archival", "schedule": "45 4 * * *" }
+    { "path": "/api/cron/data-archival", "schedule": "45 4 * * *" },
+    { "path": "/api/cron/pattern-detection", "schedule": "7 * * * *" }
   ],
   "rewrites": [
     { "source": "/lookup", "destination": "/lookup.html" },

@@ -15,6 +15,7 @@ import {
   dataArchival,
   agentBaselineCompute,
   agentAnomalyDetect,
+  patternDetection,
 } from '@acr/intelligence';
 
 const log = createLogger({ name: 'cron' });
@@ -58,5 +59,10 @@ app.get('/cron/data-archival', wrapJob('data-archival', dataArchival));
 // detection runs on the schedule the external caller picks (15 min).
 app.get('/cron/agent-baseline-compute', wrapJob('agent-baseline-compute', agentBaselineCompute));
 app.get('/cron/agent-anomaly-detect', wrapJob('agent-anomaly-detect', agentAnomalyDetect));
+
+// Phase J: Proactive pattern surfacing. Detects 4 named patterns per
+// active agent hourly; MCP tools read from `agent_patterns` and render
+// a "Things we noticed" section.
+app.get('/cron/pattern-detection', wrapJob('pattern-detection', patternDetection));
 
 export { app as cronRoute };

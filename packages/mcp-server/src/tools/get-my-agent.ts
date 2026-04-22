@@ -4,6 +4,7 @@ import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { myAgentNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { fetchActivePatterns, renderPatternsSection } from '../utils/patterns.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
 
@@ -19,6 +20,7 @@ const TOOL_MENU = `
   Onboarding:    orient_me · whats_new · summarize_my_agent · getting_started (deprecated)
   Logging:       log_interaction
   Your profile:  get_profile · get_friction_report · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_revealed_preference · get_compensation_signatures · get_composition_diff
+  Patterns:      dismiss_pattern
   Notifications: get_notifications · acknowledge_signal · acknowledge_threat (deprecated)
   Network:       get_network_status · check_environment · check_entity
   Registry:      search_skills · get_skill_tracker · get_skill_versions`.trimStart();
@@ -69,13 +71,16 @@ export function getMyAgentTool(server: McpServer) {
       const authHeaders = getAuthHeaders();
 
       try {
-        // Fetch agent record + health data in parallel
-        const [agentRes, frictionData, notifData, coverageData, profileData] = await Promise.all([
+        // Fetch agent record + health data + proactive patterns in parallel.
+        // Patterns are additive — a failure here renders as "no patterns" without
+        // affecting the rest of the health snapshot.
+        const [agentRes, frictionData, notifData, coverageData, profileData, patterns] = await Promise.all([
           fetchAuthed(`${apiUrl}/api/v1/agent/${encodeURIComponent(id)}`),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/friction?scope=week`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/coverage`, authHeaders),
           fetchJsonSafe(`${apiUrl}/api/v1/agent/${id}/profile`, authHeaders),
+          fetchActivePatterns(apiUrl, id, authHeaders),
         ]);
 
         const agent = agentRes.ok
@@ -164,6 +169,12 @@ export function getMyAgentTool(server: McpServer) {
             text += `  ${f}\n`;
           }
         }
+
+        // Things-we-noticed: renders only if the pattern-detection cron
+        // wrote any active patterns above the surface threshold. Empty
+        // helper returns '' so the divider doesn't bleed through on the
+        // common case of nothing to notice.
+        text += renderPatternsSection(patterns);
 
         text += `\n${TOOL_MENU}\n`;
 

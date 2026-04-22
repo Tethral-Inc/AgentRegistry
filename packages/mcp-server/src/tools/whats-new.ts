@@ -8,6 +8,8 @@ import { fetchAuthed } from '../utils/fetch-authed.js';
 import { renderNotificationHeader } from '../utils/notification-header.js';
 import { whatsNewNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import { fetchActivePatterns, renderPatternsSection } from '../utils/patterns.js';
+import { getAuthHeaders } from '../state.js';
 
 export function whatsNewTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -35,13 +37,21 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
 
       displayName = agent_name || getAgentName() || displayName;
 
-      // Fetch all four endpoints in parallel
-      const [yesterdayRes, weekTrendRes, notifRes, todayRes] = await Promise.allSettled([
-        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/friction?scope=yesterday`),
-        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/trend?scope=week`),
-        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`),
-        fetchAuthed(`${apiUrl}/api/v1/agent/${id}/friction?scope=day`),
+      // Fetch the four existing endpoints alongside patterns in one
+      // parallel batch. fetchActivePatterns returns [] on any failure,
+      // so a backend hiccup on /patterns renders as "nothing to notice"
+      // without affecting the rest of whats_new.
+      const authHeaders = getAuthHeaders();
+      const [fetchResults, patterns] = await Promise.all([
+        Promise.allSettled([
+          fetchAuthed(`${apiUrl}/api/v1/agent/${id}/friction?scope=yesterday`),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${id}/trend?scope=week`),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${id}/notifications?read=false`),
+          fetchAuthed(`${apiUrl}/api/v1/agent/${id}/friction?scope=day`),
+        ]),
+        fetchActivePatterns(apiUrl, id, authHeaders),
       ]);
+      const [yesterdayRes, weekTrendRes, notifRes, todayRes] = fetchResults;
 
       async function safeJson(settled: PromiseSettledResult<Response>): Promise<Record<string, unknown> | null> {
         if (settled.status === 'rejected') return null;
@@ -115,6 +125,13 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
           }
         }
       }
+
+      // ── Things we noticed ── (proactive pattern surfacing).
+      // Slots above "Today so far" so it sits in the operator's
+      // investigation flow: "here's what degraded → here's what
+      // else we noticed → here's today's activity". Empty on the
+      // common case so it doesn't clutter the briefing.
+      text += renderPatternsSection(patterns);
 
       // ── Today so far ──
       text += `\n── Today so far ──\n`;
