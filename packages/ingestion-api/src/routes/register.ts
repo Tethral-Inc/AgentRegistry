@@ -5,6 +5,7 @@ import {
   generateAgentId,
   generateAgentName,
   computeCompositionHash,
+  extractCompositionComponentHashes,
   getSigningKeyPair,
   issueCredential,
   sha256,
@@ -35,11 +36,12 @@ app.post('/register', async (c) => {
   const agentId = generateAgentId(data.public_key, timestamp);
   const agentName = data.name ?? generateAgentName(data.provider_class, data.public_key);
 
-  // Compute composition hash from skill_hashes if provided
-  const componentHashes = data.composition?.skill_hashes ?? [];
-  const compositionHash = componentHashes.length > 0
-    ? computeCompositionHash(componentHashes)
-    : computeCompositionHash([]);
+  // Compute composition hash over every composition field the agent
+  // sent — flat legacy + rich nested + sub_components. Previously only
+  // `skill_hashes` was hashed, which meant rich-only compositions all
+  // collapsed to sha256('') and could not be distinguished.
+  const componentHashes = extractCompositionComponentHashes(data.composition ?? {});
+  const compositionHash = computeCompositionHash(componentHashes);
 
   // Issue JWT credential
   const { privateKey } = await getSigningKeyPair();
@@ -98,9 +100,6 @@ app.post('/register', async (c) => {
   // set composition_source.
   if (data.composition) {
     const source = data.composition_source ?? 'agent_reported';
-    const sourceCompositionHash = componentHashes.length > 0
-      ? compositionHash
-      : computeCompositionHash([]);
     await execute(
       `INSERT INTO agent_composition_sources (agent_id, source, composition, composition_hash, updated_at)
        VALUES ($1, $2, $3, $4, now())
@@ -112,7 +111,7 @@ app.post('/register', async (c) => {
         agentId,
         source,
         JSON.stringify(data.composition),
-        sourceCompositionHash,
+        compositionHash,
       ],
     ).catch((err) => {
       // Non-fatal: if the new table doesn't exist yet (migration hasn't
@@ -122,8 +121,13 @@ app.post('/register', async (c) => {
     });
   }
 
-  // Auto-subscribe agent to threat notifications for their installed skills
-  for (const hash of componentHashes) {
+  // Auto-subscribe agent to anomaly-signal notifications for their
+  // installed skills. Subscriptions are keyed on the real skill content
+  // hash (the thing other agents' skill_hashes match), not the derived
+  // identity hashes produced by `extractCompositionComponentHashes` —
+  // those would be synthetic per-agent values that never line up with
+  // anyone else's signal ingestion.
+  for (const hash of data.composition?.skill_hashes ?? []) {
     await execute(
       `INSERT INTO skill_subscriptions (agent_id, skill_hash, notify_on)
        VALUES ($1, $2, 'anomaly_signal') ON CONFLICT (agent_id, skill_hash) DO NOTHING`,

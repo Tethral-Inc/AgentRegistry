@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   CompositionUpdateSchema,
   computeCompositionHash,
+  extractCompositionComponentHashes,
   queryOne,
   execute,
   makeError,
@@ -45,8 +46,18 @@ app.post('/composition/update', async (c) => {
     return c.json(makeError('AGENT_NOT_FOUND', `Agent ${agent_id} not found`), 404);
   }
 
-  const componentHashes = composition.skill_hashes ?? [];
+  // Hash every composition field (flat + rich + sub_components), not
+  // just the legacy `skill_hashes`. Rich-only compositions previously
+  // collapsed to sha256('') — the helper fixes that while preserving
+  // backwards compatibility for callers who only send `skill_hashes`.
+  const componentHashes = extractCompositionComponentHashes(composition);
   const compositionHash = computeCompositionHash(componentHashes);
+
+  // Skill subscriptions key on real skill content hashes (what other
+  // agents' `skill_hashes` match for signal ingestion). Synthetic
+  // component hashes derived from names or rich-component ids must not
+  // enter this table or we subscribe to signals nobody else observes.
+  const skillSubscriptionHashes = composition.skill_hashes ?? [];
 
   // Store composition snapshot
   const result = await execute(
@@ -70,13 +81,13 @@ app.post('/composition/update', async (c) => {
   );
 
   // Sync skill subscriptions: deactivate removed, activate new
-  if (componentHashes.length > 0) {
+  if (skillSubscriptionHashes.length > 0) {
     await execute(
       `UPDATE skill_subscriptions SET active = false
        WHERE agent_id = $1 AND skill_hash != ALL($2)`,
-      [agent_id, componentHashes],
+      [agent_id, skillSubscriptionHashes],
     );
-    for (const hash of componentHashes) {
+    for (const hash of skillSubscriptionHashes) {
       await execute(
         `INSERT INTO skill_subscriptions (agent_id, skill_hash, active, notify_on)
          VALUES ($1, $2, true, 'anomaly_signal')

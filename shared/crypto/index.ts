@@ -2,6 +2,7 @@ export {
   sha256,
   hashSkillFile,
   computeCompositionHash,
+  extractCompositionComponentHashes,
   generateAgentId,
   generateAgentName,
   generateReceiptId,

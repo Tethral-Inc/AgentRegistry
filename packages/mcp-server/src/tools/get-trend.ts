@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId } from '../utils/resolve-agent-id.js';
 import { confidence } from '../utils/confidence.js';
+import { formatLatencyChangeFraction, formatFailureRateDelta } from '../utils/format-delta.js';
 
 export function getTrendTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -67,10 +68,10 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
               // delta against a pre-signal baseline is still pre-signal.
               const deltaN = Math.min(currN, prevN);
               if (t.latency_change_ratio != null) {
-                text += `    latency delta: ${((t.latency_change_ratio as number) * 100).toFixed(1)}% ${confidence(deltaN)}\n`;
+                text += `    latency delta: ${formatLatencyChangeFraction(t.latency_change_ratio as number)} ${confidence(deltaN)}\n`;
               }
               if (t.failure_rate_delta != null) {
-                text += `    failure rate delta: ${((t.failure_rate_delta as number) * 100).toFixed(1)} pp ${confidence(deltaN)}\n`;
+                text += `    failure rate delta: ${formatFailureRateDelta(t.failure_rate_delta as number)} ${confidence(deltaN)}\n`;
               }
             } else {
               text += `    previous: no data\n`;

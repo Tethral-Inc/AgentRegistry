@@ -93,6 +93,7 @@ async function probeOne(
 async function emitReceipt(
   apiUrl: string,
   agentId: string,
+  providerClass: string,
   transportType: string,
   result: ProbeResult,
   unwrappedFetch: typeof fetch,
@@ -105,7 +106,7 @@ async function emitReceipt(
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        emitter: { agent_id: agentId, provider_class: 'unknown' },
+        emitter: { agent_id: agentId, provider_class: providerClass },
         target: { system_id: result.system_id, system_type: 'api' },
         interaction: {
           category: 'tool_call',
@@ -162,9 +163,14 @@ export async function runEnvironmentalProbe(options: {
     targets.map((t) => probeOne(t.system_id, t.url, unwrappedFetch)),
   );
 
-  // Emit receipts in parallel but don't block the caller's startup.
+  // Emit receipts in parallel but don't block the caller's startup. The
+  // provider_class comes from the live session (inferred from the MCP
+  // client name) so baseline probes land in the same cohort as the
+  // agent's real activity — previously they were hard-coded 'unknown'
+  // and formed a separate cohort from every caller's own receipts.
+  const providerClass = session.providerClass;
   await Promise.all(
-    results.map((r) => emitReceipt(apiUrl, agentId, session.transportType, r, unwrappedFetch)),
+    results.map((r) => emitReceipt(apiUrl, agentId, providerClass, session.transportType, r, unwrappedFetch)),
   );
 
   return results;
