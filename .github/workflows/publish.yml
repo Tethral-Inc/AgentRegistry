@@ -31,6 +31,20 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 20, cache: pnpm, registry-url: 'https://registry.npmjs.org' }
       - run: pnpm install --frozen-lockfile
+      # Fail-hard if server.json fell behind package.json. Previously this
+      # was caught only by a soft warning in the registry-sync step, which
+      # meant the 2.8/2.9/2.10 releases all silently skipped the MCP
+      # registry. Guarding BEFORE npm publish prevents shipping a version
+      # to npm that we can't sync to the MCP registry.
+      - name: Verify MCP version consistency
+        run: |
+          PKG=$(node -p "require('./packages/mcp-server/package.json').version")
+          SERVER=$(node -p "require('./server.json').version")
+          SERVER_PKG=$(node -p "require('./server.json').packages[0].version")
+          if [ "$PKG" != "$SERVER" ] || [ "$PKG" != "$SERVER_PKG" ]; then
+            echo "::error::Version drift blocks publish — mcp-server/package.json=$PKG, server.json root=$SERVER, server.json packages[0]=$SERVER_PKG."
+            exit 1
+          fi
       - name: Publish if version is new
         working-directory: packages/mcp-server
         env:
@@ -46,15 +60,12 @@ jobs:
           fi
       - name: Sync MCP registry listing
         # Keeps registry.modelcontextprotocol.io in sync with npm. Auths via
-        # GitHub OIDC (no token needed) and skips cleanly if server.json is
-        # already at the declared version.
+        # GitHub OIDC (no token needed) and skips cleanly if the registry
+        # is already at the current version. Version consistency between
+        # package.json and server.json is enforced upstream by the
+        # "Verify MCP version consistency" step.
         run: |
           PKG_VERSION=$(node -p "require('./packages/mcp-server/package.json').version")
-          SERVER_VERSION=$(node -p "require('./server.json').version")
-          if [ "$PKG_VERSION" != "$SERVER_VERSION" ]; then
-            echo "::warning::server.json version ($SERVER_VERSION) does not match package.json ($PKG_VERSION); skipping registry publish."
-            exit 0
-          fi
           REGISTRY_VERSION=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Tethral-Inc/acr" \
             | python3 -c "import sys,json; d=json.load(sys.stdin); s=d['servers']; print(s[0]['server']['version'] if s else 'none')" || echo "none")
           if [ "$REGISTRY_VERSION" = "$PKG_VERSION" ]; then

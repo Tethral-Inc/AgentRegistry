@@ -86,9 +86,15 @@ describe('POST /api/v1/register', () => {
     const keypair = generateAgentKeypair();
     const ts = Date.now();
     const sig = signRegistration(keypair.privateKey, keypair.publicKey, ts);
-    // Swap the last character — still a valid base64url shape, but
-    // cryptographically garbage.
-    const tampered = sig.slice(0, -1) + (sig.endsWith('A') ? 'B' : 'A');
+    // Tamper at the byte level, not the base64url char level. The final
+    // base64 char of an Ed25519 signature encodes only 2 meaningful bits
+    // of the signature plus 4 padding bits — flipping that char's LSB
+    // can change only padding, leaving the decoded 64-byte signature
+    // unchanged (~6% of the time). Flipping a byte in the middle of the
+    // decoded signature guarantees a different bitstring.
+    const sigBytes = Buffer.from(sig, 'base64url');
+    sigBytes[0] ^= 0xff;
+    const tampered = sigBytes.toString('base64url');
     const res = await app.request('/api/v1/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

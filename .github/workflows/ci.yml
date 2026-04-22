@@ -12,6 +12,21 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Guard against the 2.8/2.9/2.10 skew pattern: server.json version
+      # fell behind mcp-server/package.json, and publish-mcp silently
+      # skipped the registry sync instead of failing. Catching drift here
+      # (in PR CI) means it's fixed before merge, not discovered when
+      # MCP registry is stuck at an old version.
+      - name: Check MCP version consistency
+        run: |
+          PKG=$(node -p "require('./packages/mcp-server/package.json').version")
+          SERVER=$(node -p "require('./server.json').version")
+          SERVER_PKG=$(node -p "require('./server.json').packages[0].version")
+          if [ "$PKG" != "$SERVER" ] || [ "$PKG" != "$SERVER_PKG" ]; then
+            echo "::error::Version drift — mcp-server/package.json=$PKG, server.json root=$SERVER, server.json packages[0]=$SERVER_PKG. Update server.json to match."
+            exit 1
+          fi
+          echo "✓ MCP versions agree: $PKG"
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test

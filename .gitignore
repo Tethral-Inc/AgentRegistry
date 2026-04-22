@@ -22,6 +22,10 @@ scripts/backfill-scan-bundle.*
 # Next.js build output
 .next/
 
+# TypeScript incremental build cache — ends up tracked accidentally
+# because tsc writes it next to tsconfig.json, not into dist/.
+*.tsbuildinfo
+
 # IDE / OS
 .DS_Store
 *.swp
