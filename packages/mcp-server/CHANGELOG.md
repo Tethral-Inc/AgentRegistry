@@ -1,3 +1,67 @@
+## 2.5.0 (2026-04-22)
+
+HTTP transport and attribution are correct — concurrent HTTP sessions
+no longer leak each other's agent identity, registration failures
+surface actionable errors instead of silently masquerading, and the
+composition hash now reflects every component the agent reports.
+
+Release A of the v2.5.0 – v2.9.0 roadmap. Nothing changes for stdio
+users; HTTP users start getting correct attribution.
+
+- **Per-session state via `AsyncLocalStorage`**
+  (`session-state.ts` + `middleware/*`). Concurrent HTTP requests each
+  run inside `sessionContext.run(session, …)` so every tool, middleware,
+  and the fetch observer resolve the correct `SessionState` via
+  `getActiveSession()`. The fetch observer is now installed once,
+  session-agnostic, and looks up the live session on every observed
+  fetch — no more cross-session bleed. Self-log's module-boolean
+  re-entrancy guard becomes `AsyncLocalStorage<boolean>` so it survives
+  concurrent sessions correctly. Stdio semantics are preserved via
+  `defaultSession` fallback.
+- **Typed `RegistrationFailedError`** (`session-state.ts`). Auto-register
+  no longer writes `pseudo_<hex>` placeholder IDs on failure and
+  pretends to succeed. It throws a typed error carrying the HTTP status
+  and response body, with `userMessage()` rendering a one-line
+  actionable hint (5xx / 429 / other). Every tool that resolves an
+  agent ID (`get_my_agent`, `log_interaction`, `acknowledge_threat`,
+  `get_notifications`, `update_composition`) catches the typed error
+  and returns `isError: true` with the user message. `log_interaction`
+  retries the registration once (500 ms) before surfacing the error so
+  transient network blips don't break the receipt-collection loop.
+  Stale `pseudo_*` IDs previously persisted to the state file are
+  treated as unregistered on startup and trigger a clean re-registration.
+- **`provider_class` on environmental probes**
+  (`probes/environmental.ts`). Baseline probes were hard-coded
+  `provider_class='unknown'` and formed a separate cohort from the
+  agent's own activity. They now read the live session's `providerClass`
+  (inferred from the MCP client name) so the baseline lands in the
+  correct cohort.
+- **Full-composition `composition_hash`**
+  (`shared/crypto/hash.ts`). The ingestion-api previously hashed only
+  `skill_hashes`, collapsing every rich-only composition
+  (`skill_components` etc.) to `sha256('')`. A new helper
+  `extractCompositionComponentHashes` folds every field (flat + rich +
+  `sub_components`) into the hash with type-namespaced identity strings
+  so a skill and an MCP that happen to share a name don't collide. Fully
+  backwards compatible for legacy `skill_hashes`-only callers.
+  Skill-subscription writes still key off the real `skill_hashes` only
+  (not derived synthetic hashes) so cross-agent signal ingestion still
+  lines up.
+- **Signed `get_trend` deltas** (`utils/format-delta.ts`). Extracted the
+  delta-rendering into a helper with explicit signs — latency/failure
+  direction is now distinguishable at a glance. Server contract
+  (`latency_change_ratio` is a fraction, `failure_rate_delta` is a raw
+  subtraction) is documented inline.
+- **Test harness landing before the refactor**. 21 `SessionState` unit
+  tests, 11 `createAcrServer` integration tests exercising HTTP session
+  isolation end-to-end (`sessionContext.run` + `getActiveSession` +
+  `state.ts` getters), 14 `composition-hash` invariants, 11
+  `format-delta` cases. Vitest define mirrors esbuild's
+  `__PACKAGE_VERSION__` so tests see the package version at load time.
+
+Resolves 13 Big audit findings (B1, B2, B3, B4, B5, B6, B7, B8, B9, B10,
+B11, B15, B18).
+
 ## 2.4.1 (2026-04-21)
 
 Built-in upgrade nudge — long-running MCP installs learn about new
