@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { SessionState } from '../session-state.js';
+import { getActiveSession } from '../session-state.js';
 
 /**
  * Operator privacy control for deep composition capture.
@@ -19,10 +19,7 @@ import type { SessionState } from '../session-state.js';
  * Also settable via the ACR_DEEP_COMPOSITION=false environment variable
  * at MCP startup.
  */
-export function disableDeepCompositionTool(
-  server: McpServer,
-  getSession: () => SessionState,
-) {
+export function disableDeepCompositionTool(server: McpServer) {
   server.registerTool(
     'configure_deep_composition',
     {
@@ -35,7 +32,7 @@ export function disableDeepCompositionTool(
       _meta: { priorityHint: 0.3 },
     },
     async ({ enabled }) => {
-      const session = getSession();
+      const session = getActiveSession();
       const previous = session.deepComposition;
       session.setDeepComposition(enabled);
 

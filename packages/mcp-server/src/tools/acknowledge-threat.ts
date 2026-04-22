@@ -1,9 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getAuthHeaders } from '../state.js';
 import { z } from 'zod';
-import type { SessionState } from '../session-state.js';
+import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
+import { RegistrationFailedError } from '../session-state.js';
 
-export function acknowledgeThreatTool(server: McpServer, apiUrl: string, getSession: () => SessionState) {
+export function acknowledgeThreatTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'acknowledge_threat',
     {
@@ -17,8 +17,20 @@ export function acknowledgeThreatTool(server: McpServer, apiUrl: string, getSess
       _meta: { priorityHint: 0.3 },
     },
     async ({ notification_id, agent_id, reason }) => {
+      let resolvedId: string;
       try {
-        const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
+        resolvedId = agent_id ?? getAgentId() ?? await ensureRegistered();
+      } catch (err) {
+        if (err instanceof RegistrationFailedError) {
+          return {
+            content: [{ type: 'text' as const, text: err.userMessage() }],
+            isError: true,
+          };
+        }
+        throw err;
+      }
+
+      try {
         const res = await fetch(`${apiUrl}/api/v1/agent/${resolvedId}/notifications/${notification_id}/acknowledge`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },

@@ -117,10 +117,12 @@ export class SessionState {
   }
 
   async ensureRegistered(apiUrl: string): Promise<string> {
-    // Hydrate from persisted state file to avoid re-registering every session
+    // Hydrate from persisted state file to avoid re-registering every session.
+    // Stale `pseudo_*` IDs written by old MCP builds (pre-2.5.0) are treated
+    // as un-registered so this session can try again cleanly.
     if (!this._agentId) {
       const saved = readAcrStateFile();
-      if (saved?.agent_id) {
+      if (saved?.agent_id && !saved.agent_id.startsWith('pseudo_')) {
         this._agentId = saved.agent_id;
         if (saved.api_key) this._apiKey = saved.api_key;
         return this._agentId;
@@ -131,9 +133,17 @@ export class SessionState {
     if (this._registering) {
       await new Promise((r) => setTimeout(r, 1000));
       if (this._agentId) return this._agentId;
+      // Concurrent registration is still in flight and didn't land in 1s.
+      // Surface the failure rather than hang — the caller can retry.
+      throw new RegistrationFailedError(
+        apiUrl,
+        'Concurrent registration did not complete in time.',
+      );
     }
 
     this._registering = true;
+    let httpStatus: number | null = null;
+    let errorBody: string | null = null;
     try {
       const pseudoKey = `pseudo_${randomBytes(16).toString('hex')}`;
       const env = detectEnvironment(this._transportType);
@@ -158,11 +168,55 @@ export class SessionState {
         return this._agentId;
       }
 
-      this._agentId = `pseudo_${randomBytes(6).toString('hex')}`;
-      return this._agentId;
+      httpStatus = res.status;
+      errorBody = await res.text().catch(() => null);
+      throw new RegistrationFailedError(apiUrl, `HTTP ${httpStatus}`, httpStatus, errorBody);
+    } catch (err) {
+      if (err instanceof RegistrationFailedError) throw err;
+      // Network / fetch-level error (DNS, timeout, refused, etc.). Wrap as
+      // a typed error so call sites can distinguish it from caller bugs.
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new RegistrationFailedError(apiUrl, msg);
     } finally {
       this._registering = false;
     }
+  }
+}
+
+/**
+ * Typed error thrown when auto-registration with the ACR API fails.
+ * Call sites should catch this, surface an actionable message to the
+ * agent, and either retry or fall back to a read-only flow. The MCP
+ * no longer silently substitutes a `pseudo_*` agent id on failure —
+ * that masqueraded as a real ID and poisoned every subsequent call.
+ */
+export class RegistrationFailedError extends Error {
+  constructor(
+    public readonly apiUrl: string,
+    public readonly detail: string,
+    public readonly httpStatus: number | null = null,
+    public readonly responseBody: string | null = null,
+  ) {
+    super(`Registration with ${apiUrl} failed: ${detail}`);
+    this.name = 'RegistrationFailedError';
+  }
+
+  /**
+   * Human-readable message to render back to the agent. Describes the
+   * failure in one line and points to the most likely cause. Kept
+   * short so tools can concatenate it into an isError output block.
+   */
+  userMessage(): string {
+    if (this.httpStatus && this.httpStatus >= 500) {
+      return `ACR registry is unavailable right now (HTTP ${this.httpStatus} from ${this.apiUrl}). Try again in a minute. If it persists, set ACR_API_URL to a reachable endpoint or skip logging for this session.`;
+    }
+    if (this.httpStatus === 429) {
+      return `ACR registry throttled this registration (HTTP 429 from ${this.apiUrl}). Try again in a minute.`;
+    }
+    if (this.httpStatus) {
+      return `ACR registration rejected (HTTP ${this.httpStatus} from ${this.apiUrl}): ${this.responseBody ?? this.detail}`;
+    }
+    return `ACR registration could not reach ${this.apiUrl}: ${this.detail}. Check network connectivity or ACR_API_URL.`;
   }
 }
 

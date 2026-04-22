@@ -1,8 +1,29 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
-import { getActiveSession } from '../session-state.js';
+import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import type { CorrelationWindow } from '../middleware/correlation-window.js';
+
+/**
+ * Resolve an agent id for this call, transparently retrying registration
+ * once before surfacing. If both attempts fail we throw the typed error
+ * so the caller can render an isError: true response with the actionable
+ * message — instead of silently substituting a pseudo_ id that will
+ * never successfully log a receipt anyway.
+ */
+async function resolveAgentIdWithRetry(): Promise<string> {
+  try {
+    return await ensureRegistered();
+  } catch (err) {
+    if (!(err instanceof RegistrationFailedError)) throw err;
+    // Transparent retry — many registration failures are transient
+    // (network blip, cold start on the server). Wait briefly so a
+    // tight loop doesn't just retry immediately against a stressed
+    // endpoint.
+    await new Promise((r) => setTimeout(r, 500));
+    return await ensureRegistered();
+  }
+}
 
 function inferSystemType(systemId: string): string {
   const prefix = systemId.split(':')[0];
@@ -74,7 +95,18 @@ export function logInteractionTool(
     async (params) => {
       try {
         const session = getActiveSession();
-        const id = params.agent_id || getAgentId() || await ensureRegistered();
+        let id: string;
+        try {
+          id = params.agent_id || getAgentId() || await resolveAgentIdWithRetry();
+        } catch (err) {
+          if (err instanceof RegistrationFailedError) {
+            return {
+              content: [{ type: 'text' as const, text: err.userMessage() }],
+              isError: true,
+            };
+          }
+          throw err;
+        }
         const nowMs = Date.now();
 
         // Observation principle: chain structure is derived from session

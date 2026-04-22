@@ -1,8 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { SessionState } from '../session-state.js';
+import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { stripSubComponents } from '../strip-sub-components.js';
-import { getAuthHeaders } from '../state.js';
+import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
 
 // Component schema — matches shared/schemas/agent.ts CompositionSchema.
 // Kept local so we don't need to cross package boundaries for the Zod type.
@@ -18,7 +18,7 @@ const ComponentSchema = z.object({
   })).max(64).optional(),
 });
 
-export function updateCompositionTool(server: McpServer, apiUrl: string, getSession: () => SessionState) {
+export function updateCompositionTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'update_composition',
     {
@@ -42,10 +42,21 @@ export function updateCompositionTool(server: McpServer, apiUrl: string, getSess
       _meta: { priorityHint: 0.4 },
     },
     async ({ agent_id, composition }) => {
+      let resolvedAgentId: string;
       try {
-        const resolvedAgentId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
+        resolvedAgentId = agent_id ?? getAgentId() ?? await ensureRegistered();
+      } catch (err) {
+        if (err instanceof RegistrationFailedError) {
+          return {
+            content: [{ type: 'text' as const, text: err.userMessage() }],
+            isError: true,
+          };
+        }
+        throw err;
+      }
 
-        const session = getSession();
+      try {
+        const session = getActiveSession();
         const deep = session.deepComposition;
         const effectiveComposition = {
           ...composition,
@@ -84,7 +95,7 @@ export function updateCompositionTool(server: McpServer, apiUrl: string, getSess
           + (composition.mcp_components?.length ?? 0)
           + (composition.tool_components?.length ?? 0);
 
-        const deepNote = session.deepComposition
+        const deepNote = deep
           ? ''
           : '\n\n(Deep composition is disabled. Sub-components, if provided, were stripped before sending.)';
 

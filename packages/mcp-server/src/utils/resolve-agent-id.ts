@@ -5,9 +5,16 @@ import { ensureRegistered, getAgentId, getAgentName, getApiUrl } from '../state.
  * Consolidates the resolveId / resolveAgentId pattern duplicated across tool files.
  *
  * Resolution order:
- *   1. If agent_name looks like an ID (starts with acr_ or pseudo_), use it directly.
+ *   1. If agent_name looks like an ACR id (starts with `acr_`), use as-is.
  *   2. If agent_name is provided, look it up via the agent endpoint.
  *   3. Otherwise fall through to agent_id → session agentId → auto-register.
+ *
+ * Pre-2.5.0 builds would write `pseudo_*` ids on a registration failure.
+ * Those are no longer treated as valid ids here — they flow through the
+ * `/api/v1/agent/{name}` lookup and surface a clean "not found" if the
+ * agent really never registered. The auto-register path now throws a
+ * RegistrationFailedError on failure; callers should catch and render
+ * `isError: true`.
  */
 export async function resolveAgentId(
   params: { agentId?: string; agentName?: string },
@@ -16,8 +23,8 @@ export async function resolveAgentId(
   const { agentId, agentName } = params;
 
   if (agentName) {
-    // If it looks like a real ID, use it as-is
-    if (agentName.startsWith('acr_') || agentName.startsWith('pseudo_')) {
+    // If it looks like a real ACR id, use it as-is
+    if (agentName.startsWith('acr_')) {
       return { id: agentName, displayName: agentName };
     }
     const apiUrl = getApiUrl();
@@ -29,6 +36,9 @@ export async function resolveAgentId(
     return { id: data.agent_id, displayName: data.name ?? agentName };
   }
 
+  // ensureRegistered() throws RegistrationFailedError on failure; callers
+  // should catch it and render isError: true. We don't catch here so the
+  // typed error surfaces intact to the tool handler.
   const id = agentId || getAgentId() || await ensureRegistered();
   const displayName = getAgentName() ?? id;
   return { id, displayName };

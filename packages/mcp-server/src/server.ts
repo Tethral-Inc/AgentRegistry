@@ -137,10 +137,10 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getSkillTrackerTool(server, apiUrl);
   searchSkillsTool(server, apiUrl);
   getSkillVersionsTool(server, apiUrl, resolverUrl);
-  updateCompositionTool(server, apiUrl, () => session);
-  getNotificationsTool(server, apiUrl, () => session);
-  acknowledgeThreatTool(server, apiUrl, () => session);
-  disableDeepCompositionTool(server, () => session);
+  updateCompositionTool(server, apiUrl);
+  getNotificationsTool(server, apiUrl);
+  acknowledgeThreatTool(server, apiUrl);
+  disableDeepCompositionTool(server);
   getProfileTool(server, apiUrl);
   getCoverageTool(server, apiUrl);
   getStableCorridorsTool(server, apiUrl);

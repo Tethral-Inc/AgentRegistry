@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ensureRegistered, getAgentId, getAgentName, getApiUrl, getApiKey, getAuthHeaders } from '../state.js';
-import { getActiveSession } from '../session-state.js';
+import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
@@ -33,7 +33,18 @@ export function getMyAgentTool(server: McpServer) {
       _meta: { priorityHint: 0.8 },
     },
     async () => {
-      const id = getAgentId() || await ensureRegistered();
+      let id: string;
+      try {
+        id = getAgentId() || await ensureRegistered();
+      } catch (err) {
+        if (err instanceof RegistrationFailedError) {
+          return {
+            content: [{ type: 'text' as const, text: err.userMessage() }],
+            isError: true,
+          };
+        }
+        throw err;
+      }
       const name = getAgentName();
       const apiUrl = getApiUrl();
       const apiKey = getApiKey();

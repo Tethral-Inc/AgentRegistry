@@ -1,9 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getAuthHeaders } from '../state.js';
 import { z } from 'zod';
-import type { SessionState } from '../session-state.js';
+import { ensureRegistered, getAgentId, getAuthHeaders } from '../state.js';
+import { RegistrationFailedError } from '../session-state.js';
 
-export function getNotificationsTool(server: McpServer, apiUrl: string, getSession: () => SessionState) {
+export function getNotificationsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_notifications',
     {
@@ -15,8 +15,20 @@ export function getNotificationsTool(server: McpServer, apiUrl: string, getSessi
       _meta: { priorityHint: 0.5 },
     },
     async ({ agent_id }) => {
+      let resolvedId: string;
       try {
-        const resolvedId = agent_id ?? getSession().agentId ?? await getSession().ensureRegistered(apiUrl);
+        resolvedId = agent_id ?? getAgentId() ?? await ensureRegistered();
+      } catch (err) {
+        if (err instanceof RegistrationFailedError) {
+          return {
+            content: [{ type: 'text' as const, text: err.userMessage() }],
+            isError: true,
+          };
+        }
+        throw err;
+      }
+
+      try {
         const authHeaders = getAuthHeaders();
 
         // Fetch notifications and profile in parallel to detect empty composition
