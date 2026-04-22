@@ -72,11 +72,14 @@ export const ToolComponentSchema = ComponentSchema;
 // fields. Both are accepted. Clients using only the flat fields continue to
 // work unchanged.
 export const CompositionSchema = z.object({
-  // Legacy flat fields (backwards compat)
-  mcps: z.array(z.string()).optional(),
-  tools: z.array(z.string()).optional(),
-  skills: z.array(z.string()).optional(),
-  skill_hashes: z.array(z.string()).optional(),
+  // Legacy flat fields (backwards compat).
+  // Capped at 64 to match the richer component arrays — matters most for
+  // skill_hashes, which the register handler turns into one INSERT per
+  // entry. Without a cap, a single request could pin a serverless worker.
+  mcps: z.array(z.string()).max(64).optional(),
+  tools: z.array(z.string()).max(64).optional(),
+  skills: z.array(z.string()).max(64).optional(),
+  skill_hashes: z.array(z.string()).max(64).optional(),
   // Richer nested fields
   skill_components: z.array(SkillComponentSchema).max(64).optional(),
   mcp_components: z.array(McpComponentSchema).max(64).optional(),

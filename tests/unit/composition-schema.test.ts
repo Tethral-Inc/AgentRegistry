@@ -69,6 +69,27 @@ describe('CompositionSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects skill_hashes array longer than 64', () => {
+    // Without this cap, a single register call would do N sequential
+    // INSERTs on skill_subscriptions and could pin a serverless worker.
+    const tooMany = Array.from({ length: 65 }, (_, i) => `hash-${i}`);
+    const result = CompositionSchema.safeParse({ skill_hashes: tooMany });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts skill_hashes array of exactly 64', () => {
+    const atLimit = Array.from({ length: 64 }, (_, i) => `hash-${i}`);
+    const result = CompositionSchema.safeParse({ skill_hashes: atLimit });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects flat skills/mcps/tools arrays longer than 64', () => {
+    const tooMany = Array.from({ length: 65 }, (_, i) => `item-${i}`);
+    expect(CompositionSchema.safeParse({ skills: tooMany }).success).toBe(false);
+    expect(CompositionSchema.safeParse({ mcps: tooMany }).success).toBe(false);
+    expect(CompositionSchema.safeParse({ tools: tooMany }).success).toBe(false);
+  });
 });
 
 describe('SkillComponentSchema', () => {
