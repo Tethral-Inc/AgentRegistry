@@ -1,3 +1,47 @@
+## 2.5.2 (2026-04-22)
+
+Verdicts show their math; descriptions match behavior. Operators no
+longer have to reverse-engineer why a friction target got flagged one
+way or another — the threshold rule that fired is rendered inline. Tool
+menu + description accuracy + malformed-response guards round out the
+release.
+
+Release C of the v2.5.0 – v2.9.0 roadmap.
+
+- **`config/friction-thresholds.ts`** extracts the per-target verdict
+  math from `get-friction-report.ts` inline. Every threshold is named
+  (`LOCAL_MIN_INTERACTIONS`, `NETWORK_HEALTHY_PCT`,
+  `LOCAL_CONFIG_FLOOR_PCT`, `CONFIG_RATIO`, `BETTER_RATIO`,
+  `NETWORK_WIDE_PCT`, `NETWORK_MIN_AGENTS`, `NETWORK_MIN_INTERACTIONS`)
+  and the verdict render returns the exact clause that fired, so the
+  report prints `(threshold: net<5% AND yours≥5% AND yours>2×net)`
+  under each verdict line. Calibration notes live in
+  [`docs/friction-verdict-thresholds.md`](docs/friction-verdict-thresholds.md).
+- **`TOOL_MENU` covers all 26 tools** (`get-my-agent.ts`). Adds
+  `getting_started`, `get_revealed_preference`,
+  `get_compensation_signatures`, `get_composition_diff` to the menu —
+  they were registered but invisible. A new CI guard
+  (`tests/unit/tool-menu.test.ts`) scrapes every
+  `server.registerTool(...)` call and asserts set-equality with the
+  menu, so a future tool can't slip in without a menu entry.
+- **Honest description on `summarize_my_agent`**. Previously
+  advertised "all available lenses" — it actually fetches profile +
+  friction + coverage. Description now says so, and points at the
+  individual lens tools for deeper dives.
+- **`get_interaction_log` single-receipt path**. A call with an
+  explicit `receipt_id` now returns the matching receipt in detail or
+  a clear "receipt X not found — either the id is wrong, or it belongs
+  to a different agent." Previously the server returning a narrowed
+  list would render as "detail of up to 5 receipts," which was
+  confusing noise. `mode="detail"` without an id still shows the
+  recent handful.
+- **`log_interaction` `.join` guard**. Defensive `Array.isArray` check
+  on `data.receipt_ids` — a server returning an unexpected shape (200
+  with malformed body) no longer crashes the render with a confusing
+  `.join is not a function` error.
+
+No schema changes. Rebuild and republish only.
+
 ## 2.5.1 (2026-04-22)
 
 UX footers across every lens. Each lens output now starts with a silent

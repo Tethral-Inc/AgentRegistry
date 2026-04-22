@@ -6,14 +6,30 @@ import { myAgentNextAction, renderNextActionFooter } from '../utils/next-action.
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
 
+/**
+ * Menu of every registered tool, grouped by the task you'd be doing
+ * when you'd want that tool. Kept in sync with the full registered set
+ * via `tests/unit/tool-menu.test.ts` — CI fails if a new tool is added
+ * without landing in a group here.
+ */
 const TOOL_MENU = `
 ── Available Tools ──
-  Your agent:   get_my_agent · register_agent · update_composition · configure_deep_composition
-  Logging:      log_interaction
-  Your profile: get_friction_report · summarize_my_agent · get_profile · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · whats_new
+  Your agent:    get_my_agent · register_agent · update_composition · configure_deep_composition
+  Onboarding:    getting_started · whats_new · summarize_my_agent
+  Logging:       log_interaction
+  Your profile:  get_profile · get_friction_report · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_revealed_preference · get_compensation_signatures · get_composition_diff
   Notifications: get_notifications · acknowledge_threat
-  Network:      get_network_status · check_environment · check_entity
-  Registry:     search_skills · get_skill_tracker · get_skill_versions`.trimStart();
+  Network:       get_network_status · check_environment · check_entity
+  Registry:      search_skills · get_skill_tracker · get_skill_versions`.trimStart();
+
+/**
+ * Exported for the tool-menu test. Keep this list mirrored with the
+ * menu string above — the test parses the string and asserts set
+ * equality with this list. The one source of truth for "what tools does
+ * this MCP register?" is the set of `server.registerTool('<name>', ...)`
+ * calls under `src/tools/`; the test grep-scrapes them.
+ */
+export const EXPECTED_TOOL_MENU = TOOL_MENU;
 
 async function fetchJsonSafe(url: string, headers: Record<string, string>): Promise<Record<string, unknown> | null> {
   try {

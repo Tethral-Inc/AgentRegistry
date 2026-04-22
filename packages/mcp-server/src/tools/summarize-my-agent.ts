@@ -20,7 +20,7 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'summarize_my_agent',
     {
-      description: 'Single-read overview of your interaction profile across all available lenses. Fetches profile, friction summary, and coverage in one call. Use this for a quick status check instead of calling each lens individually.',
+      description: 'One-call snapshot of your profile, friction summary, and coverage — three lenses combined, not every lens. Use this for a quick status check; call the individual lens tools (get_trend, get_failure_registry, get_stable_corridors, get_revealed_preference, get_compensation_signatures, get_composition_diff) for deeper dives.',
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),

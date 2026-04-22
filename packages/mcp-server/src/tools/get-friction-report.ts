@@ -6,6 +6,11 @@ import { confidence } from '../utils/confidence.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
 import { frictionNextAction, renderNextActionFooter } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
+import {
+  LOCAL_MIN_INTERACTIONS,
+  hasEnoughSampleForVerdict,
+  renderVerdict,
+} from '../config/friction-thresholds.js';
 
 /** "1h 12m", "12m 4s", "4.2s" — picks the right unit for the magnitude. */
 function formatDuration(ms: number): string {
@@ -284,13 +289,9 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             }
 
             // Network context — actionable comparison instead of a raw
-            // rate dump. We only compare when both samples are big enough
-            // to be meaningful:
-            //   - this agent has >= 10 interactions with the target
-            //   - the network side has >= 3 agents and >= 50 interactions
-            // Below those thresholds we surface the network rate without
-            // a verdict, so the operator sees the number but isn't misled
-            // by a 1-agent "network".
+            // rate dump. Sample-size floors + verdict thresholds are
+            // centralized in config/friction-thresholds.ts so the math
+            // shown next to each verdict matches the rule that fired.
             if (
               t.network_failure_rate != null ||
               t.network_anomaly_rate != null ||
@@ -302,34 +303,25 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               const netFailRate = t.network_failure_rate ?? null;
               const netAgents = t.network_agent_count ?? 0;
               const netInteractions = (t.network_interaction_count as number | undefined) ?? null;
-              const enoughLocal = t.interaction_count >= 10;
-              const enoughNetwork = netAgents >= 3 && (netInteractions == null || netInteractions >= 50);
+              const sample = hasEnoughSampleForVerdict({
+                localInteractionCount: t.interaction_count,
+                networkAgentCount: netAgents,
+                networkInteractionCount: netInteractions,
+              });
 
               text += `    population: ${netAgents} agents`;
               text += `, network failure rate ${((netFailRate ?? 0) * 100).toFixed(1)}%`;
               text += `, anomaly rate ${((t.network_anomaly_rate ?? 0) * 100).toFixed(1)}%\n`;
 
-              if (agentFailRate != null && netFailRate != null && enoughLocal && enoughNetwork) {
-                const yoursPct = agentFailRate * 100;
-                const netPct = netFailRate * 100;
-                let verdict: string;
-                // Absolute floor on yoursPct before blaming the user's
-                // config — a single failure out of 10 interactions is
-                // 10% which trivially beats `netPct * 2` when netPct is
-                // 0.5%. Require both relative AND absolute elevation.
-                if (netPct < 5 && yoursPct >= 5 && yoursPct > netPct * 2) {
-                  verdict = 'likely your config/network — most agents succeed here';
-                } else if (yoursPct > 0 && netPct > yoursPct * 2) {
-                  verdict = 'better than the network on this target';
-                } else if (netPct >= 20 && yoursPct >= 20) {
-                  verdict = 'network-wide issue — this target is failing for many agents';
-                } else {
-                  verdict = 'consistent with the network';
-                }
-                text += `    you ${yoursPct.toFixed(1)}% vs network ${netPct.toFixed(1)}% → ${verdict}\n`;
-              } else if (!enoughLocal) {
-                text += `    (need ≥10 local interactions for a network comparison; you have ${t.interaction_count})\n`;
-              } else if (!enoughNetwork) {
+              if (agentFailRate != null && netFailRate != null && sample.enough) {
+                const v = renderVerdict({ localFailRate: agentFailRate, networkFailRate: netFailRate });
+                text += `    you ${v.math.yoursPct.toFixed(1)}% vs network ${v.math.netPct.toFixed(1)}% → ${v.verdict}\n`;
+                // Surface the exact threshold rule that fired so the
+                // operator can see *why* without running a debugger.
+                text += `    (threshold: ${v.math.rule})\n`;
+              } else if (sample.missing === 'local') {
+                text += `    (need ≥${LOCAL_MIN_INTERACTIONS} local interactions for a network comparison; you have ${t.interaction_count})\n`;
+              } else if (sample.missing === 'network') {
                 text += `    (not enough network data for a verdict yet)\n`;
               }
             }

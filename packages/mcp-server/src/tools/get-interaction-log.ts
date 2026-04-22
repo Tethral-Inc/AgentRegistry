@@ -69,12 +69,40 @@ export function getInteractionLogTool(server: McpServer, apiUrl: string) {
 
         const displayName = data.name || agent_name || getAgentName() || resolvedDisplayName;
 
-        // Detail mode — single receipt
-        if (receipt_id || mode === 'detail') {
+        // Detail mode — single receipt. When `receipt_id` is explicit,
+        // we want one of two clean outcomes: the detail for that
+        // receipt, or an honest not-found that tells the operator their
+        // id didn't match. Previously a server that returned a
+        // narrowed-list response (matching the requested id among
+        // others) would render as a "detail of up to 5 receipts",
+        // which is confusing noise when the caller asked for one.
+        if (receipt_id) {
           if (data.receipt) {
             return { content: [{ type: 'text' as const, text: formatDetail(data, displayName) }] };
           }
-          // If receipt_id was given but we got a list, show first item in detail
+          // If the server returned a list, find the exact match;
+          // otherwise it's not-found.
+          const receipts = (data.receipts as Array<Record<string, unknown>> | undefined) ?? [];
+          const match = receipts.find((r) => r.receipt_id === receipt_id);
+          if (match) {
+            return {
+              content: [{ type: 'text' as const, text: formatDetail({ ...data, receipt: match }, displayName) }],
+            };
+          }
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Receipt ${receipt_id} not found for ${displayName}. Either the id is wrong, or it belongs to a different agent. Use mode="list" to see recent receipt ids.`,
+            }],
+          };
+        }
+        if (mode === 'detail') {
+          if (data.receipt) {
+            return { content: [{ type: 'text' as const, text: formatDetail(data, displayName) }] };
+          }
+          // detail mode without a specific id: show the most recent
+          // handful in detail so the caller sees what shape "detail"
+          // produces without having to know an id.
           if (data.receipts && data.receipts.length > 0) {
             return { content: [{ type: 'text' as const, text: formatListDetailed(data.receipts.slice(0, 5), displayName) }] };
           }

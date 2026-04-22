@@ -209,7 +209,12 @@ export function logInteractionTool(
           }
         }
 
-        let text = `Logged ${data.accepted} receipt(s). IDs: ${data.receipt_ids.join(', ')}`;
+        // Guard against a malformed server response that doesn't carry
+        // a receipt_ids array. `.join` on a non-array would throw and
+        // mask the real problem (ingestion quietly returning 200 with
+        // an unexpected shape).
+        const receiptIds = Array.isArray(data.receipt_ids) ? data.receipt_ids : [];
+        let text = `Logged ${data.accepted} receipt(s). IDs: ${receiptIds.join(', ')}`;
 
         // Surface raw anomaly signals for any skill targets in this
         // receipt. No synthetic severity label — the MCP just renders
