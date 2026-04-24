@@ -66,6 +66,8 @@ app.get('/network/status', async (c) => {
             p95_duration_ms AS "p95_duration_ms",
             last_seen_at::text AS "last_seen_at"
      FROM system_health
+     WHERE total_interactions >= 3
+       AND last_seen_at >= now() - INTERVAL '30 days'
      ORDER BY
        failure_rate DESC,
        anomaly_rate DESC,
@@ -73,8 +75,12 @@ app.get('/network/status', async (c) => {
      LIMIT 50`,
   ).catch(() => []);
 
-  // Staleness check
-  const latestSeen = systems[0]?.last_seen_at;
+  // Staleness check — use an unfiltered probe so the volume filter on systems[]
+  // doesn't cause false positives in low-traffic / staging environments.
+  const stalenessRows = await query<{ max_last_seen: string | null }>(
+    `SELECT MAX(last_seen_at)::text AS "max_last_seen" FROM system_health`,
+  ).catch(() => [{ max_last_seen: null }]);
+  const latestSeen = stalenessRows[0]?.max_last_seen ?? null;
   const stale = latestSeen
     ? (Date.now() - new Date(latestSeen).getTime()) > TWO_HOURS_MS
     : true;
