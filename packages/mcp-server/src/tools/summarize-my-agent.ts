@@ -4,7 +4,7 @@ import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
-import { summarizeNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { summarizeNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { isThinSample, renderCohortBaselineHeader } from '../utils/cohort-baseline.js';
 import { fmtRatio, section } from '../utils/style.js';
@@ -23,7 +23,7 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'summarize_my_agent',
     {
-      description: 'One-call snapshot of your profile, friction summary, and coverage — three lenses combined, not every lens. Use this for a quick status check; call the individual lens tools (get_trend, get_failure_registry, get_stable_corridors, get_revealed_preference, get_compensation_signatures, get_composition_diff) for deeper dives.',
+      description: '[DEPRECATED — call `orient_me` instead.] One-call snapshot of profile, friction, and coverage. Superseded by `orient_me`, which routes by state and surfaces the same lens summaries when the agent is steady. Will be removed in a future release.',
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
@@ -158,9 +158,15 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
         }
       }
 
-      // summarize_my_agent is a cross-lens snapshot. Defer to friction
-      // first (where shadow tax shows up); coverage second. Dashboard
-      // link points at the overview view.
+      // Deprecation notice rendered in-band so callers see the migration
+      // path even before they read the description.
+      text += `\n[DEPRECATED] This tool's job is now better served by \`orient_me\` for routing,\n`;
+      text += `             plus the individual lens tools for depth. It will be removed in a future release.\n`;
+
+      // The next-action helper for summarize is itself a cross-lens
+      // dispatcher; we keep it for the prose footer but route _meta
+      // explicitly to orient_me so agentic clients land on the
+      // canonical entry point.
       const summaryFriction = friction && !friction.error
         ? {
             total_interactions: (friction.summary as Record<string, unknown>)?.total_interactions as number | undefined,
@@ -180,7 +186,11 @@ export function summarizeMyAgentTool(server: McpServer, apiUrl: string) {
       );
       text += renderDashboardFooter(id, 'overview');
 
-      return { content: [{ type: 'text' as const, text }] };
+      const meta = nextActionMeta({ text: '', tool: 'orient_me', args: {} });
+      return {
+        content: [{ type: 'text' as const, text }],
+        ...(meta && { _meta: meta }),
+      };
     },
   );
 }

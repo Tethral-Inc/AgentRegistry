@@ -5,9 +5,10 @@ import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
-import { stableCorridorsNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { stableCorridorsNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
+import { renderEmptyState } from '../utils/empty-state.js';
 import { section } from '../utils/style.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
@@ -67,13 +68,19 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         text += `\n${section(`Matches (${data.match_count !== undefined ? data.match_count : matches.length})`)}\n`;
 
         if (matches.length === 0) {
-          // Empty-state branch: state the criteria and point the
-          // operator at the lenses that explain why. The next-action
-          // footer below handles the general "log more interactions"
-          // case — this line explains the specific filter that blocked
-          // matches.
-          text += `  No stable corridors found for this period. No targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;
-          text += `  → Call \`get_friction_report\` to see which targets are churning and \`get_failure_registry\` for the failure sources blocking stability.\n`;
+          // Standardized empty-state (F10). The next-action footer
+          // below handles general routing; this section frames "why
+          // empty" with the filter criteria + the lenses that
+          // explain it.
+          text += '\n';
+          text += await renderEmptyState({
+            displayName,
+            lensName: 'stable corridors',
+            apiUrl,
+            unlocks: 'targets with zero failures, low latency variance, and enough samples to trust',
+          });
+          text += `   No targets met all filter criteria (zero failures, low variance, sufficient samples).\n`;
+          text += `   Call \`get_friction_report\` to see which targets are churning and \`get_failure_registry\` for the failure sources.\n`;
         } else {
           for (const m of matches) {
             const receiptCount = (m.receipt_count as number) ?? 0;
@@ -83,14 +90,13 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        text += renderNextActionFooter(
-          stableCorridorsNextAction({
-            corridors: matches.map((m) => ({
-              target: m.target_system_id as string | undefined,
-              stability_score: m.coefficient_of_variation as number | undefined,
-            })),
-          }),
-        );
+        const action = stableCorridorsNextAction({
+          corridors: matches.map((m) => ({
+            target: m.target_system_id as string | undefined,
+            stability_score: m.coefficient_of_variation as number | undefined,
+          })),
+        });
+        text += renderNextActionFooter(action);
         text += renderDashboardFooter(id, 'stable-corridors', { range: scope, source: source ?? 'agent' });
 
         const snapshot = await createSnapshot({
@@ -102,9 +108,16 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         });
         text += renderSnapshotFooter(snapshot);
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Stable corridors error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Stable corridors error: ${err instanceof Error ? err.message : 'Unknown'}` }],
+          isError: true,
+        };
       }
     },
   );

@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
 import { query, createLogger } from '@acr/shared';
+import { probeAggregationFreshness } from '../helpers/aggregation-freshness.js';
 
 const log = createLogger({ name: 'network-status' });
 const app = new Hono();
-
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 /**
  * GET /network/status — Full network dashboard.
@@ -12,18 +11,15 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
  */
 app.get('/network/status', async (c) => {
   // Source defaults to 'agent' so network totals reflect agent traffic,
-  // not server-side self-log. Pass source=all for both.
+  // not server-side self-log. The systems block now reads from
+  // per-source rows in system_health (migration 000023) so totals
+  // and systems agree by construction. Before that migration, totals
+  // filtered by source while systems read an unfiltered roll-up —
+  // they could disagree (totals = 0 while systems showed 16).
   const sourceParam = c.req.query('source') ?? 'agent';
-  const sourceFilter = sourceParam === 'all' ? null : sourceParam;
-
-  const totalsParams: unknown[] = [];
-  let totalsSourceClause = '';
-  if (sourceFilter) {
-    totalsParams.push(sourceFilter);
-    totalsSourceClause = ` AND source = $${totalsParams.length}`;
-  }
 
   // 1. 24h totals
+  const totalsParams: unknown[] = [sourceParam === 'all' ? null : sourceParam];
   const totalsRows = await query<{
     active_agents: number;
     active_systems: number;
@@ -38,13 +34,16 @@ app.get('/network/status', async (c) => {
               NULLIF(COUNT(*), 0), 0
             ) AS "anomaly_rate_24h"
      FROM interaction_receipts
-     WHERE created_at >= now() - INTERVAL '24 hours'${totalsSourceClause}`,
+     WHERE created_at >= now() - INTERVAL '24 hours'
+       AND ($1::STRING IS NULL OR source = $1)`,
     totalsParams,
   ).catch(() => [{ active_agents: 0, active_systems: 0, interactions_24h: 0, anomaly_rate_24h: 0 }]);
 
   const totals = totalsRows[0]!;
 
-  // 2. Systems sorted worst-first
+  // 2. Systems sorted worst-first. Aggregator emits one row per
+  // (system, source) plus an 'all' rollup, so the read filter matches
+  // the source param 1:1.
   const systems = await query<{
     system_id: string;
     system_type: string;
@@ -54,6 +53,7 @@ app.get('/network/status', async (c) => {
     anomaly_rate: number;
     median_duration_ms: number | null;
     p95_duration_ms: number | null;
+    p99_duration_ms: number | null;
     last_seen_at: string;
   }>(
     `SELECT system_id AS "system_id",
@@ -64,26 +64,24 @@ app.get('/network/status', async (c) => {
             anomaly_rate AS "anomaly_rate",
             median_duration_ms AS "median_duration_ms",
             p95_duration_ms AS "p95_duration_ms",
+            p99_duration_ms AS "p99_duration_ms",
             last_seen_at::text AS "last_seen_at"
      FROM system_health
-     WHERE total_interactions >= 3
+     WHERE source = $1
+       AND total_interactions >= 3
        AND last_seen_at >= now() - INTERVAL '30 days'
      ORDER BY
        failure_rate DESC,
        anomaly_rate DESC,
        total_interactions DESC
      LIMIT 50`,
+    [sourceParam],
   ).catch(() => []);
 
-  // Staleness check — use an unfiltered probe so the volume filter on systems[]
-  // doesn't cause false positives in low-traffic / staging environments.
-  const stalenessRows = await query<{ max_last_seen: string | null }>(
-    `SELECT MAX(last_seen_at)::text AS "max_last_seen" FROM system_health`,
-  ).catch(() => [{ max_last_seen: null }]);
-  const latestSeen = stalenessRows[0]?.max_last_seen ?? null;
-  const stale = latestSeen
-    ? (Date.now() - new Date(latestSeen).getTime()) > TWO_HOURS_MS
-    : true;
+  // Staleness comes from the same probe /health uses, so the two
+  // routes can never disagree about pipeline state.
+  const freshness = await probeAggregationFreshness();
+  const stale = freshness.stale;
 
   // 3. Skills with anomaly signals
   const threats = await query<{

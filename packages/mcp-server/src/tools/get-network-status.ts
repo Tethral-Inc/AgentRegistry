@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { confidence } from '../utils/confidence.js';
-import { networkStatusNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { networkStatusNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { fmtRatio, section, truncHash } from '../utils/style.js';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
@@ -96,19 +96,25 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         // network-wide, not agent-local — so only the next-action footer
         // is appended here. Notification header is skipped for the same
         // reason (no agent id in scope).
-        text += renderNextActionFooter(
-          networkStatusNextAction({
-            degraded_systems: (systems as Array<Record<string, unknown>>).map((sys) => ({
-              system_id: sys.system_id as string | undefined,
-              failure_rate: sys.failure_rate as number | undefined,
-            })).filter((sys) => (sys.failure_rate ?? 0) > 0.05),
-          }),
-        );
+        const action = networkStatusNextAction({
+          degraded_systems: (systems as Array<Record<string, unknown>>).map((sys) => ({
+            system_id: sys.system_id as string | undefined,
+            failure_rate: sys.failure_rate as number | undefined,
+          })).filter((sys) => (sys.failure_rate ?? 0) > 0.05),
+        });
+        text += renderNextActionFooter(action);
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Network status error: ${msg}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Network status error: ${msg}` }],
+          isError: true,
+        };
       }
     },
   );

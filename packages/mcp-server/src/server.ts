@@ -19,7 +19,7 @@ import { searchSkillsTool } from './tools/search-skills.js';
 import { getSkillVersionsTool } from './tools/get-skill-versions.js';
 import { updateCompositionTool } from './tools/update-composition.js';
 import { getNotificationsTool } from './tools/get-notifications.js';
-import { acknowledgeSignalTool, acknowledgeThreatTool } from './tools/acknowledge-threat.js';
+import { acknowledgeSignalTool } from './tools/acknowledge-signal.js';
 import { disableDeepCompositionTool } from './tools/configure-deep-composition.js';
 import { getProfileTool } from './tools/get-profile.js';
 import { getCoverageTool } from './tools/get-coverage.js';
@@ -27,12 +27,12 @@ import { getStableCorridorsTool } from './tools/get-stable-corridors.js';
 import { getFailureRegistryTool } from './tools/get-failure-registry.js';
 import { getTrendTool } from './tools/get-trend.js';
 import { summarizeMyAgentTool } from './tools/summarize-my-agent.js';
-import { gettingStartedTool } from './tools/getting-started.js';
 import { orientMeTool } from './tools/orient-me.js';
 import { whatsNewTool } from './tools/whats-new.js';
 import { getCompositionDiffTool } from './tools/get-composition-diff.js';
 import { dismissPatternTool } from './tools/dismiss-pattern.js';
 import { setWatchTool, listWatchesTool } from './tools/set-watch.js';
+import { getTierFeaturesTool } from './tools/get-tier-features.js';
 import { withSelfLog } from './middleware/self-log.js';
 import { CorrelationWindow } from './middleware/correlation-window.js';
 import { installFetchObserver, getUnwrappedFetch } from './middleware/fetch-observer.js';
@@ -40,6 +40,7 @@ import { runEnvironmentalProbe } from './probes/environmental.js';
 import { defaultSession, SessionState } from './session-state.js';
 import { checkLatestVersion } from './version-check.js';
 import { readCachedVersionCheck, writeCachedVersionCheck } from './version-check-cache.js';
+import { recordSelfFailure } from './self-telemetry.js';
 
 declare const __PACKAGE_VERSION__: string;
 
@@ -144,7 +145,6 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   updateCompositionTool(server, apiUrl);
   getNotificationsTool(server, apiUrl);
   acknowledgeSignalTool(server, apiUrl);
-  acknowledgeThreatTool(server, apiUrl); // deprecated alias — removed no earlier than v2.7.0 + 90 days
   disableDeepCompositionTool(server);
   getProfileTool(server, apiUrl);
   getCoverageTool(server, apiUrl);
@@ -152,13 +152,13 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   getFailureRegistryTool(server, apiUrl);
   getTrendTool(server, apiUrl);
   summarizeMyAgentTool(server, apiUrl);
-  gettingStartedTool(server, apiUrl);
   orientMeTool(server, apiUrl);
   whatsNewTool(server, apiUrl);
   getCompositionDiffTool(server, apiUrl);
   dismissPatternTool(server, apiUrl);
   setWatchTool(server, apiUrl);
   listWatchesTool(server, apiUrl);
+  getTierFeaturesTool(server);
 
   // Fire the environmental probe in the background. We register the
   // agent first (if needed) then fire probes to common public targets
@@ -178,8 +178,12 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
         session,
         unwrappedFetch: getUnwrappedFetch(),
       });
-    } catch {
-      // Silent drop — probe failures must not affect MCP startup.
+    } catch (err) {
+      // Probe failures must not affect MCP startup. Recorded into
+      // self-telemetry so check_environment can surface "baseline
+      // measurements unavailable" instead of looking healthy.
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      recordSelfFailure('environmental_probe', msg);
     }
   })();
 
@@ -205,8 +209,12 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
       if (session.isClosed) return;
       session.setVersionCheck(result);
       writeCachedVersionCheck(result);
-    } catch {
-      // Silent drop — a failed version check must never affect tool calls.
+    } catch (err) {
+      // Failed version check must never affect tool calls, but the
+      // operator deserves to know upgrade prompts are missing because
+      // the registry is unreachable, not because no upgrade exists.
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      recordSelfFailure('version_check', msg);
     }
   })();
 

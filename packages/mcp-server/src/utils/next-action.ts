@@ -11,6 +11,12 @@
  * action explicitly says "nothing to do this period — call X when Y."
  * That's more honest than pretending there's always something to chase.
  *
+ * Two surfaces (Sprint 2 / F12):
+ *   - `text` — the prose footer humans read.
+ *   - `tool` + `args` — structured routing in the response `_meta` so
+ *     agentic clients (Claude, etc.) can auto-traverse the lens graph
+ *     without parsing prose. Convention documented in the README.
+ *
  * Keep heuristics simple and keep the threshold math obvious — an
  * operator should be able to look at the lens output and agree with
  * the recommendation just by scanning.
@@ -22,6 +28,14 @@ export interface NextAction {
    * Include a tool name (backticks optional) so the operator can act.
    */
   text: string;
+  /**
+   * Structured routing for agentic clients. Set when there's a clear
+   * tool to call next; omit for terminal states ("nothing to chase",
+   * "log more receipts") where the next move is human-side.
+   */
+  tool?: string;
+  /** Args the agentic client should pass to `tool`. Default: empty. */
+  args?: Record<string, unknown>;
 }
 
 /* --------------------------------- friction --------------------------------- */
@@ -60,6 +74,8 @@ export function frictionNextAction(s: FrictionSummary | null | undefined): NextA
   if (networkyTarget?.target_system_id) {
     return {
       text: `call \`get_network_status\` — ${networkyTarget.target_system_id} is failing across multiple agents, not just you.`,
+      tool: 'get_network_status',
+      args: {},
     };
   }
 
@@ -69,6 +85,8 @@ export function frictionNextAction(s: FrictionSummary | null | undefined): NextA
   if (retryHot?.target_system_id) {
     return {
       text: `call \`get_skill_tracker\` to see if ${retryHot.target_system_id} has a known version with better retry behavior.`,
+      tool: 'get_skill_tracker',
+      args: { target_system_id: retryHot.target_system_id },
     };
   }
 
@@ -80,6 +98,8 @@ export function frictionNextAction(s: FrictionSummary | null | undefined): NextA
   if (waitHog?.target_system_id) {
     return {
       text: `call \`get_failure_registry\` for ${waitHog.target_system_id} — it accounts for >30% of your wait time.`,
+      tool: 'get_failure_registry',
+      args: { target_system_id: waitHog.target_system_id },
     };
   }
 
@@ -109,9 +129,15 @@ export function trendNextAction(s: TrendSummary | null | undefined): NextAction 
   if (degraded?.target) {
     return {
       text: `call \`get_friction_report\` — ${degraded.target} degraded period-over-period.`,
+      tool: 'get_friction_report',
+      args: {},
     };
   }
-  return { text: 'call `get_stable_corridors` to see which paths you can trust this week.' };
+  return {
+    text: 'call `get_stable_corridors` to see which paths you can trust this week.',
+    tool: 'get_stable_corridors',
+    args: {},
+  };
 }
 
 /* -------------------------------- coverage -------------------------------- */
@@ -127,7 +153,11 @@ export function coverageNextAction(s: CoverageSummary | null | undefined): NextA
       text: `call \`log_interaction\` consistently — gaps in ${triggered.slice(0, 2).join(', ')} mean some lenses won't have signal yet.`,
     };
   }
-  return { text: 'coverage looks complete. Call `get_friction_report` to read the lenses you just unlocked.' };
+  return {
+    text: 'coverage looks complete. Call `get_friction_report` to read the lenses you just unlocked.',
+    tool: 'get_friction_report',
+    args: {},
+  };
 }
 
 /* --------------------------- failure-registry ---------------------------- */
@@ -140,15 +170,25 @@ export interface FailureRegistrySummary {
 export function failureRegistryNextAction(s: FailureRegistrySummary | null | undefined): NextAction {
   const total = s?.total_failures ?? 0;
   if (total === 0) {
-    return { text: 'no failures this window. Call `get_trend` to spot degradations before they turn into failures.' };
+    return {
+      text: 'no failures this window. Call `get_trend` to spot degradations before they turn into failures.',
+      tool: 'get_trend',
+      args: {},
+    };
   }
   const top = (s?.by_error_code ?? [])[0];
   if (top?.error_code && top.top_target) {
     return {
       text: `call \`get_skill_tracker\` for ${top.top_target} — ${top.error_code} is the dominant failure mode.`,
+      tool: 'get_skill_tracker',
+      args: { target_system_id: top.top_target },
     };
   }
-  return { text: 'call `get_friction_report` to see whether these failures concentrate in a specific target.' };
+  return {
+    text: 'call `get_friction_report` to see whether these failures concentrate in a specific target.',
+    tool: 'get_friction_report',
+    args: {},
+  };
 }
 
 /* -------------------------- stable-corridors ----------------------------- */
@@ -162,7 +202,11 @@ export function stableCorridorsNextAction(s: StableCorridorsSummary | null | und
   if (corridors.length === 0) {
     return { text: 'no stable corridors yet — log more interactions so patterns can emerge.' };
   }
-  return { text: 'call `get_trend` to see whether these corridors held up period-over-period.' };
+  return {
+    text: 'call `get_trend` to see whether these corridors held up period-over-period.',
+    tool: 'get_trend',
+    args: {},
+  };
 }
 
 /* ---------------------------- network-status ----------------------------- */
@@ -174,7 +218,19 @@ export interface NetworkStatusSummary {
 export function networkStatusNextAction(s: NetworkStatusSummary | null | undefined): NextAction {
   const degraded = s?.degraded_systems ?? [];
   if (degraded.length === 0) {
-    return { text: 'network looks healthy. Call `get_friction_report` for agent-local issues.' };
+    return {
+      text: 'network looks healthy. Call `get_friction_report` for agent-local issues.',
+      tool: 'get_friction_report',
+      args: {},
+    };
+  }
+  const top = degraded[0];
+  if (top?.system_id) {
+    return {
+      text: 'call `check_entity` on the top degraded system to see its history.',
+      tool: 'check_entity',
+      args: { entity_id: top.system_id },
+    };
   }
   return { text: 'call `check_entity` on the top degraded system to see its history.' };
 }
@@ -190,7 +246,11 @@ export function revealedPreferenceNextAction(s: RevealedPreferenceSummary | null
   if (n === 0) {
     return { text: 'no revealed-preference signals yet. Keep logging — the lens needs repeated behavior to speak.' };
   }
-  return { text: 'call `get_stable_corridors` to see whether your actual routing matches what you believe is stable.' };
+  return {
+    text: 'call `get_stable_corridors` to see whether your actual routing matches what you believe is stable.',
+    tool: 'get_stable_corridors',
+    args: {},
+  };
 }
 
 /* --------------------------- compensation --------------------------- */
@@ -202,9 +262,17 @@ export interface CompensationSummary {
 export function compensationNextAction(s: CompensationSummary | null | undefined): NextAction {
   const n = (s?.signatures ?? []).length;
   if (n === 0) {
-    return { text: 'no compensation signatures detected this window. Call `get_failure_registry` to see raw failures.' };
+    return {
+      text: 'no compensation signatures detected this window. Call `get_failure_registry` to see raw failures.',
+      tool: 'get_failure_registry',
+      args: {},
+    };
   }
-  return { text: 'call `get_friction_report` — compensation activity usually concentrates in a small set of friction targets.' };
+  return {
+    text: 'call `get_friction_report` — compensation activity usually concentrates in a small set of friction targets.',
+    tool: 'get_friction_report',
+    args: {},
+  };
 }
 
 /* ------------------------------- whats-new ------------------------------- */
@@ -216,9 +284,17 @@ export interface WhatsNewSummary {
 export function whatsNewNextAction(s: WhatsNewSummary | null | undefined): NextAction {
   const n = (s?.items ?? []).length;
   if (n === 0) {
-    return { text: 'nothing new. Call `get_friction_report` for a fresh read of this week\'s behavior.' };
+    return {
+      text: 'nothing new. Call `get_friction_report` for a fresh read of this week\'s behavior.',
+      tool: 'get_friction_report',
+      args: {},
+    };
   }
-  return { text: 'call `get_notifications` to see the items worth acknowledging.' };
+  return {
+    text: 'call `get_notifications` to see the items worth acknowledging.',
+    tool: 'get_notifications',
+    args: {},
+  };
 }
 
 /* ------------------------------- summarize ------------------------------- */
@@ -247,7 +323,11 @@ export interface MyAgentSummary {
 
 export function myAgentNextAction(s: MyAgentSummary | null | undefined): NextAction {
   if ((s?.unread_notifications ?? 0) > 0) {
-    return { text: 'call `get_notifications` — unread signals are waiting.' };
+    return {
+      text: 'call `get_notifications` — unread signals are waiting.',
+      tool: 'get_notifications',
+      args: {},
+    };
   }
   return summarizeNextAction(s ?? null);
 }
@@ -262,4 +342,24 @@ export function myAgentNextAction(s: MyAgentSummary | null | undefined): NextAct
 export function renderNextActionFooter(action: NextAction | null | undefined): string {
   if (!action || !action.text) return '';
   return `\n→ Next action: ${action.text}\n`;
+}
+
+/**
+ * Build the `_meta` block to attach to a tool response so agentic
+ * clients can auto-traverse to the next tool. Returns `undefined` for
+ * terminal states (no `tool` set) — caller spreads conditionally:
+ *
+ *   const meta = nextActionMeta(action);
+ *   return { content: [...], ...(meta && { _meta: meta }) };
+ */
+export function nextActionMeta(
+  action: NextAction | null | undefined,
+): { 'acr/next_action': { tool: string; args: Record<string, unknown> } } | undefined {
+  if (!action?.tool) return undefined;
+  return {
+    'acr/next_action': {
+      tool: action.tool,
+      args: action.args ?? {},
+    },
+  };
 }

@@ -6,7 +6,7 @@ import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { renderNotificationHeader } from '../utils/notification-header.js';
-import { whatsNewNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { whatsNewNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { fetchActivePatterns, renderPatternsSection } from '../utils/patterns.js';
 import { getAuthHeaders } from '../state.js';
@@ -16,7 +16,7 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
     'whats_new',
     {
       description:
-        "Morning briefing: yesterday's performance summary, anything that degraded this week, today's activity so far, and unread notifications. One call to orient yourself at the start of a session.",
+        "Time-scoped digest: yesterday's performance, anything that degraded this week, today's activity so far, and unread notification count. Strictly retrospective — for routing (\"what should I do next?\") call `orient_me` instead.",
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
@@ -161,10 +161,11 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
         }
       }
 
-      // Build a whats-new items summary the next-action heuristic expects.
-      // We treat degraded targets + unread notifications as items worth
-      // acknowledging — if there's nothing, whatsNewNextAction routes to
-      // get_friction_report for a fresh read.
+      // whats_new is a digest, not a router. The next-action footer
+      // points at the most useful FOLLOW-ON read for what the digest
+      // surfaced — unread notifications win, otherwise route to a
+      // fresh friction read. Routing decisions ("where should I
+      // start?") live in orient_me, not here.
       const weekTargets = (trendData?.per_target as Array<Record<string, unknown>> | undefined) ?? [];
       const degradedCount = weekTargets.filter((t) => {
         const delta = t.failure_rate_delta as number | null | undefined;
@@ -173,10 +174,15 @@ export function whatsNewTool(server: McpServer, apiUrl: string) {
       const unreadForAction = (notifData?.unread_count as number | undefined) ?? 0;
       const whatsNewItems = Array.from({ length: degradedCount + unreadForAction });
 
-      text += renderNextActionFooter(whatsNewNextAction({ items: whatsNewItems }));
+      const action = whatsNewNextAction({ items: whatsNewItems });
+      text += renderNextActionFooter(action);
       text += renderDashboardFooter(id, 'overview');
 
-      return { content: [{ type: 'text' as const, text }] };
+      const meta = nextActionMeta(action);
+      return {
+        content: [{ type: 'text' as const, text }],
+        ...(meta && { _meta: meta }),
+      };
     },
   );
 }

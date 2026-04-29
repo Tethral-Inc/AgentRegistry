@@ -32,6 +32,16 @@ On first use your agent auto-registers and gets a human-readable name (e.g. `ant
 
 Want an API key for authenticated writes? You already have one — `get_my_agent` returns it. But the ingest path accepts unauthenticated writes too, so low-barrier onboarding just works.
 
+## First Session
+
+The minimum useful sequence on day one — backed by `tests/integration/first-session.test.ts` so the steps below stay in sync with the actual tool surface:
+
+1. **Discover** — `get_my_agent` returns your agent id, API key, and dashboard link. No registration call needed.
+2. **Log** — call `log_interaction` after every external tool call, API request, or MCP interaction. Every lens depends on receipts; without them the lens output is cohort-baseline only.
+3. **Orient** — `orient_me` reads your state and routes you to the next useful tool. State-aware: brand new (cohort baselines), some data (fill in gaps), steady (drill into friction).
+4. **Read a lens** — `get_friction_report` for where time goes, `get_coverage` for which signals you're missing, `get_stable_corridors` for paths you can rely on.
+5. **Network awareness** — `check_environment` shows pipeline health, aggregation freshness, and any anomaly signals affecting components in your composition.
+
 ## What It Does
 
 ACR is an **interaction profile registry** — not a security product, not a skill store.
@@ -101,13 +111,13 @@ Tier: free
   None recorded this week.
 ```
 
-## Tools (25)
+## Tools (30)
 
 ### Your agent
 | Tool | Purpose |
 |------|---------|
-| `get_my_agent` | Your agent ID, API key, dashboard link, health snapshot, and menu of available lenses. The entry point to ACR. |
-| `getting_started` | Step-by-step setup checklist: registration, logging, composition, coverage, and your next action. |
+| `orient_me` | State-aware entry point. Classifies your agent (new / some-data / steady) and routes to the next useful tool. |
+| `get_my_agent` | Your agent ID, API key, dashboard link, health snapshot, and menu of available lenses. |
 | `register_agent` | Explicit registration with composition. Auto-registration is the default on first call. |
 | `update_composition` | Update your composition without re-registering. Preserves agent identity. |
 | `configure_deep_composition` | Privacy control: enable/disable sub-component capture for this session. |
@@ -130,13 +140,22 @@ Tier: free
 | `get_trend` | Latency and failure rate changes: current vs previous period, raw deltas. |
 | `get_revealed_preference` | Declared-but-uncalled bindings vs called-but-undeclared targets: where real behavior diverges from composition metadata. |
 | `get_compensation_signatures` | Repeated multi-hop patterns an agent falls back on: chain-shape stability, frequency, and fleet-wide comparison when available. |
+| `whats_new` | Time-scoped digest: yesterday's friction, today's activity, week trend, unread signals — in one call. |
+| `get_composition_diff` | Compare your declared composition against what your interactions actually exercise. |
 
 ### Anomaly signal notifications
 | Tool | Purpose |
 |------|---------|
-| `check_environment` | Active anomaly signals and network observations. Call on startup. |
+| `check_environment` | Pipeline health, aggregation freshness, and active anomaly signals. Call on startup. |
 | `get_notifications` | Unread anomaly signal notifications about components in your composition. |
-| `acknowledge_threat` | Acknowledge a notification after reviewing with your operator. Expires in 30 days. |
+| `acknowledge_signal` | Acknowledge an anomaly signal notification after reviewing with your operator. Expires in 30 days. |
+| `dismiss_pattern` | Suppress a noticed pattern from future renderings. |
+
+### Watches
+| Tool | Purpose |
+|------|---------|
+| `set_watch` | Create or update a watch on a friction/trend metric; fires a notification on threshold crossing. |
+| `list_watches` | List your active watches and their current evaluation state. |
 
 ### Network observation
 | Tool | Purpose |
@@ -150,6 +169,11 @@ Tier: free
 | `check_entity` | Ask the network what it knows about a specific skill, agent, or system. |
 | `search_skills` | Query the network's knowledge of a skill by name. |
 | `get_skill_versions` | Version history for a skill hash. |
+
+### Tier
+| Tool | Purpose |
+|------|---------|
+| `get_tier_features` | Free vs paid feature comparison. Lens output also includes contextual upsells when your data suggests a paid feature would help (suppress with `ACR_NO_UPSELL=1`). |
 
 ## Dashboard
 
@@ -177,6 +201,7 @@ All boolean env vars accept `1`/`true`/`yes`/`on` (truthy) or `0`/`false`/`no`/`
 | `ACR_DISABLE_FETCH_OBSERVE` | `false` | Disable the transport-boundary fetch observer (no passive receipt emission). |
 | `ACR_DISABLE_ENV_PROBE` | `false` | Disable environmental latency probes at startup. |
 | `ACR_DISABLE_VERSION_CHECK` | `false` | Skip the background npm version check. |
+| `ACR_NO_UPSELL` | `false` | Suppress contextual paid-tier upsell lines in lens output. |
 | `ACR_ENV_PROBE_TARGETS` | built-in list | Comma-separated override for the probe's target hosts. |
 
 ### HTTP transport (only used by `acr-mcp-http`)
@@ -220,7 +245,7 @@ The dashboard updates as receipts arrive. If you've logged interactions but see 
 
 **Targeted notifications aren't arriving**
 
-Call `getting_started` — Step 3 checks composition. If your composition is empty (0 skills, 0 MCPs, 0 tools), anomaly notifications are network-wide only. Call `update_composition` with your current stack to enable targeted alerts.
+Call `orient_me` — it surfaces composition state. If your composition is empty (0 skills, 0 MCPs, 0 tools), anomaly notifications are network-wide only. Call `update_composition` with your current stack to enable targeted alerts.
 
 ## Data Collection
 

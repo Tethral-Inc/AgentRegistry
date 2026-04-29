@@ -5,6 +5,11 @@ import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
+import {
+  compensationNextAction,
+  renderNextActionFooter,
+  nextActionMeta,
+} from '../utils/next-action.js';
 
 const TOOL_DESCRIPTION = `Query the compensation-signatures lens: how stereotyped is your chain-shape behavior, and which chain patterns dominate vs which are exploratory?
 
@@ -94,6 +99,9 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
           }
         }
 
+        const action = compensationNextAction({ signatures: data.patterns });
+        text += renderNextActionFooter(action);
+
         const snapshot = await createSnapshot({
           apiUrl,
           agentId: id,
@@ -103,10 +111,17 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
         });
         text += `\n${renderSnapshotFooter(snapshot)}`;
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Compensation error: ${msg}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Compensation error: ${msg}` }],
+          isError: true,
+        };
       }
     },
   );

@@ -1,3 +1,50 @@
+## 2.11.0 (2026-04-26)
+
+Deprecation cleanup. The `getting_started` shim and `acknowledge_threat`
+alias were carried for a transition window that, with no external users
+yet, never needed to exist. Both are gone, the menu is shorter, and the
+codebase stops carrying parallel paths to the same handler.
+
+- **`getting_started` removed.** Marked deprecated in 2.7.0 with
+  `orient_me` as the replacement. Source file deleted, registration
+  dropped from `server.ts`, README row removed, troubleshooting
+  pointer rewritten to `orient_me`. The `version-check.ts` entry-
+  point comment updated to match.
+- **`acknowledge_threat` removed.** Renamed to `acknowledge_signal` in
+  2.7.0; the legacy alias has been carrying a deprecation banner since
+  then. The shared-handler indirection is gone — `acknowledge_signal`
+  is now a single-handler tool. Source file renamed
+  `acknowledge-threat.ts` → `acknowledge-signal.ts`.
+- **TOOL_MENU cleaned.** `(deprecated)` annotations removed from the
+  Onboarding and Notifications rows in `get_my_agent`.
+- **Tool count: 31 → 29.** Reflected in the package description.
+- **`get_friction_report` nil-guard.** `top_retry_targets` now
+  defaults to `[]` when the upstream response omits it, so the paid-
+  tier render path no longer throws on partial responses.
+
+## 2.10.0 (2026-04-25)
+
+Registration proof-of-possession. Before this release `/register`
+accepted any body with a `public_key` field ≥32 chars and minted
+credentials for it — anyone who learned another operator's public key
+could hijack the identity. Now every register request must carry an
+Ed25519 signature over `register:v1:${public_key}:${ts}` with a 5-minute
+freshness window, verified before the DB is touched.
+
+- **MCP owns the keypair.** Persisted in `~/.claude/.acr-state.json`
+  and reused across sessions. `register_agent` no longer accepts
+  `public_key` as input, closing the prompt-injection vector where an
+  agent could be coerced to register against a foreign key.
+- **ts-sdk additions.** `generateAgentKeypair`,
+  `signRegistrationRequest`, `registerWithKeypair`, `registerNewAgent`
+  — zero-dep preserved (`node:crypto` only). ts-sdk bumped 0.3.0 →
+  0.4.0 (payload-shape breaking).
+- **python-sdk additions.** Mirror helpers gated on
+  `cryptography>=42`. Bumped 0.3.0 → 0.4.0.
+- **Replay bounded** by the freshness window plus the existing
+  `UNIQUE(public_key)` constraint. `REGISTER_POP_REQUIRED=false` is a
+  local dev escape hatch only; production leaves it at default.
+
 ## 2.9.0 (2026-04-22)
 
 Shareable insights + watches. The lens suite stays raw, but two

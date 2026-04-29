@@ -4,7 +4,7 @@ import { getAgentName, getAuthHeaders } from '../state.js';
 import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
-import { coverageNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { coverageNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
@@ -79,11 +79,10 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           }
         }
 
-        text += renderNextActionFooter(
-          coverageNextAction({
-            rules: (rules ?? []).map((r) => ({ signal: r.signal, triggered: r.triggered })),
-          }),
-        );
+        const action = coverageNextAction({
+          rules: (rules ?? []).map((r) => ({ signal: r.signal, triggered: r.triggered })),
+        });
+        text += renderNextActionFooter(action);
         text += renderDashboardFooter(id, 'coverage', { source: source ?? 'agent' });
 
         const snapshot = await createSnapshot({
@@ -95,9 +94,16 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
         });
         text += renderSnapshotFooter(snapshot);
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Coverage error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Coverage error: ${err instanceof Error ? err.message : 'Unknown'}` }],
+          isError: true,
+        };
       }
     },
   );

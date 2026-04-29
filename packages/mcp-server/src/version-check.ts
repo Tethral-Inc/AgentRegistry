@@ -7,7 +7,7 @@
  * error-code breakdowns, or new lenses have shipped. This module hits
  * the public npm registry once per process, compares against the
  * baked-in package version, and stashes the result on the session so
- * natural entry-point tools (`getting_started`, `whats_new`,
+ * natural entry-point tools (`orient_me`, `whats_new`,
  * `get_my_agent`) can surface an upgrade hint.
  *
  * Design constraints:

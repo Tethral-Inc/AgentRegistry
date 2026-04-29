@@ -1,10 +1,9 @@
 /**
  * orient_me — state-aware routing for "what should I do next?"
  *
- * Replaces the static getting_started checklist with a state-sensitive
- * router. Reads profile + coverage + notifications + cohort baseline,
- * classifies the agent into one of three states, and returns the single
- * most useful next tool call for that state:
+ * Reads profile + coverage + notifications + cohort baseline, classifies
+ * the agent into one of three states, and returns the single most useful
+ * next tool call for that state:
  *
  *   NEW         — just registered, zero receipts
  *                 → start logging + see cohort typical performance
@@ -12,9 +11,6 @@
  *                 → keep logging, focus on coverage gaps
  *   STEADY      — ≥10 receipts
  *                 → jump to a lens (friction / notifications / trend)
- *
- * getting_started stays registered for now (discoverable by name) but
- * its description will route to orient_me starting in v2.7.0.
  *
  * Design principle: one crisp answer per state. Operators who want more
  * call the lens tools directly. This is the front door for "where am
@@ -30,6 +26,7 @@ import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { renderCohortBaselineHeader, THIN_SAMPLE_THRESHOLD } from '../utils/cohort-baseline.js';
 import { getActiveSession } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
+import { nextActionMeta } from '../utils/next-action.js';
 
 async function fetchJson(url: string): Promise<Record<string, unknown> | null> {
   try {
@@ -60,7 +57,7 @@ export function orientMeTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'orient_me',
     {
-      description: "Where am I, and what should I do next? Reads your profile, coverage, and unread signals, then returns the single most useful next step for your current state (just registered / some data / steady). Call this when you're unsure where to start. Replaces `getting_started` as the recommended front-door tool.",
+      description: "Where am I, and what should I do next? Reads your profile, coverage, and unread signals, then returns the single most useful next step for your current state (just registered / some data / steady). Call this when you're unsure where to start.",
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
@@ -127,7 +124,11 @@ export function orientMeTool(server: McpServer, apiUrl: string) {
         text += `State: ${unreadNotifications} unread signal${unreadNotifications === 1 ? '' : 's'} waiting\n\n`;
         text += `→ Next step: call \`get_notifications\` to read them.\n`;
         text += renderDashboardFooter(id, 'overview');
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta({ text: '', tool: 'get_notifications', args: {} });
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       }
 
       if (state === 'NEW') {
@@ -172,11 +173,21 @@ export function orientMeTool(server: McpServer, apiUrl: string) {
         text += `  \`get_trend\` — period-over-period changes\n`;
         text += `  \`get_failure_registry\` — what's failing and why\n`;
         text += `  \`get_stable_corridors\` — paths you can trust\n`;
-        text += `  \`summarize_my_agent\` — one-call snapshot of everything\n`;
+        text += `  \`whats_new\` — yesterday + today + week digest\n`;
       }
 
       text += renderDashboardFooter(id, 'overview');
-      return { content: [{ type: 'text' as const, text }] };
+
+      // Structured next-action so agentic clients can auto-traverse.
+      // NEW + SOME_DATA → call log_interaction (the prerequisite for
+      // every lens). STEADY → call get_friction_report (the lens that
+      // surfaces shadow tax, the most actionable first read).
+      const nextTool = state === 'STEADY' ? 'get_friction_report' : 'log_interaction';
+      const meta = nextActionMeta({ text: '', tool: nextTool, args: {} });
+      return {
+        content: [{ type: 'text' as const, text }],
+        ...(meta && { _meta: meta }),
+      };
     },
   );
 }

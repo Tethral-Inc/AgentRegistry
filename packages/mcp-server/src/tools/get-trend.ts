@@ -6,9 +6,10 @@ import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { formatLatencyChangeFraction, formatFailureRateDelta } from '../utils/format-delta.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
-import { trendNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { trendNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
+import { renderEmptyState } from '../utils/empty-state.js';
 
 export function getTrendTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -61,7 +62,15 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
         if (previousPeriod) text += `Previous: ${previousPeriod.start} to ${previousPeriod.end}\n`;
 
         if (targets.length === 0) {
-          text += `\nNo targets with data in both periods.\n`;
+          // Standardized empty-state (F10) — replaces the bare
+          // "No targets..." line with cohort framing + next step + unlocks.
+          text += '\n';
+          text += await renderEmptyState({
+            displayName,
+            lensName: 'trend',
+            apiUrl,
+            unlocks: 'period-over-period failure rate and latency deltas per target',
+          });
         } else {
           for (const t of targets) {
             const curr = t.current as Record<string, unknown>;
@@ -95,15 +104,14 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
           if (rules.previous_window != null) text += `  Previous window: ${rules.previous_window}\n`;
         }
 
-        text += renderNextActionFooter(
-          trendNextAction({
-            per_target: targets.map((t) => ({
-              target: t.target as string | undefined,
-              latency_change_ratio: t.latency_change_ratio as number | null | undefined,
-              failure_rate_delta: t.failure_rate_delta as number | null | undefined,
-            })),
-          }),
-        );
+        const action = trendNextAction({
+          per_target: targets.map((t) => ({
+            target: t.target as string | undefined,
+            latency_change_ratio: t.latency_change_ratio as number | null | undefined,
+            failure_rate_delta: t.failure_rate_delta as number | null | undefined,
+          })),
+        });
+        text += renderNextActionFooter(action);
         text += renderDashboardFooter(id, 'trend', { range: scope, source: source ?? 'agent' });
 
         const snapshot = await createSnapshot({
@@ -115,9 +123,16 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
         });
         text += renderSnapshotFooter(snapshot);
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Trend error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Trend error: ${err instanceof Error ? err.message : 'Unknown'}` }],
+          isError: true,
+        };
       }
     },
   );

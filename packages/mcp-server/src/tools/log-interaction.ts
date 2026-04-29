@@ -4,6 +4,33 @@ import { ensureRegistered, getAgentId } from '../state.js';
 import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import type { CorrelationWindow } from '../middleware/correlation-window.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
+import { parseApiResponse } from '../utils/parse-api-response.js';
+
+/**
+ * Schema for the /api/v1/receipts ingestion response. Defined here
+ * (not in @acr/shared) because the MCP only cares about the fields
+ * it renders — `accepted` (count), `receipt_ids` (for correlation
+ * window linkage), and the optional `skill_signals` /
+ * `composition_last_updated_minutes_ago` enrichments.
+ *
+ * Anything not listed here is ignored at parse time. Anything
+ * declared but missing on the wire makes the response "malformed",
+ * which used to silently no-op as `accepted = undefined` /
+ * `receipt_ids = []`. Now it surfaces as a structured isError.
+ */
+const ReceiptsResponseSchema = z.object({
+  accepted: z.number().int().nonnegative(),
+  receipt_ids: z.array(z.string()),
+  skill_signals: z.array(z.object({
+    target: z.string(),
+    skill_name: z.string().nullable().optional(),
+    anomaly_signal_count: z.number(),
+    anomaly_signal_rate: z.number().optional(),
+    agent_count: z.number(),
+    last_updated_at: z.string().optional(),
+  })).optional(),
+  composition_last_updated_minutes_ago: z.number().optional(),
+});
 
 /**
  * Resolve an agent id for this call, transparently retrying registration
@@ -190,19 +217,18 @@ export function logInteractionTool(
           }),
         });
 
-        const data = await res.json();
-        if (!res.ok) {
-          return { content: [{ type: 'text' as const, text: `Failed to log: ${JSON.stringify(data)}` }] };
-        }
+        const parsed = await parseApiResponse(res, ReceiptsResponseSchema, 'log_interaction');
+        if (!parsed.ok) return parsed.error;
+        const data = parsed.data;
 
         // Record the receipt's correlation keys into the window so the
         // next in-flight receipt in the same chain can find it. We now
         // always have a chain_id (session-inferred if agent didn't set
         // one), so linkage works uniformly regardless of agent behavior.
-        if (correlationWindow && chainId && Array.isArray(data.receipt_ids)) {
+        if (correlationWindow && chainId) {
           for (const receiptId of data.receipt_ids) {
             correlationWindow.record({
-              receipt_id: String(receiptId),
+              receipt_id: receiptId,
               chain_id: chainId,
               target_system_id: params.target_system_id,
               created_at_ms: nowMs,
@@ -210,18 +236,13 @@ export function logInteractionTool(
           }
         }
 
-        // Guard against a malformed server response that doesn't carry
-        // a receipt_ids array. `.join` on a non-array would throw and
-        // mask the real problem (ingestion quietly returning 200 with
-        // an unexpected shape).
-        const receiptIds = Array.isArray(data.receipt_ids) ? data.receipt_ids : [];
-        let text = `Logged ${data.accepted} receipt(s). IDs: ${receiptIds.join(', ')}`;
+        let text = `Logged ${data.accepted} receipt(s). IDs: ${data.receipt_ids.join(', ')}`;
 
         // Surface raw anomaly signals for any skill targets in this
         // receipt. No synthetic severity label — the MCP just renders
         // the counts and rates the server observed. Operator reads the
         // numbers and decides.
-        if (data.skill_signals && Array.isArray(data.skill_signals) && data.skill_signals.length > 0) {
+        if (data.skill_signals && data.skill_signals.length > 0) {
           text += '\n\nSkill signals (raw anomaly stats from the network):';
           for (const s of data.skill_signals) {
             const ratePct = typeof s.anomaly_signal_rate === 'number'
@@ -251,7 +272,10 @@ export function logInteractionTool(
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Logging error: ${msg}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Logging error: ${msg}` }],
+          isError: true,
+        };
       }
     },
   );

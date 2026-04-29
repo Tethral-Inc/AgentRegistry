@@ -1,27 +1,8 @@
 /**
- * `acknowledge_signal` + `acknowledge_threat` — dual-registered for a
- * 90-day deprecation window.
- *
- * ACR has always recorded "anomalies" as *signals* — observed
- * deviations from cohort baseline, not verdicts. The old tool name
- * `acknowledge_threat` leaked a synthetic verdict label into the
- * operator's vocabulary: "threat" implies ACR decided something is
- * bad, when the raw data is just an observation. The rename to
- * `acknowledge_signal` aligns the tool surface with how the rest of
- * the codebase already talks (`anomaly_signal_count`,
- * `skill_signals`, `anomaly_rate`, etc.).
- *
- * Deprecation plan:
- *   - v2.7.0 (this release): both names registered. `threat` stamps
- *     a deprecation banner on its output. Descriptions tell callers
- *     which to use going forward.
- *   - v2.7.0 + 90 days: `acknowledge_threat` removed. Anyone still
- *     calling it gets an InputValidationError, which is the correct
- *     failure mode for "the tool is gone".
- *
- * Both tools share one handler because their semantics are
- * identical — the rename is purely vocabulary. Descriptions and
- * banners differ; behavior does not.
+ * `acknowledge_signal` — operator marks an anomaly signal notification
+ * as reviewed. ACR records observed deviations from cohort baseline as
+ * *signals*, not verdicts; acknowledgement records that the operator
+ * has seen one, not that anything is "resolved."
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -45,16 +26,9 @@ type Input = {
   verbose?: boolean;
 };
 
-/**
- * Shared handler. `deprecationBanner` gets prepended to the success
- * output only — error paths don't need the banner because the
- * caller already has a problem to fix before the deprecation
- * matters.
- */
 async function acknowledgeHandler(
   apiUrl: string,
   { notification_id, agent_id, reason, verbose }: Input,
-  deprecationBanner = '',
 ) {
   let resolvedId: string;
   try {
@@ -93,7 +67,7 @@ async function acknowledgeHandler(
     const nowIso = data.acknowledged_at ?? new Date().toISOString();
     const expiresIso = data.expires_at ?? null;
 
-    let text = `${deprecationBanner}Notification acknowledged.\n\n`;
+    let text = `Notification acknowledged.\n\n`;
     text += `${section('Diff')}\n`;
     text += `  Notification: ${truncId(notification_id, { verbose })}\n`;
     text += `  State:        unacknowledged ${ARROW} acknowledged\n`;
@@ -117,43 +91,15 @@ async function acknowledgeHandler(
   }
 }
 
-/**
- * New canonical name — `acknowledge_signal`. Matches the rest of the
- * codebase's vocabulary (`anomaly_signal`, `skill_signals`).
- */
 export function acknowledgeSignalTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'acknowledge_signal',
     {
-      description: 'Acknowledge an anomaly signal notification after reviewing it with your operator. Records that the notification has been reviewed. Acknowledgements expire after 30 days. Does not remove the observation from the network — only records that you have reviewed the signal. Replaces `acknowledge_threat` (same behavior, aligned terminology).',
+      description: 'Acknowledge an anomaly signal notification after reviewing it with your operator. Records that the notification has been reviewed. Acknowledgements expire after 30 days. Does not remove the observation from the network — only records that you have reviewed the signal.',
       inputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
       _meta: { priorityHint: 0.3 },
     },
     async (input) => acknowledgeHandler(apiUrl, input as Input),
-  );
-}
-
-/**
- * Legacy name — kept for 90 days so existing agent code doesn't break
- * on upgrade. Identical behavior, deprecation banner on success.
- * Remove no earlier than v2.7.0 + 90 days.
- */
-export function acknowledgeThreatTool(server: McpServer, apiUrl: string) {
-  server.registerTool(
-    'acknowledge_threat',
-    {
-      description: 'DEPRECATED since v2.7.0 — call `acknowledge_signal` instead. Behavior is identical; the rename aligns with how the rest of the ACR codebase talks ("signal", not "threat"). This shim will be removed no earlier than 90 days after v2.7.0.',
-      inputSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false },
-      // Priority dropped so hosts sorting by priorityHint surface the
-      // canonical tool first.
-      _meta: { priorityHint: 0.1, deprecated: true, replacedBy: 'acknowledge_signal', deprecatedSince: '2.7.0' },
-    },
-    async (input) => acknowledgeHandler(
-      apiUrl,
-      input as Input,
-      `NOTE: acknowledge_threat is deprecated since v2.7.0. Call \`acknowledge_signal\` — same behavior, aligned terminology.\n\n`,
-    ),
   );
 }

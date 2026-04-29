@@ -5,9 +5,10 @@ import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
-import { failureRegistryNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { failureRegistryNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
+import { renderEmptyState } from '../utils/empty-state.js';
 
 export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -61,10 +62,23 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         text += `Distinct failing targets: ${data.distinct_failing_targets}\n`;
 
         if (failures.length === 0) {
-          // Explicit health marker so the operator sees at a glance
-          // that the empty output is good news, not a missing-data
-          // problem. The next-action footer still fires below.
-          text += `\n✓ Healthy — no failures recorded in this period.\n`;
+          if (totalInteractions === 0) {
+            // No interactions at all → standardized empty-state with
+            // cohort framing, since the operator may be brand new and
+            // confused why everything reads zero.
+            text += '\n';
+            text += await renderEmptyState({
+              displayName,
+              lensName: 'failure',
+              apiUrl,
+              unlocks: 'per-target status codes, error categories, and median duration on failure',
+            });
+          } else {
+            // Interactions logged, but zero failures — actually a
+            // healthy verdict. Keep the explicit "healthy" marker so
+            // the operator doesn't read empty-as-broken.
+            text += `\n✓ Healthy — no failures recorded in this period.\n`;
+          }
         } else {
           for (const f of failures) {
             const totalCount = (f.total_count as number) ?? 0;
@@ -102,12 +116,11 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         }
         byErrorCode.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
 
-        text += renderNextActionFooter(
-          failureRegistryNextAction({
-            total_failures: data.total_failures as number | undefined,
-            by_error_code: byErrorCode,
-          }),
-        );
+        const action = failureRegistryNextAction({
+          total_failures: data.total_failures as number | undefined,
+          by_error_code: byErrorCode,
+        });
+        text += renderNextActionFooter(action);
         text += renderDashboardFooter(id, 'failure-registry', { range: scope, source: source ?? 'agent' });
 
         const snapshot = await createSnapshot({
@@ -119,9 +132,16 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         });
         text += renderSnapshotFooter(snapshot);
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Failure registry error: ${err instanceof Error ? err.message : 'Unknown'}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Failure registry error: ${err instanceof Error ? err.message : 'Unknown'}` }],
+          isError: true,
+        };
       }
     },
   );

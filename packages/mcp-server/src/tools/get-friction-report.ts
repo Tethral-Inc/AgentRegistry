@@ -5,10 +5,12 @@ import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js
 import { confidence } from '../utils/confidence.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { getUnreadNotificationCount, renderNotificationHeader } from '../utils/notification-header.js';
-import { frictionNextAction, renderNextActionFooter } from '../utils/next-action.js';
+import { frictionNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { isThinSample, renderCohortBaselineHeader } from '../utils/cohort-baseline.js';
+import { frictionTierUpsell } from '../utils/tier-upsell.js';
+import { renderEmptyState } from '../utils/empty-state.js';
 import {
   LOCAL_MIN_INTERACTIONS,
   hasEnoughSampleForVerdict,
@@ -78,13 +80,26 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
 
         if (s.total_interactions === 0) {
           let emptyText = renderNotificationHeader(unreadCount);
-          // Even with zero interactions, the cohort baseline gives a
-          // fresh agent something to look at on first call.
-          emptyText += await renderCohortBaselineHeader(apiUrl);
-          emptyText += `No interactions recorded for ${displayName} (scope "${scope}", source "${source ?? 'agent'}"). Call log_interaction after each external tool call or API request to populate your friction data. If you're only emitting server self-log, pass source='all' or source='server' to see those.`;
-          emptyText += renderNextActionFooter(frictionNextAction({ total_interactions: 0 }));
+          // Standardized empty-state template (F10): cohort framing,
+          // concrete next step, "what unlocks" line. Same shape as
+          // every other lens so first-impression UX is consistent.
+          emptyText += await renderEmptyState({
+            displayName,
+            lensName: 'friction',
+            apiUrl,
+            unlocks: 'top targets by wait share, retry waste, chain overhead',
+          });
+          if ((source ?? 'agent') === 'agent') {
+            emptyText += `   (Reading source='agent' — pass source='all' or source='server' to include observer self-log.)\n`;
+          }
+          const emptyAction = frictionNextAction({ total_interactions: 0 });
+          emptyText += renderNextActionFooter(emptyAction);
           emptyText += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
-          return { content: [{ type: 'text' as const, text: emptyText }] };
+          const emptyMeta = nextActionMeta(emptyAction);
+          return {
+            content: [{ type: 'text' as const, text: emptyText }],
+            ...(emptyMeta && { _meta: emptyMeta }),
+          };
         }
 
         let text = renderNotificationHeader(unreadCount);
@@ -179,7 +194,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           const ro = data.retry_overhead;
           text += `  Total retries: ${ro.total_retries}\n`;
           text += `  Wasted time: ${(ro.total_wasted_ms / 1000).toFixed(1)}s\n`;
-          for (const t of ro.top_retry_targets) {
+          for (const t of ro.top_retry_targets ?? []) {
             text += `    ${t.target_system_id}: ${t.retry_count} retries, ${(t.wasted_ms / 1000).toFixed(1)}s wasted ${confidence(t.retry_count)}\n`;
           }
         } else {
@@ -365,17 +380,32 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           text += `  ${data.population_comparison.baselines_available} baselines available\n`;
         }
 
+        // Contextual paid-tier upsell — only when the user's data
+        // suggests a specific paid feature would be valuable. Returns
+        // '' on paid tier, on ACR_NO_UPSELL, or when no signal warrants
+        // a pitch. Renders before the next-action footer so it doesn't
+        // displace the routing line.
+        text += frictionTierUpsell({
+          tier: data.tier as string | null | undefined,
+          retry_overhead: data.retry_overhead,
+          chain_analysis: data.chain_analysis,
+          directional_pairs: data.directional_pairs,
+          population_drift: data.population_drift,
+          top_targets: data.top_targets,
+        });
+
         // Next-action + dashboard footers. Next-action reads the same data
         // the lens just rendered so the routing decision is honest; the
         // dashboard link carries range + source so the operator lands on
-        // the exact view they just saw.
-        text += renderNextActionFooter(
-          frictionNextAction({
-            total_interactions: s.total_interactions,
-            top_targets: data.top_targets,
-            failure_breakdown: data.by_error_code,
-          }),
-        );
+        // the exact view they just saw. The same NextAction also lands
+        // in `_meta` (F12) so agentic clients can auto-traverse without
+        // parsing prose.
+        const action = frictionNextAction({
+          total_interactions: s.total_interactions,
+          top_targets: data.top_targets,
+          failure_breakdown: data.by_error_code,
+        });
+        text += renderNextActionFooter(action);
         text += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
 
         // Shareable-snapshot footer. Freezes the rendered view under a
@@ -390,10 +420,17 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         });
         text += renderSnapshotFooter(snapshot);
 
-        return { content: [{ type: 'text' as const, text }] };
+        const meta = nextActionMeta(action);
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(meta && { _meta: meta }),
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { content: [{ type: 'text' as const, text: `Friction report error: ${msg}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Friction report error: ${msg}` }],
+          isError: true,
+        };
       }
     },
   );
