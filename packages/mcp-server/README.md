@@ -8,7 +8,15 @@ MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) netwo
 
 No signup. No API key. No credit card. `npx` and go.
 
-Add to your project (`.mcp.json` — works with Claude Code, Cursor, Continue, any MCP client):
+**Claude Code** — one command, available in every directory:
+
+```bash
+claude mcp add acr -s user -- npx -y @tethral/acr-mcp@latest
+```
+
+(Drop `-s user` for project-scope, or use `-s local` to keep it private to you in this repo.)
+
+**Cursor, Continue, Claude Desktop, any other MCP client** — add to your config (`.mcp.json` for project-scope, or the client's user-scope MCP file):
 
 ```json
 {

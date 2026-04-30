@@ -39,14 +39,20 @@ Agents don't get skills from ACR — we observe skills that already exist in the
 
 ## Add to Claude Code (30 seconds)
 
-Add this to your Claude Code settings (`.claude/settings.json` or via IDE):
+One command, available in every directory:
+
+```bash
+claude mcp add acr -s user -- npx -y @tethral/acr-mcp@latest
+```
+
+Or, for any MCP client (Cursor, Continue, Claude Desktop, etc.) — add to `.mcp.json` for project-scope, or your client's user-scope MCP config:
 
 ```json
 {
   "mcpServers": {
     "acr": {
       "command": "npx",
-      "args": ["@tethral/acr-mcp"]
+      "args": ["-y", "@tethral/acr-mcp@latest"]
     }
   }
 }
