@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "acr": {
+      "command": "npx",
+      "args": ["-y", "@tethral/acr-mcp@2.11.0"]
+    }
+  }
+}

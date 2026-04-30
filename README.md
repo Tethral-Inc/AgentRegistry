@@ -236,6 +236,8 @@ node scripts/run-migration.mjs up      # Run DB migrations
 node scripts/test-agent-lifecycle.mjs  # Run integration test
 ```
 
+**Optional: dogfood ACR while working on this repo.** Copy [`.mcp.json.example`](.mcp.json.example) to `.mcp.json` and any MCP-aware client (Claude Code, Cursor, Continue, etc.) opening this directory will load the published `@tethral/acr-mcp`. Opt-in by design: `.mcp.json` itself is gitignored so contributors are never enrolled implicitly. To test local MCP changes instead of the published version, point `command` at `node` and `args` at `./packages/mcp-server/dist/cli/stdio.js` after `pnpm build`.
+
 ## License
 
 MIT
