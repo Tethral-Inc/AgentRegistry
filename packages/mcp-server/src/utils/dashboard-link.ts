@@ -6,11 +6,28 @@
  * my terminal" to "now I want to drill in." The URL is honest — it
  * points at the same agent + lens + scope the MCP just rendered.
  *
+ * When the session has an API key, we append it as a URL fragment
+ * (`#k=<encoded>`) so the dashboard can land the operator already
+ * authenticated. Fragments are not sent to servers in HTTP requests
+ * and are stripped from the cross-origin Referer header, so the key
+ * stays client-side.
+ *
  * `ACR_DASHBOARD_URL` override exists for staging and self-hosted
  * deployments. Keeps parity with `get_my_agent`'s dashboard link.
  */
+import { getApiKey } from '../state.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
+
+/**
+ * Append the API key to a dashboard URL as a fragment (`#k=...`) so the
+ * dashboard can pick it up on arrival and store it client-side. No-op
+ * when the key is missing.
+ */
+export function appendKeyFragment(url: string, apiKey: string | null | undefined): string {
+  if (!apiKey) return url;
+  return `${url}#k=${encodeURIComponent(apiKey)}`;
+}
 
 /** Lens segment used in the dashboard URL path. Matches the dashboard's own routes. */
 export type DashboardLens =
@@ -62,5 +79,6 @@ export function renderDashboardFooter(
   opts: DashboardLinkOptions = {},
 ): string {
   if (!agentId) return '';
-  return `\nFull view: ${dashboardUrl(agentId, lens, opts)}\n`;
+  const url = appendKeyFragment(dashboardUrl(agentId, lens, opts), getApiKey());
+  return `\nFull view: ${url}\n`;
 }

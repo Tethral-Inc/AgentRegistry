@@ -4,6 +4,7 @@ import { getActiveSession, RegistrationFailedError } from '../session-state.js';
 import { renderUpgradeBanner } from '../version-check.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { nextActionMeta } from '../utils/next-action.js';
+import { appendKeyFragment } from '../utils/dashboard-link.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
 
@@ -82,7 +83,7 @@ export function getMyAgentTool(server: McpServer) {
         text += `${displayName} (${provider})\n`;
         text += `ID: ${id}\n`;
         if (apiKey) text += `Key: ${apiKey}\n`;
-        text += `Dashboard: ${DASHBOARD_URL}/agents/${id}\n`;
+        text += `Dashboard: ${appendKeyFragment(`${DASHBOARD_URL}/agents/${id}`, apiKey)}\n`;
         if (agent?.status) text += `Status: ${agent.status}\n`;
         if (agent?.last_active_at) text += `Last active: ${agent.last_active_at}\n`;
 

@@ -1,3 +1,26 @@
+## 2.11.1 (2026-05-01)
+
+Dashboard deeplink. The link printed by `get_my_agent` (and every lens
+"Full view:" footer) now carries the session API key as a URL fragment
+so the dashboard lands the operator already authenticated. Fragments
+aren't sent to servers and are stripped from cross-origin Referer, so
+the key stays client-side; the dashboard reads it on arrival, stashes
+it in sessionStorage, and clears the fragment via `history.replaceState`.
+
+- **`appendKeyFragment(url, apiKey)` helper** in `utils/dashboard-link.ts`.
+  No-op when the key is missing — older sessions and the public
+  leaderboard still get a clean URL.
+- **`renderDashboardFooter` reads the key from session state**, so every
+  lens tool that already calls it picks up the fragment automatically;
+  no per-tool changes.
+- **`get_my_agent` link** uses the same helper, replacing the inline URL
+  construction. Output format otherwise unchanged.
+- **Dashboard `/agents/[id]#k=...` consumption.** `lib/api.ts` now reads
+  the fragment on first import, writes the key to sessionStorage, and
+  clears the hash so it doesn't linger in the URL bar. The landing page
+  drops the "API key required" gating — the field is now optional copy
+  that only matters when arriving without a deeplink.
+
 ## 2.11.0 (2026-04-26)
 
 Deprecation cleanup. The `getting_started` shim and `acknowledge_threat`

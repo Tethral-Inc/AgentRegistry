@@ -18,12 +18,15 @@ export default function AgentsLanding() {
     router.push(`/agents/${id}`);
   };
 
+  const canSubmit = agentId.trim().length > 0;
+
   return (
     <div style={{ maxWidth: 600, margin: '4rem auto', textAlign: 'center' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Agent Profile Viewer</h1>
       <p style={{ color: '#888', marginBottom: '2rem' }}>
-        Enter your agent ID and API key to view your interaction profile. Both are printed
-        when the MCP registers, or call <code style={{ color: '#e0e0e0' }}>get_my_agent</code> in your session.
+        If you arrived from a <code style={{ color: '#e0e0e0' }}>get_my_agent</code> dashboard
+        link, your API key is already loaded. Otherwise, enter your agent ID below — the
+        API key is optional and only needed to unlock paid-tier lenses.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         <input
@@ -39,7 +42,7 @@ export default function AgentsLanding() {
         />
         <input
           type="password"
-          placeholder="API Key (acr_...)"
+          placeholder="API Key (optional — acr_...)"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && go()}
@@ -50,10 +53,10 @@ export default function AgentsLanding() {
         />
         <button
           onClick={go}
-          disabled={!agentId.trim() || !apiKey.trim()}
+          disabled={!canSubmit}
           style={{
-            padding: '0.75rem 1.5rem', background: agentId.trim() && apiKey.trim() ? '#4a9eff' : '#333',
-            border: 'none', borderRadius: '6px', color: '#fff', cursor: agentId.trim() && apiKey.trim() ? 'pointer' : 'default', fontWeight: 600,
+            padding: '0.75rem 1.5rem', background: canSubmit ? '#4a9eff' : '#333',
+            border: 'none', borderRadius: '6px', color: '#fff', cursor: canSubmit ? 'pointer' : 'default', fontWeight: 600,
           }}
         >
           View Profile

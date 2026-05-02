@@ -1,9 +1,33 @@
 const API_URL = process.env.NEXT_PUBLIC_ACR_API_URL ?? 'https://acr.nfkey.ai';
 const RESOLVER_URL = process.env.NEXT_PUBLIC_ACR_RESOLVER_URL ?? API_URL;
+const STORAGE_KEY = 'acr_api_key';
+
+/**
+ * If the page was opened via an MCP deeplink (`/agents/{id}#k=<key>`), pull
+ * the key out of the URL fragment, stash it in sessionStorage, and strip
+ * the hash so it doesn't linger in the address bar. Fragments aren't sent
+ * to servers, so the key never appears in any access log along the way.
+ */
+function consumeKeyFromHash(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const hash = window.location.hash;
+    if (!hash || hash.length < 2) return;
+    const params = new URLSearchParams(hash.slice(1));
+    const k = params.get('k');
+    if (!k) return;
+    sessionStorage.setItem(STORAGE_KEY, k);
+    const url = new URL(window.location.href);
+    url.hash = '';
+    window.history.replaceState(null, '', url.toString());
+  } catch { /* ignore */ }
+}
+
+if (typeof window !== 'undefined') consumeKeyFromHash();
 
 function getStoredApiKey(): string | null {
   if (typeof window === 'undefined') return null;
-  try { return sessionStorage.getItem('acr_api_key'); } catch { return null; }
+  try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
 }
 
 export async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
