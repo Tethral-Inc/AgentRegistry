@@ -6,7 +6,34 @@ MCP server for the [ACR](https://acr.nfkey.ai) (Agent Composition Records) netwo
 
 ## 60-second quickstart
 
-No signup. No API key. No credit card. `npx` and go.
+No signup. No API key. No credit card. Two pieces: a host-side observer (captures every tool call automatically) and an MCP (lets the agent query its own profile).
+
+### Step 1 — install the observer (Claude Code)
+
+The observer is what actually fills your profile. It runs as a Claude Code PreToolUse/PostToolUse hook, sees every tool call your agent makes, and emits a receipt without the LLM having to remember anything.
+
+```bash
+npm install -g @tethral/acr-hook
+```
+
+Then add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": ".*", "hooks": [["npx", "@tethral/acr-hook", "pre"]] }],
+    "PostToolUse": [{ "matcher": ".*", "hooks": [["npx", "@tethral/acr-hook", "post"]] }]
+  }
+}
+```
+
+The hook reads `agent_id` and `api_url` from `~/.claude/.acr-state.json`, which the MCP (step 2) writes on first registration. No per-user config needed.
+
+> Not on Claude Code? Skip to step 2 — the MCP still works, but the `log_interaction` tool will be your only capture path, and LLMs are unreliable about calling it. Host-side observers for Cursor / Continue / other hosts are on the roadmap.
+
+### Step 2 — install the MCP (any host)
+
+The MCP is the query layer. It registers your agent, exposes the lenses (`get_friction_report`, `get_coverage`, `get_stable_corridors`, `get_failure_registry`, `get_trend`), and lets the agent enrich its own receipts with chain structure, decision tokens, and substitution links the hook can't see.
 
 **Claude Code** — one command, available in every directory:
 
@@ -36,7 +63,7 @@ npx -y @tethral/acr-mcp          # stdio transport
 npx -y @tethral/acr-mcp-http     # HTTP transport
 ```
 
-On first use your agent auto-registers and gets a human-readable name (e.g. `anthropic-amber-fox`). That's it — start calling `log_interaction` after every external tool call and the lenses fill in as receipts accumulate. Call `get_my_agent` any time to see your agent ID, API key, and dashboard link.
+On first use your agent auto-registers and gets a human-readable name (e.g. `anthropic-amber-fox`). The hook starts emitting receipts on the next tool call, and `get_friction_report` fills in once you've accumulated some signal. Call `get_my_agent` any time to see your agent ID, API key, and dashboard link.
 
 Want an API key for authenticated writes? You already have one — `get_my_agent` returns it. But the ingest path accepts unauthenticated writes too, so low-barrier onboarding just works.
 
@@ -45,10 +72,11 @@ Want an API key for authenticated writes? You already have one — `get_my_agent
 The minimum useful sequence on day one — backed by `tests/integration/first-session.test.ts` so the steps below stay in sync with the actual tool surface:
 
 1. **Discover** — `get_my_agent` returns your agent id, API key, and dashboard link. No registration call needed.
-2. **Log** — call `log_interaction` after every external tool call, API request, or MCP interaction. Every lens depends on receipts; without them the lens output is cohort-baseline only.
-3. **Orient** — `orient_me` reads your state and routes you to the next useful tool. State-aware: brand new (cohort baselines), some data (fill in gaps), steady (drill into friction).
-4. **Read a lens** — `get_friction_report` for where time goes, `get_coverage` for which signals you're missing, `get_stable_corridors` for paths you can rely on.
-5. **Network awareness** — `check_environment` shows pipeline health, aggregation freshness, and any anomaly signals affecting components in your composition.
+2. **Capture** — the hook captures every tool call automatically. If you haven't installed the hook, call `log_interaction` manually after external calls — but expect lens views to be sparse, because LLMs forget.
+3. **Enrich** — for multi-step workflows or substitution-graph signals, call `log_interaction` with `chain_id`, `preceded_by`, `substitution_of`, `result_used`, or `decision_tokens`. These signals only come from the agent; the hook can't infer them.
+4. **Orient** — `orient_me` reads your state and routes you to the next useful tool. State-aware: brand new (cohort baselines), some data (fill in gaps), steady (drill into friction).
+5. **Read a lens** — `get_friction_report` for where time goes, `get_coverage` for which signals you're missing, `get_stable_corridors` for paths you can rely on.
+6. **Network awareness** — `check_environment` shows pipeline health, aggregation freshness, and any anomaly signals affecting components in your composition.
 
 ## What It Does
 

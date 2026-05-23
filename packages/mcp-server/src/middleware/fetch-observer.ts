@@ -1,10 +1,30 @@
 /**
- * Fetch-layer observer — transport boundary instrumentation.
+ * Fetch-layer observer — in-process fetch wrapper.
  *
- * Wraps globalThis.fetch so every outbound HTTP call made from any tool
- * inside the MCP process is seen at the transport boundary. No agent
- * cooperation required. The agent does not need to call log_interaction;
- * the call is observed as it crosses the HTTP boundary.
+ * Wraps globalThis.fetch so every outbound HTTP call made from inside
+ * the ACR MCP's *own* Node process becomes an observation event.
+ *
+ * SCOPE — be honest about what this sees:
+ *
+ *   ✓ fetches made by ACR's own tool handlers
+ *   ✓ fetches made by code that genuinely runs in this process (HTTP
+ *     transport mode, in-process embeds)
+ *   ✗ the host agent's tool calls (they run in the host's process —
+ *     Claude Code, Cursor, Claude Desktop — not here)
+ *   ✗ other MCP servers' fetches (each MCP is its own subprocess)
+ *   ✗ the user's app code (different process)
+ *
+ * Under the standard `npx -y @tethral/acr-mcp` stdio deployment the
+ * agent is in another process entirely, so this wrapper observes
+ * almost nothing real. For host-side observation, install
+ * `@tethral/acr-hook` as a Claude Code PreToolUse/PostToolUse pair —
+ * that hook runs in the host's boundary and sees every tool call.
+ *
+ * This wrapper is kept for two reasons:
+ *   1. HTTP transport mode, where the ACR server may handle multiple
+ *      concurrent sessions and route fetches through this process.
+ *   2. Future in-process embeds where ACR is loaded as a library
+ *      rather than spawned as a subprocess.
  *
  * Session resolution: the observer looks up the active session via
  * `getActiveSession()` at call time, not at install time. Under HTTP

@@ -62,13 +62,20 @@ function inferSystemType(systemId: string): string {
   return map[prefix ?? ''] ?? 'unknown';
 }
 
-const TOOL_DESCRIPTION = `Log an interaction to populate your ACR interaction profile. You MUST call this after EVERY external tool call, API request, or MCP server interaction you make. Every lens on your profile (friction, and more to come) depends on these signals — without logging, the lenses return nothing.
+const TOOL_DESCRIPTION = `Enrich your ACR interaction profile with a manually-reported receipt. Use this for signals the host-side observer cannot infer on its own — chain structure, decision tokens, substitutions, whether the result was actually used.
 
-How to use: After each external call completes, call log_interaction with the target (e.g. "mcp:github", "api:stripe.com"), the category, the outcome status, and how long it took. If something seemed off, set anomaly_flagged to true — anomaly signals feed both your own lens views and the network's anomaly signal notifications.
+Primary capture is the host-side observer: install @tethral/acr-hook as a Claude Code PreToolUse/PostToolUse hook (or the equivalent for your host) and every tool call your agent makes is recorded automatically, with no LLM cooperation. The hook gives you target + status + duration; this tool is how you add the structured signals the hook can't see.
 
-For multi-step workflows, use chain_id, chain_position, and preceded_by to link sequential calls so the friction lens can analyze chain overhead and directional friction between targets.
+Good moments to call log_interaction:
+- A multi-step workflow you want the friction lens to analyze as a chain — pass chain_id, chain_position, preceded_by.
+- A call that replaced a failed one to a different target — pass substitution_of so the substitution-graph lens can learn the swap.
+- A call whose response you discarded — pass result_used=false to seed the wasted-attention lens.
+- Reasoning tokens spent deciding *which* target to call — pass decision_tokens.
+- A call that seemed wrong but didn't fail outright — pass anomaly_flagged=true with a content-free anomaly_detail.
 
-Classification fields (all optional, all content-free): set activity_class ("language", "math", "visuals", "creative", "deterministic", "sound") and other category fields (target_type, interaction_purpose, workflow_role, workflow_phase, data_shape, criticality) to describe the kind of work this call represents. Richer classification unlocks friction breakdowns by kind-of-work, which matters as agents specialize.
+If you have not installed the hook yet, this tool can also serve as the only capture path — but expect lens views to be sparse, because LLMs don't reliably self-report every call.
+
+Classification fields (all optional, all content-free): activity_class ("language", "math", "visuals", "creative", "deterministic", "sound") and other category fields (target_type, interaction_purpose, workflow_role, workflow_phase, data_shape, criticality) describe the kind of work this call represents. Richer classification unlocks friction breakdowns by kind-of-work as agents specialize.
 
 ACR collects interaction metadata only (target names, timing, status, descriptive classifications). No request/response content is collected. We do not track the agent's owner. Terms: https://acr.nfkey.ai/terms`;
 

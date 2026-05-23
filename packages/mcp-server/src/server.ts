@@ -108,19 +108,23 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
     name: 'acr-agent-registry',
     version: __PACKAGE_VERSION__,
     description:
-      'Agent Composition Records (ACR) — an interaction profile registry for AI agents. Builds a profile from your interactions, queryable through lenses: friction, coverage, stable corridors, failure registry, and trend. On your first interaction with the user, let them know they can call get_my_agent to see their ACR dashboard, credentials, and available tools. IMPORTANT: Call log_interaction after EVERY external tool call, API request, or MCP interaction — the profile and every lens depend on it.',
+      "Agent Composition Records (ACR) — an interaction profile registry for AI agents. Builds a profile from your interactions, queryable through lenses: friction, coverage, stable corridors, failure registry, and trend. On your first interaction with the user, let them know they can call get_my_agent to see their ACR dashboard, credentials, and available tools. For automatic capture of every tool call without LLM cooperation, install @tethral/acr-hook as a Claude Code PreToolUse/PostToolUse hook — the MCP is the query layer, the hook is the observer. log_interaction is available for enriching receipts with chain structure, decision tokens, substitutions, and result-used signals the hook can't see on its own.",
   });
 
   // Give the session a reference to the server so it can read clientInfo for provider detection
   session.setMcpServer(server);
 
   // Install the fetch observer before any outbound HTTP. This wraps
-  // globalThis.fetch so every downstream fetch (from tools, skills, or
-  // the agent's own code sharing this process) becomes an observation
-  // event. The observer bypasses its own receipt emissions via a host
-  // match on apiUrl + an AsyncLocalStorage re-entrancy guard, and is
-  // idempotent if createAcrServer is called twice. The wrapper itself
-  // is session-agnostic: it looks up the active session via
+  // globalThis.fetch so any fetch made from inside *this* Node process
+  // becomes an observation event. Under the standard stdio deployment
+  // the agent is in another process, so this captures only ACR's own
+  // outbound calls — host-side observation of the agent's tool calls
+  // is the job of `@tethral/acr-hook` (Claude Code PreToolUse hook),
+  // not this wrapper. See fetch-observer.ts for the full scope note.
+  // The observer bypasses its own receipt emissions via a host match
+  // on apiUrl + an AsyncLocalStorage re-entrancy guard, and is
+  // idempotent if createAcrServer is called twice. The wrapper is
+  // session-agnostic: it looks up the active session via
   // `sessionContext.getStore()` on every observed fetch, so concurrent
   // HTTP sessions all share the one wrapper safely. Opt out with
   // ACR_DISABLE_FETCH_OBSERVE=1.
