@@ -116,14 +116,23 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         text += `Source: ${source ?? 'all'}\n`;
         text += `Tier: ${data.tier || 'free'}\n\n`;
 
-        // Summary metrics
-        text += `── Summary ──\n`;
+        // Summary, split so the readings/interpretation boundary is visible:
+        // measured facts first, then the values computed on top of them. The
+        // payload's `derivation` block documents each derived field and the
+        // active-span model constants — we read those constants from it so
+        // this text can't drift from the actual model.
+        const der = (data.derivation?.fields ?? {}) as Record<string, { constants?: { burst_gap_ms?: number; min_active_ms?: number } }>;
+        const gapMin = der.active_time_ratio?.constants?.burst_gap_ms
+          ? Math.round(der.active_time_ratio.constants.burst_gap_ms / 60000) : 10;
+        const floorSec = der.active_time_ratio?.constants?.min_active_ms
+          ? Math.round(der.active_time_ratio.constants.min_active_ms / 1000) : 60;
+
+        text += `── Readings (measured) ──\n`;
         text += `  Interactions: ${s.total_interactions}\n`;
-        text += `  Total wait: ${formatDuration(s.total_wait_time_ms)}\n`;
-        // Active span: the burst-union of interaction timestamps, which is
-        // the denominator of friction_percentage. Rendering it turns the %
-        // from a ratio into a number the operator can act on.
-        // "3.1% of 4h active" ≠ "3.1% of 40s active".
+        text += `  Total call time: ${formatDuration(s.total_wait_time_ms)}\n`;
+        // Active span: the burst-union of interaction timestamps — the
+        // denominator of the active-time ratio. Rendering it makes the ratio
+        // interpretable: "3.1% of 4h active" ≠ "3.1% of 40s active".
         if (typeof s.active_span_ms === 'number' && s.active_span_ms > 0) {
           const scopeStartMs = new Date(data.period_start).getTime();
           const scopeEndMs = new Date(data.period_end).getTime();
@@ -132,27 +141,29 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           if (scopeSpanMs > 0) text += ` of ${formatDuration(scopeSpanMs)} (${scope} scope)`;
           text += `\n`;
         }
-        // friction_percentage can exceed 100% when calls run in parallel
-        // (wall-clock wait exceeds active span). Show the raw number so
-        // the operator sees the signal, but annotate the cause so it
-        // doesn't read as a bug.
-        const fricNote = s.friction_percentage > 100 ? ' (parallel calls — wait exceeds active span)' : '';
-        text += `  Friction: ${s.friction_percentage.toFixed(2)}% of active time${fricNote}\n`;
-        text += `  Failures: ${s.total_failures} (${(s.failure_rate * 100).toFixed(1)}% rate)\n`;
-        // Token usage: surface total + wasted-on-failure so the operator can
-        // see the dollar impact of bad targets, not just the time impact.
-        // Rendered whenever the server reports them (agent must supply
-        // tokens_used on log_interaction).
+        text += `  Failures: ${s.total_failures}\n`;
         if (typeof s.total_tokens_used === 'number' && s.total_tokens_used > 0) {
           text += `  Tokens used: ${s.total_tokens_used.toLocaleString()}\n`;
         }
+
+        text += `\n── Derived (computed from the readings above) ──\n`;
+        // active_time_ratio and friction_percentage are the same number — the
+        // first is the neutral name, the second the interpretive one. Can
+        // exceed 100% with parallel calls (wall-clock wait > active span).
+        const ratioVal = typeof s.active_time_ratio === 'number' ? s.active_time_ratio : s.friction_percentage;
+        const fricNote = ratioVal > 100 ? '  (parallel calls — wait exceeds active span)' : '';
+        text += `  Active-time ratio: ${ratioVal.toFixed(2)}%${fricNote}\n`;
+        text += `    = call time ÷ active span (a.k.a. "friction"); active span inferred — bursts split at >${gapMin}m idle, floored ${floorSec}s\n`;
+        text += `  Failure rate: ${(s.failure_rate * 100).toFixed(1)}%\n`;
+        // Wasted tokens is an interpretation ('failed = wasted'), so it lives
+        // under Derived and says so.
         if (typeof s.wasted_tokens === 'number' && s.wasted_tokens > 0) {
           const wastePct = (s.total_tokens_used ?? 0) > 0
             ? ((s.wasted_tokens / s.total_tokens_used) * 100).toFixed(1)
             : null;
-          text += `  Wasted tokens (on failed calls): ${s.wasted_tokens.toLocaleString()}`;
+          text += `  Wasted tokens (failed calls): ${s.wasted_tokens.toLocaleString()}`;
           if (wastePct) text += ` (${wastePct}% of total)`;
-          text += `\n`;
+          text += `  — interpretation: treats a failed call's tokens as wasted\n`;
         }
 
         // ── Structural friction FIRST ──

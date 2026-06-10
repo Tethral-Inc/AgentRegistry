@@ -258,8 +258,10 @@ export interface FrictionResponse {
   summary: {
     total_interactions: number;
     total_wait_time_ms: number;
-    /** Burst-union of active time — denominator of friction_percentage. */
+    /** Burst-union of active time — denominator of the active-time ratio. */
     active_span_ms: number;
+    /** Neutral name for the ratio; friction_percentage is the same number. */
+    active_time_ratio?: number;
     friction_percentage: number;
     total_failures: number;
     failure_rate: number;
@@ -314,6 +316,12 @@ export interface FrictionResponse {
     amplification_factor: number;
     sample_count: number;
   }>;
+  /**
+   * Documents which summary fields are computed on top of the raw readings
+   * (and the active-span model constants), so the interpretation layer is
+   * explicit rather than baked into the numbers. See the friction route.
+   */
+  derivation?: Record<string, unknown>;
   tier: string;
 }
 

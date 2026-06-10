@@ -13,6 +13,59 @@ import { computeShadowTax } from '../lib/shadow-tax.js';
 const log = createLogger({ name: 'friction' });
 const app = new Hono();
 
+// ── Active-span model constants ──
+// The denominator of the active-time ratio is inferred, not measured: receipts
+// are grouped into "bursts" split by idle gaps > BURST_GAP_MS, each burst's span
+// (max-min) summed, then floored at MIN_ACTIVE_MS. These knobs change the ratio,
+// so they're surfaced in the response's `derivation` block (below).
+const BURST_GAP_MS = 10 * 60 * 1000; // 10 minutes — gap that ends one active burst
+const MIN_ACTIVE_MS = 60 * 1000;     // 60 seconds — floor so a few fast calls don't explode the ratio
+
+// ── Derivation map ──
+// Makes the readings/interpretation boundary explicit IN THE PAYLOAD. The
+// "readings" are measured per-call facts and their direct sums/counts:
+// total_interactions, total_wait_time_ms, active_span_ms, total_failures,
+// total_tokens_used. Everything listed here is computed ON TOP of those —
+// a consumer can drop these fields and keep the unjudged data. `interpretation:
+// true` marks the opinionated fields (a theory of "waste"), vs plain arithmetic.
+const DERIVATION = {
+  note: "Readings are the measured per-call facts and their direct sums/counts (total_interactions, total_wait_time_ms, active_span_ms, total_failures, total_tokens_used). The fields below are computed on top of those readings — drop them to get the unjudged data.",
+  fields: {
+    active_time_ratio: {
+      derived: true,
+      interpretation: false,
+      also_called: 'friction_percentage',
+      formula: '100 * total_wait_time_ms / active_span_ms',
+      reading_inputs: ['total_wait_time_ms', 'active_span_ms'],
+      constants: { burst_gap_ms: BURST_GAP_MS, min_active_ms: MIN_ACTIVE_MS },
+      caveats: [
+        "'wait' here is call duration, not idle time",
+        'active_span_ms is inferred (bursts split at idle gaps > burst_gap_ms, summed, floored at min_active_ms)',
+        'can exceed 100% when calls run in parallel (wall-clock wait > active span)',
+      ],
+    },
+    failure_rate: {
+      derived: true,
+      interpretation: false,
+      formula: 'total_failures / total_interactions',
+      reading_inputs: ['total_failures', 'total_interactions'],
+      note: "'failure' = any status other than 'success'",
+    },
+    shadow_tax: {
+      derived: true,
+      interpretation: true,
+      definition: 'failed_call_ms + retry_ms + chain_queue_ms',
+      assumption: "treats failed-call duration, retry overhead, and chain queue wait as time that produced 'no forward progress'",
+    },
+    wasted_tokens: {
+      derived: true,
+      interpretation: true,
+      definition: "sum of tokens_used over calls with status != 'success'",
+      assumption: "treats a failed call's tokens as wasted",
+    },
+  },
+} as const;
+
 function getScopeWindow(scope: string): { start: Date; end: Date } {
   const end = new Date();
   const start = new Date();
@@ -147,11 +200,16 @@ app.get('/agent/:agent_id/friction', async (c) => {
       summary: {
         total_interactions: 0,
         total_wait_time_ms: 0,
+        active_span_ms: 0,
+        // active_time_ratio is the neutral name; friction_percentage is the
+        // same number under an interpretive label. See `derivation`.
+        active_time_ratio: 0,
         friction_percentage: 0,
         total_failures: 0,
         failure_rate: 0,
         shadow_tax: { total_ms: 0, failed_call_ms: 0, retry_ms: 0, chain_queue_ms: 0, percentage_of_wait: 0 },
       },
+      derivation: DERIVATION,
       top_targets: [],
     });
   }
@@ -385,9 +443,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
   // burst's duration (max - min). A single-receipt burst contributes the
   // receipt's own duration. We floor the total at MIN_ACTIVE_MS so a
   // handful of fast calls doesn't produce a denominator so small the
-  // percentage explodes past 100%.
-  const BURST_GAP_MS = 10 * 60 * 1000; // 10 minutes
-  const MIN_ACTIVE_MS = 60 * 1000;     // 60 seconds floor
+  // percentage explodes past 100%. Constants are module-scoped (see DERIVATION).
   const timestamps = rows
     .map((r) => ({ ts: new Date(r.created_at).getTime(), dur: r.duration_ms ?? 0 }))
     .filter((r) => Number.isFinite(r.ts))
@@ -884,6 +940,11 @@ app.get('/agent/:agent_id/friction', async (c) => {
       // is visible to the user. Without this the % is uninterpretable —
       // 3% of 4h means something different from 3% of 40s.
       active_span_ms: activeMs,
+      // Neutral name for the ratio of measured call-time to inferred active
+      // span. `friction_percentage` is the SAME number under an interpretive
+      // label; both are kept so consumers can choose the framing. The model
+      // and its constants/caveats are spelled out in `derivation` below.
+      active_time_ratio: Math.round(frictionPercentage * 1000) / 1000,
       friction_percentage: Math.round(frictionPercentage * 1000) / 1000,
       total_failures: totalFailures,
       failure_rate: rows.length > 0 ? Math.round((totalFailures / rows.length) * 1000) / 1000 : 0,
@@ -891,6 +952,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
       ...(wastedTokensTotal > 0 ? { wasted_tokens: wastedTokensTotal } : {}),
       shadow_tax: computeShadowTax(rows, totalWaitMs),
     },
+    derivation: DERIVATION,
     by_category: categories,
     by_error_code: byErrorCode,
     top_targets: visibleTargets,
