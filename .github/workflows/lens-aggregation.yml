@@ -38,8 +38,15 @@ jobs:
           fail=0
           hit() {
             echo "→ $1"
-            curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
-              "$INGESTION_API_URL/api/cron/$1" || { echo "::warning::$1 failed"; fail=1; }
+            body=$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $CRON_SECRET" \
+              "$INGESTION_API_URL/api/cron/$1")
+            code=$(printf '%s' "$body" | tail -n1)
+            payload=$(printf '%s' "$body" | sed '$d')
+            echo "  [$code] $payload"
+            case "$code" in
+              2*) : ;;
+              *) echo "::warning::$1 returned $code"; fail=1 ;;
+            esac
           }
           # Every 15 min: the high-frequency lenses.
           hit system-health-aggregate
