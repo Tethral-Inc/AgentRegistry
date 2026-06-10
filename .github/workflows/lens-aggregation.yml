@@ -7,13 +7,22 @@ name: Lens aggregation
 # (whose vercel.json has no `crons`), so Vercel never registers them — driving
 # them from GitHub Actions is plan-independent and matches anomaly-tick.yml.
 #
-# All endpoints are idempotent no-ops when there's no new data. Clean-skips when
-# CRON_SECRET or INGESTION_API_URL aren't set.
+# Routing is by `github.event.schedule` (the cron string that triggered the run)
+# rather than wall-clock minute math: GitHub's scheduler routinely fires late
+# (a ~02:00 run can land at 02:27), and a late run still carries its schedule —
+# so the daily friction-baseline job can't be missed by a delayed trigger.
+# All endpoints are idempotent no-ops when there's no new data.
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/15 * * * *'   # high-frequency: system-health-aggregate + chain-analysis
+    - cron: '7,37 * * * *'   # ~2x/hour: skill-threat-update
+    - cron: '15 2 * * *'     # daily: friction-baseline-compute
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'Endpoints to hit on manual run: "all" or space-separated names'
+        default: 'all'
 
 jobs:
   aggregate:
@@ -21,6 +30,8 @@ jobs:
     env:
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
       INGESTION_API_URL: ${{ secrets.INGESTION_API_URL }}
+      SCHEDULE: ${{ github.event.schedule }}
+      DISPATCH_JOBS: ${{ github.event.inputs.jobs }}
     steps:
       - name: Check secrets configured
         id: check
@@ -34,7 +45,6 @@ jobs:
       - name: Run due lens jobs
         if: steps.check.outputs.configured == 'true'
         run: |
-          minute=$(date -u +%M); hour=$(date -u +%H)
           fail=0
           hit() {
             echo "→ $1"
@@ -48,15 +58,21 @@ jobs:
               *) echo "::warning::$1 returned $code"; fail=1 ;;
             esac
           }
-          # Every 15 min: the high-frequency lenses.
-          hit system-health-aggregate
-          hit chain-analysis
-          # ~Every 30 min: skill anomaly counts (slots 00-14 and 30-44).
-          if [ "$minute" -lt 15 ] || { [ "$minute" -ge 30 ] && [ "$minute" -lt 45 ]; }; then
-            hit skill-threat-update
-          fi
-          # Daily ~02:00 UTC: friction baselines.
-          if [ "$hour" = "02" ] && [ "$minute" -lt 15 ]; then
-            hit friction-baseline-compute
-          fi
+          # Decide whether endpoint $1 is due for this trigger.
+          due() {
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              [ "${DISPATCH_JOBS:-all}" = "all" ] && return 0
+              printf ' %s ' "$DISPATCH_JOBS" | grep -q " $1 "
+              return $?
+            fi
+            case "$SCHEDULE" in
+              '*/15 * * * *') case "$1" in system-health-aggregate|chain-analysis) return 0;; esac ;;
+              '7,37 * * * *') [ "$1" = skill-threat-update ] && return 0 ;;
+              '15 2 * * *')   [ "$1" = friction-baseline-compute ] && return 0 ;;
+            esac
+            return 1
+          }
+          for job in system-health-aggregate chain-analysis skill-threat-update friction-baseline-compute; do
+            if due "$job"; then hit "$job"; fi
+          done
           exit $fail
