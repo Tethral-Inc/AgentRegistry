@@ -1,0 +1,15 @@
+-- Migration 000024: drop the stale single-column unique index on
+-- system_health(system_id) left behind by 000023.
+--
+-- 000023 promoted the primary key to (system_id, source) via ALTER PRIMARY
+-- KEY. CockroachDB retains the old primary-key index as a UNIQUE secondary
+-- index named `system_health_system_id_key`. That index rejects the
+-- per-source rows the aggregator now upserts (one row per source plus an
+-- 'all' rollup, all sharing the same system_id), so every
+-- system-health-aggregate run failed with:
+--   duplicate key value violates unique constraint "system_health_system_id_key"
+--
+-- Drop it so (system_id, source) is the only uniqueness constraint. CASCADE
+-- removes the unique constraint backed by the index. IF EXISTS keeps this
+-- idempotent on environments where the index was already gone.
+DROP INDEX IF EXISTS system_health@system_health_system_id_key CASCADE;
