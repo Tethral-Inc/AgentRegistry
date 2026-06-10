@@ -17,28 +17,49 @@ app.get('/network/status', async (c) => {
   // so both totals and systems read empty. Pass source=agent/server to slice.
   const sourceParam = c.req.query('source') ?? 'all';
 
-  // 1. 24h totals
-  const totalsParams: unknown[] = [sourceParam === 'all' ? null : sourceParam];
-  const totalsRows = await query<{
-    active_agents: number;
-    active_systems: number;
-    interactions_24h: number;
-    anomaly_rate_24h: number;
-  }>(
-    `SELECT COUNT(DISTINCT emitter_agent_id)::int AS "active_agents",
-            COUNT(DISTINCT target_system_id)::int AS "active_systems",
-            COUNT(*)::int AS "interactions_24h",
-            COALESCE(
-              COUNT(*) FILTER (WHERE anomaly_flagged = true)::float /
-              NULLIF(COUNT(*), 0), 0
-            ) AS "anomaly_rate_24h"
-     FROM interaction_receipts
-     WHERE created_at >= now() - INTERVAL '24 hours'
-       AND ($1::text IS NULL OR source = $1)`,
-    totalsParams,
-  ).catch(() => [{ active_agents: 0, active_systems: 0, interactions_24h: 0, anomaly_rate_24h: 0 }]);
+  // 1. 24h totals.
+  //
+  // Computed as separate single-aggregate queries rather than one SELECT
+  // with two COUNT(DISTINCT ...) expressions. CockroachDB (this backend)
+  // rejects multiple distinct aggregations in a single statement, and the
+  // failure was swallowed by a bare .catch → every total read 0 even while
+  // receipts existed (observatory-summary, which already uses this split
+  // pattern, reported the real counts). Each query carries the same optional
+  // source filter so the totals and the systems block stay consistent.
+  // Sequential awaits respect the pool max:1 on Vercel. Failures are logged,
+  // not silently zeroed, so this can't regress into invisible-empty again.
+  const sourceClause = sourceParam === 'all' ? '' : ' AND source = $1';
+  const totalsParams: unknown[] = sourceParam === 'all' ? [] : [sourceParam];
 
-  const totals = totalsRows[0]!;
+  const agentsRow = await query<{ n: number }>(
+    `SELECT COUNT(DISTINCT emitter_agent_id)::int AS "n"
+     FROM interaction_receipts
+     WHERE created_at >= now() - INTERVAL '24 hours'${sourceClause}`,
+    totalsParams,
+  ).catch((err) => { log.warn({ err }, 'network totals: active_agents query failed'); return [{ n: 0 }]; });
+
+  const systemsCountRow = await query<{ n: number }>(
+    `SELECT COUNT(DISTINCT target_system_id)::int AS "n"
+     FROM interaction_receipts
+     WHERE created_at >= now() - INTERVAL '24 hours'${sourceClause}`,
+    totalsParams,
+  ).catch((err) => { log.warn({ err }, 'network totals: active_systems query failed'); return [{ n: 0 }]; });
+
+  const volumeRow = await query<{ total: number; anomalies: number }>(
+    `SELECT COUNT(*)::int AS "total",
+            COUNT(*) FILTER (WHERE anomaly_flagged = true)::int AS "anomalies"
+     FROM interaction_receipts
+     WHERE created_at >= now() - INTERVAL '24 hours'${sourceClause}`,
+    totalsParams,
+  ).catch((err) => { log.warn({ err }, 'network totals: volume query failed'); return [{ total: 0, anomalies: 0 }]; });
+
+  const totalInteractions = volumeRow[0]?.total ?? 0;
+  const totals = {
+    active_agents: agentsRow[0]?.n ?? 0,
+    active_systems: systemsCountRow[0]?.n ?? 0,
+    interactions_24h: totalInteractions,
+    anomaly_rate_24h: totalInteractions > 0 ? (volumeRow[0]?.anomalies ?? 0) / totalInteractions : 0,
+  };
 
   // 2. Systems sorted worst-first. Aggregator emits one row per
   // (system, source) plus an 'all' rollup, so the read filter matches
