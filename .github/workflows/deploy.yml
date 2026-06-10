@@ -132,10 +132,17 @@ jobs:
 
   # Dashboard: separate Vercel project (Next.js). It was never wired into CI —
   # production sat on a months-old manual `vercel deploy`, so dashboard-side
-  # changes (e.g. localStorage key persistence) never shipped. Same prebuilt
-  # pull/build/deploy pattern as ingestion-api, pointed at the dashboard
-  # project. VERCEL_PROJECT_ID is hardcoded (project IDs aren't secret and the
-  # shared VERCEL_PROJECT_ID secret is the ingestion-api's).
+  # changes (e.g. localStorage key persistence) never shipped.
+  #
+  # Uses a REMOTE build (`vercel deploy --prod`), not the prebuilt pattern the
+  # ingestion-api job uses. Prebuilt fails here: `vercel build` produces a
+  # .vercel/output that references pnpm's symlinked node_modules/.pnpm/...
+  # paths, which don't survive upload (ENOENT on styled-jsx). The dashboard
+  # has no @acr/* workspace deps (just next/react), so a remote build of this
+  # package is self-contained — Vercel installs + builds it in its own env,
+  # which is exactly how the prior successful manual deploys ran.
+  # VERCEL_PROJECT_ID is hardcoded (project IDs aren't secret and the shared
+  # VERCEL_PROJECT_ID secret is the ingestion-api's).
   dashboard:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -145,9 +152,8 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: pnpm }
+        with: { node-version: 24 }
       - name: Check Vercel token configured
         id: vercel_check
         run: |
@@ -157,17 +163,7 @@ jobs:
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
-      - run: pnpm install --frozen-lockfile
-        if: steps.vercel_check.outputs.configured == 'true'
-      - name: Pull Vercel environment
+      - name: Deploy dashboard to Vercel (remote build)
         if: steps.vercel_check.outputs.configured == 'true'
         working-directory: packages/dashboard
-        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
-      - name: Build with Vercel
-        if: steps.vercel_check.outputs.configured == 'true'
-        working-directory: packages/dashboard
-        run: npx vercel@latest build --prod --token="$VERCEL_TOKEN"
-      - name: Deploy prebuilt to Vercel
-        if: steps.vercel_check.outputs.configured == 'true'
-        working-directory: packages/dashboard
-        run: npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: npx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
