@@ -21,7 +21,7 @@ The lens classifies every target into one of four buckets:
 
 When both composition sources are present (mcp_observed + agent_reported), the summary reports binding_source_disagreements — targets one source lists and the other doesn't. A disagreement on a target the agent actually calls is a strong integrity signal.
 
-Defaults to scope=yesterday (complete prior day). A live "today" window always undercounts the agent's steady state. Source defaults to 'agent' so the called-set is the agent's real traffic, not observer self-log.`;
+Defaults to scope=yesterday (complete prior day). A live "today" window always undercounts the agent's steady state. Source defaults to 'all' so the called-set reflects every capture path — the host-side hook is primary. Pass source='agent'/'server' to slice.`;
 
 export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -32,7 +32,7 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
         scope: z.enum(['yesterday', 'day', 'week', 'month']).optional().default('yesterday').describe('Time window. Default yesterday — a complete prior day. Use week/month for slow-moving bindings.'),
-        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source for the called-set. 'agent' (default) = log_interaction calls. 'server' = observer self-log. 'all' = both."),
+        source: z.enum(['agent', 'server', 'all']).optional().default('all').describe("Signal source for the called-set. 'all' = every capture path incl. the host-side hook (default). 'agent' = log_interaction self-reports only. 'server' = MCP observer self-log only."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.75 },
@@ -51,7 +51,7 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
       try {
         const params = new URLSearchParams({
           scope: scope ?? 'yesterday',
-          source: source ?? 'agent',
+          source: source ?? 'all',
         });
         const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${id}/revealed-preference?${params}`);
         if (!res.ok) {
@@ -72,7 +72,7 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
           return {
             content: [{
               type: 'text' as const,
-              text: `No bindings and no calls recorded for ${displayName} (scope "${scopeLabel}", source "${source ?? 'agent'}"). Register with composition fields populated, and emit log_interaction after each external call. If you're only emitting server self-log, pass source='all' or source='server'.`,
+              text: `No bindings and no calls recorded for ${displayName} (scope "${scopeLabel}", source "${source ?? 'all'}"). Register with composition fields populated, and emit log_interaction after each external call. If you're only emitting server self-log, pass source='all' or source='server'.`,
             }],
           };
         }
@@ -80,7 +80,7 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
         let text = `Revealed-Preference Report for ${displayName} (${scopeLabel})\n`;
         text += `Agent ID: ${data.agent_id}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
-        text += `Source: ${source ?? 'agent'}\n\n`;
+        text += `Source: ${source ?? 'all'}\n\n`;
 
         text += `── Summary ──\n`;
         text += `  Bound targets (declared): ${s.bound_targets}\n`;
@@ -138,7 +138,7 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
           apiUrl,
           agentId: id,
           lens: 'revealed_preference',
-          query: { scope: scope ?? 'yesterday', source: source ?? 'agent' },
+          query: { scope: scope ?? 'yesterday', source: source ?? 'all' },
           resultText: text,
         });
         text += `\n${renderSnapshotFooter(snapshot)}`;

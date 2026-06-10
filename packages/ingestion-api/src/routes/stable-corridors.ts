@@ -65,9 +65,9 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
   const scope = scopeParsed.data;
   const { start, end } = getScopeWindow(scope);
 
-  // Source defaults to 'agent' so corridor stability reflects the agent's
-  // real calls, not server-side self-log latency. Pass source=all for both.
-  const sourceParam = c.req.query('source') ?? 'agent';
+  // Source defaults to 'all' so corridor stability reflects every capture
+  // path — the host-side hook is primary. Pass source=agent/server to slice.
+  const sourceParam = c.req.query('source') ?? 'all';
   const sourceFilter = sourceParam === 'all' ? null : sourceParam;
 
   const resolved = await resolveAgentId(identifier);

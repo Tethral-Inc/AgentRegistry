@@ -59,9 +59,9 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
   const scope = scopeParsed.data;
   const { start, end } = getScopeWindow(scope);
 
-  // Source defaults to 'agent' so the called-set reflects the agent's
-  // true traffic, not observer self-log. Pass source=all to include both.
-  const sourceParam = c.req.query('source') ?? 'agent';
+  // Source defaults to 'all' so the called-set reflects every capture path —
+  // the host-side hook is primary. Pass source=agent/server to slice.
+  const sourceParam = c.req.query('source') ?? 'all';
   const sourceFilter = sourceParam === 'all' ? null : sourceParam;
 
   const resolved = await resolveAgentId(identifier);

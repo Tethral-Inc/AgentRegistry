@@ -32,9 +32,9 @@ app.get('/agent/:agent_id/coverage', async (c) => {
   const resolved = await resolveAgentId(identifier);
   const agentId = resolved.agent_id;
 
-  // Source defaults to 'agent' so coverage reflects what the agent is
-  // reporting — not observer-side self-log. Pass source=all for both.
-  const sourceParam = c.req.query('source') ?? 'agent';
+  // Source defaults to 'all' so coverage reflects every capture path —
+  // the host-side hook is primary. Pass source=agent/server to slice.
+  const sourceParam = c.req.query('source') ?? 'all';
   const sourceFilter = sourceParam === 'all' ? null : sourceParam;
 
   const statsParams: unknown[] = [agentId];

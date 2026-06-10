@@ -11,7 +11,9 @@ export function ApiKeyInput({ onChange }: { onChange?: (key: string | null) => v
 
   useEffect(() => {
     try {
-      const s = sessionStorage.getItem(STORAGE_KEY);
+      // Prefer persistent store; fall back to sessionStorage for keys saved
+      // by an older build so they aren't silently dropped on first load.
+      const s = localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
       setStored(s);
       if (s) setKey(s);
     } catch { /* ignore */ }
@@ -20,8 +22,10 @@ export function ApiKeyInput({ onChange }: { onChange?: (key: string | null) => v
   const save = () => {
     const trimmed = key.trim();
     try {
-      if (trimmed) sessionStorage.setItem(STORAGE_KEY, trimmed);
-      else sessionStorage.removeItem(STORAGE_KEY);
+      if (trimmed) localStorage.setItem(STORAGE_KEY, trimmed);
+      else localStorage.removeItem(STORAGE_KEY);
+      // Drop any legacy sessionStorage copy so the two stores can't diverge.
+      sessionStorage.removeItem(STORAGE_KEY);
     } catch { /* ignore */ }
     setStored(trimmed || null);
     setEditing(false);
@@ -29,7 +33,10 @@ export function ApiKeyInput({ onChange }: { onChange?: (key: string | null) => v
   };
 
   const clear = () => {
-    try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch { /* ignore */ }
     setKey('');
     setStored(null);
     setEditing(false);
@@ -44,7 +51,7 @@ export function ApiKeyInput({ onChange }: { onChange?: (key: string | null) => v
       {stored && !editing ? (
         <>
           <code style={{ color: '#4a9eff', fontSize: '0.85rem', fontFamily: 'monospace' }}>{masked}</code>
-          <span style={{ color: '#4caf50', fontSize: '0.75rem' }}>✓ active (session)</span>
+          <span style={{ color: '#4caf50', fontSize: '0.75rem' }}>✓ active</span>
           <button onClick={() => setEditing(true)} style={btn}>Change</button>
           <button onClick={clear} style={btn}>Clear</button>
         </>
@@ -62,7 +69,7 @@ export function ApiKeyInput({ onChange }: { onChange?: (key: string | null) => v
           <button onClick={save} style={{ ...btn, background: '#1e3a5f', color: '#4a9eff', borderColor: '#2a4a7a' }}>Save</button>
           {stored && <button onClick={() => { setEditing(false); setKey(stored); }} style={btn}>Cancel</button>}
           <span style={{ color: '#666', fontSize: '0.7rem', width: '100%' }}>
-            Stored in sessionStorage. Unlocks paid-tier lenses (p95, vs_baseline, volatility).
+            Saved in this browser. Open the dashboard link from any ACR lens to fill this in automatically. Unlocks paid-tier lenses (p95, vs_baseline, volatility).
           </span>
         </>
       )}

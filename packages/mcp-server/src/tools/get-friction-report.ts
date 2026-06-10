@@ -35,12 +35,12 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_friction_report',
     {
-      description: "Query the friction lens of your interaction profile — one of several lenses available (more on the roadmap). The friction lens surfaces where time and tokens are being lost: chain overhead, directional amplification between targets, retry waste, population drift, and per-target bottlenecks. Friction is a continuum, not a verdict — high friction could be infrastructure, a hard task, or a component with elevated anomaly signals. Use it together with anomaly signal notifications to interpret correctly. Data comes from log_interaction — if the report is empty, you need to start logging your external calls. The report defaults to source='agent' (your reported interactions). Pass source='server' for observer-side self-log only, or source='all' to combine both.",
+      description: "Query the friction lens of your interaction profile — one of several lenses available (more on the roadmap). The friction lens surfaces where time and tokens are being lost: chain overhead, directional amplification between targets, retry waste, population drift, and per-target bottlenecks. Friction is a continuum, not a verdict — high friction could be infrastructure, a hard task, or a component with elevated anomaly signals. Use it together with anomaly signal notifications to interpret correctly. Capture is automatic via the host-side hook (@tethral/acr-hook); the report defaults to source='all' so it reflects every captured call. Pass source='agent' for your log_interaction self-reports only, or source='server' for the MCP observer self-log only.",
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id). Use this if you know your name but not your ID.'),
         scope: z.enum(['session', 'day', 'yesterday', 'week']).optional().default('week').describe('Time window for the report'),
-        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source. 'agent' = your log_interaction calls (default, the truth). 'server' = observer-side self-log (MCP tool-call timing). 'all' = both combined."),
+        source: z.enum(['agent', 'server', 'all']).optional().default('all').describe("Signal source. 'all' = every capture path incl. the host-side hook (default). 'agent' = your log_interaction self-reports only. 'server' = MCP observer self-log only (tool-call timing)."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.7 },
@@ -57,7 +57,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
+        const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'all' });
         const authHeaders = getAuthHeaders();
         // Fetch friction data + unread-notification count in parallel so the
         // header doesn't add a serial round-trip.
@@ -89,12 +89,12 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             apiUrl,
             unlocks: 'top targets by wait share, retry waste, chain overhead',
           });
-          if ((source ?? 'agent') === 'agent') {
+          if ((source ?? 'all') === 'agent') {
             emptyText += `   (Reading source='agent' — pass source='all' or source='server' to include observer self-log.)\n`;
           }
           const emptyAction = frictionNextAction({ total_interactions: 0 });
           emptyText += renderNextActionFooter(emptyAction);
-          emptyText += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
+          emptyText += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'all' });
           const emptyMeta = nextActionMeta(emptyAction);
           return {
             content: [{ type: 'text' as const, text: emptyText }],
@@ -113,7 +113,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         text += `Friction Report for ${displayName} (${scope})\n`;
         text += `Agent ID: ${data.agent_id}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
-        text += `Source: ${source ?? 'agent'}\n`;
+        text += `Source: ${source ?? 'all'}\n`;
         text += `Tier: ${data.tier || 'free'}\n\n`;
 
         // Summary metrics
@@ -406,7 +406,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           failure_breakdown: data.by_error_code,
         });
         text += renderNextActionFooter(action);
-        text += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'agent' });
+        text += renderDashboardFooter(id, 'friction', { range: scope, source: source ?? 'all' });
 
         // Shareable-snapshot footer. Freezes the rendered view under a
         // short public URL so the operator can paste it to a teammate
@@ -415,7 +415,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           apiUrl,
           agentId: id,
           lens: 'friction',
-          query: { scope, source: source ?? 'agent' },
+          query: { scope, source: source ?? 'all' },
           resultText: text,
         });
         text += renderSnapshotFooter(snapshot);
