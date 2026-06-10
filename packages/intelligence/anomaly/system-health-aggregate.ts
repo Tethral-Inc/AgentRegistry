@@ -20,31 +20,45 @@ interface AggregateRow {
 
 export async function handler() {
   try {
-    // GROUP BY GROUPING SETS gives us per-source rows AND an aggregate
-    // 'all' row in one pass. The NULL group from the second set becomes
-    // the 'all' rollup at INSERT time. This is the fix for the
-    // network-status totals/systems contradiction: the totals query
-    // filtered by source, the systems block read from this table which
-    // had no source dimension. After this change both queries can
-    // filter by the same source value.
-    const rows = await query<AggregateRow>(
-      `SELECT
-         target_system_id AS "target_system_id",
-         target_system_type AS "target_system_type",
-         source AS "source",
+    // We want per-source rows AND a cross-source 'all' rollup per system.
+    // CockroachDB does NOT implement `GROUP BY GROUPING SETS` ("unimplemented:
+    // this syntax"), so we emit the two grouping levels as UNION ALL'd
+    // aggregations instead: the first SELECT groups by (system, type, source),
+    // the second drops `source` (NULL) to produce the rollup that becomes the
+    // 'all' row at INSERT time (row.source ?? 'all' below). Both halves read
+    // the same 24h base rows, so the rollup percentiles are computed over the
+    // full per-system population — not averaged from the per-source rows.
+    //
+    // This is the fix for the network-status totals/systems contradiction: the
+    // totals query filtered by source, the systems block read from this table
+    // which had no source dimension. Both can now filter by the same value.
+    const AGG_COLS = `
          COUNT(*)::text AS "total_count",
          COUNT(DISTINCT emitter_agent_id)::text AS "distinct_agents",
          COUNT(*) FILTER (WHERE anomaly_flagged = true)::text AS "anomaly_count",
          COUNT(*) FILTER (WHERE status != 'success')::text AS "failure_count",
          percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration",
          percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p95_duration",
-         percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p99_duration"
+         percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p99_duration"`;
+    const WINDOW = `created_at >= now() - INTERVAL '24 hours'`;
+    const rows = await query<AggregateRow>(
+      `SELECT
+         target_system_id AS "target_system_id",
+         target_system_type AS "target_system_type",
+         source AS "source",
+         ${AGG_COLS}
        FROM interaction_receipts
-       WHERE created_at >= now() - INTERVAL '24 hours'
-       GROUP BY GROUPING SETS (
-         (target_system_id, target_system_type, source),
-         (target_system_id, target_system_type)
-       )`,
+       WHERE ${WINDOW}
+       GROUP BY target_system_id, target_system_type, source
+       UNION ALL
+       SELECT
+         target_system_id AS "target_system_id",
+         target_system_type AS "target_system_type",
+         NULL AS "source",
+         ${AGG_COLS}
+       FROM interaction_receipts
+       WHERE ${WINDOW}
+       GROUP BY target_system_id, target_system_type`,
     );
 
     if (rows.length === 0) {
