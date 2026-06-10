@@ -8,7 +8,7 @@ on:
         description: 'Package to publish'
         required: true
         type: choice
-        options: [all, mcp-server, ts-sdk, python-sdk]
+        options: [all, mcp-server, ts-sdk, python-sdk, acr-hook]
 
 # Only allow workflow_dispatch from master
 # All publish jobs require manual approval via the npm-publish environment.
@@ -121,3 +121,29 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: python -m build && twine check dist/* && twine upload --skip-existing dist/*
+
+  publish-hook:
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && (github.event.inputs.package == 'all' || github.event.inputs.package == 'acr-hook'))
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: pnpm, registry-url: 'https://registry.npmjs.org' }
+      - run: pnpm install --frozen-lockfile
+      - name: Publish if version is new
+        working-directory: packages/acr-hook
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          PUBLISHED=$(npm view "$PKG@$VERSION" version 2>/dev/null || echo "")
+          if [ "$PUBLISHED" = "$VERSION" ]; then
+            echo "⏭️  $PKG@$VERSION already published, skipping."
+          else
+            pnpm build && npm publish --provenance --access public
+          fi
