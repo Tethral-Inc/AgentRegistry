@@ -3,6 +3,11 @@
   "version": "0.2.2",
   "description": "Claude Code PreToolUse/PostToolUse hook that emits ACR receipts for every tool call your agent makes. Host-side observation — no log_interaction calls required. Pairs with @tethral/acr-mcp for querying the resulting interaction profile.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tethral-Inc/AgentRegistry.git",
+    "directory": "packages/acr-hook"
+  },
   "main": "dist/cli.js",
   "bin": {
     "acr-hook": "dist/cli.js"
