@@ -20,7 +20,7 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
         scope: z.enum(['day', 'yesterday', 'week', 'month']).optional().default('week').describe('Time window'),
-        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source. 'agent' = your log_interaction calls (default). 'server' = observer-side self-log. 'all' = both."),
+        source: z.enum(['agent', 'server', 'all']).optional().default('all').describe("Signal source. 'all' = every capture path incl. the host-side hook (default). 'agent' = log_interaction self-reports only. 'server' = MCP observer self-log only."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.5 },
@@ -37,7 +37,7 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'agent' });
+        const params = new URLSearchParams({ scope: scope ?? 'week', source: source ?? 'all' });
         const authHeaders = getAuthHeaders();
         const [res, unreadCount] = await Promise.all([
           fetchAuthed(`${apiUrl}/api/v1/agent/${id}/stable-corridors?${params}`),
@@ -55,7 +55,7 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
 
         let text = renderNotificationHeader(unreadCount);
         text += `Stable Corridors for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
-        text += `Source: ${source ?? 'agent'}\n`;
+        text += `Source: ${source ?? 'all'}\n`;
         text += `Period: ${data.period_start} to ${data.period_end}\n`;
 
         if (filter) {
@@ -97,13 +97,13 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
           })),
         });
         text += renderNextActionFooter(action);
-        text += renderDashboardFooter(id, 'stable-corridors', { range: scope, source: source ?? 'agent' });
+        text += renderDashboardFooter(id, 'stable-corridors', { range: scope, source: source ?? 'all' });
 
         const snapshot = await createSnapshot({
           apiUrl,
           agentId: id,
           lens: 'stable_corridors',
-          query: { scope, source: source ?? 'agent' },
+          query: { scope, source: source ?? 'all' },
           resultText: text,
         });
         text += renderSnapshotFooter(snapshot);

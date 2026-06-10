@@ -64,9 +64,9 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
   const scope = scopeParsed.data;
   const { start, end } = getScopeWindow(scope);
 
-  // Source defaults to 'agent' so the registry reflects the agent's
-  // own observed failures, not self-log rows. Pass source=all for both.
-  const sourceParam = c.req.query('source') ?? 'agent';
+  // Source defaults to 'all' so the registry reflects failures across every
+  // capture path — the host-side hook is primary. Pass source=agent/server to slice.
+  const sourceParam = c.req.query('source') ?? 'all';
   const sourceFilter = sourceParam === 'all' ? null : sourceParam;
 
   const resolved = await resolveAgentId(identifier);

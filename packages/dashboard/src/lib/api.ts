@@ -4,9 +4,15 @@ const STORAGE_KEY = 'acr_api_key';
 
 /**
  * If the page was opened via an MCP deeplink (`/agents/{id}#k=<key>`), pull
- * the key out of the URL fragment, stash it in sessionStorage, and strip
+ * the key out of the URL fragment, stash it in localStorage, and strip
  * the hash so it doesn't linger in the address bar. Fragments aren't sent
  * to servers, so the key never appears in any access log along the way.
+ *
+ * localStorage (not sessionStorage) so a single MCP→dashboard handoff
+ * sticks across tabs and future visits — an owner shouldn't have to
+ * re-paste their key to look at their own system every time. The key is
+ * low-sensitivity (interaction metadata only) and lives on the owner's
+ * own machine.
  */
 function consumeKeyFromHash(): void {
   if (typeof window === 'undefined') return;
@@ -16,7 +22,7 @@ function consumeKeyFromHash(): void {
     const params = new URLSearchParams(hash.slice(1));
     const k = params.get('k');
     if (!k) return;
-    sessionStorage.setItem(STORAGE_KEY, k);
+    localStorage.setItem(STORAGE_KEY, k);
     const url = new URL(window.location.href);
     url.hash = '';
     window.history.replaceState(null, '', url.toString());
@@ -27,7 +33,9 @@ if (typeof window !== 'undefined') consumeKeyFromHash();
 
 function getStoredApiKey(): string | null {
   if (typeof window === 'undefined') return null;
-  try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
+  // Prefer the persistent store; fall back to sessionStorage so keys saved
+  // by an older build (or the current tab before migration) still resolve.
+  try { return localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
 }
 
 export async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {

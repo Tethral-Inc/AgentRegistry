@@ -13,11 +13,11 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
   server.registerTool(
     'get_coverage',
     {
-      description: "Signal coverage: which fields you populate on your receipts and which you don't. Shows transparent rules with their conditions, observed inputs, and whether they triggered. Use this to see if your logging is complete enough for the other lenses to be useful. Defaults to source='agent' (your log_interaction calls).",
+      description: "Signal coverage: which fields you populate on your receipts and which you don't. Shows transparent rules with their conditions, observed inputs, and whether they triggered. Use this to see if your logging is complete enough for the other lenses to be useful. Defaults to source='all' so it reflects every capture path (the host-side hook is primary).",
       inputSchema: {
         agent_id: z.string().optional().describe('Your ACR agent ID (auto-assigned if omitted)'),
         agent_name: z.string().optional().describe('Your agent name (alternative to agent_id)'),
-        source: z.enum(['agent', 'server', 'all']).optional().default('agent').describe("Signal source. 'agent' = your log_interaction calls (default). 'server' = observer-side self-log. 'all' = both."),
+        source: z.enum(['agent', 'server', 'all']).optional().default('all').describe("Signal source. 'all' = every capture path incl. the host-side hook (default). 'agent' = log_interaction self-reports only. 'server' = MCP observer self-log only."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: { priorityHint: 0.5 },
@@ -34,7 +34,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
       }
 
       try {
-        const params = new URLSearchParams({ source: source ?? 'agent' });
+        const params = new URLSearchParams({ source: source ?? 'all' });
         const authHeaders = getAuthHeaders();
         const [res, unreadCount] = await Promise.all([
           fetchAuthed(`${apiUrl}/api/v1/agent/${id}/coverage?${params}`),
@@ -52,7 +52,7 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
 
         let text = renderNotificationHeader(unreadCount);
         text += `Coverage Report for ${displayName}\n${'='.repeat(30)}\n`;
-        text += `Source: ${source ?? 'agent'}\n`;
+        text += `Source: ${source ?? 'all'}\n`;
 
         text += `\n${section('Signal Counts')}\n`;
         for (const [key, value] of Object.entries(signals)) {
@@ -83,13 +83,13 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           rules: (rules ?? []).map((r) => ({ signal: r.signal, triggered: r.triggered })),
         });
         text += renderNextActionFooter(action);
-        text += renderDashboardFooter(id, 'coverage', { source: source ?? 'agent' });
+        text += renderDashboardFooter(id, 'coverage', { source: source ?? 'all' });
 
         const snapshot = await createSnapshot({
           apiUrl,
           agentId: id,
           lens: 'coverage',
-          query: { source: source ?? 'agent' },
+          query: { source: source ?? 'all' },
           resultText: text,
         });
         text += renderSnapshotFooter(snapshot);

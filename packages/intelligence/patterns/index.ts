@@ -155,7 +155,7 @@ export async function handler() {
     if (declaredHashes.size > 0) {
       const catalogRows = await query<{ declared_hash: string; skill_name: string | null; current_hash: string | null }>(
         `WITH declared AS (
-           SELECT unnest($1::STRING[]) AS declared_hash
+           SELECT unnest($1::text[]) AS declared_hash
          )
          SELECT
            d.declared_hash AS "declared_hash",

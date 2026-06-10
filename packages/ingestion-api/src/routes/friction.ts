@@ -53,10 +53,15 @@ app.get('/agent/:agent_id/friction', async (c) => {
   const { start, end } = getScopeWindow(scope);
 
   // Optional transport_type and source filters.
-  // Source defaults to 'agent' so lenses show the truth — self-log (source='server')
-  // describes the observer, not the agent's interactions. Pass source=all to include both.
+  // Source defaults to 'all' so the lens shows every capture path — the
+  // host-side hook (source='claude-code-hook') is the primary, and now
+  // default, signal; the old 'agent' default only matched self-reported
+  // log_interaction receipts, which most agents never emit, so the lens
+  // read empty even while the hook was capturing everything. 'all' still
+  // excludes environmental probes (handled below). Pass source=agent for
+  // self-report only or source=server for observer self-log only.
   const transportFilter = c.req.query('transport_type');
-  const sourceParam = c.req.query('source') ?? 'agent';
+  const sourceParam = c.req.query('source') ?? 'all';
   const sourceFilter = sourceParam === 'all' ? null : sourceParam;
   // Environmental probes (background reachability checks) are emitted as
   // the agent's own agent_id but represent baseline network health, not

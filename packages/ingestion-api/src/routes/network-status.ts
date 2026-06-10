@@ -10,13 +10,12 @@ const app = new Hono();
  * All queries run sequentially (pool max:1 on Vercel).
  */
 app.get('/network/status', async (c) => {
-  // Source defaults to 'agent' so network totals reflect agent traffic,
-  // not server-side self-log. The systems block now reads from
-  // per-source rows in system_health (migration 000023) so totals
-  // and systems agree by construction. Before that migration, totals
-  // filtered by source while systems read an unfiltered roll-up —
-  // they could disagree (totals = 0 while systems showed 16).
-  const sourceParam = c.req.query('source') ?? 'agent';
+  // Source defaults to 'all' so network totals reflect every capture path
+  // (the host-side hook is primary). The systems block reads the source='all'
+  // rollup row the aggregator writes (migration 000023). The old 'agent'
+  // default matched only self-reported receipts — essentially none exist —
+  // so both totals and systems read empty. Pass source=agent/server to slice.
+  const sourceParam = c.req.query('source') ?? 'all';
 
   // 1. 24h totals
   const totalsParams: unknown[] = [sourceParam === 'all' ? null : sourceParam];
@@ -35,7 +34,7 @@ app.get('/network/status', async (c) => {
             ) AS "anomaly_rate_24h"
      FROM interaction_receipts
      WHERE created_at >= now() - INTERVAL '24 hours'
-       AND ($1::STRING IS NULL OR source = $1)`,
+       AND ($1::text IS NULL OR source = $1)`,
     totalsParams,
   ).catch(() => [{ active_agents: 0, active_systems: 0, interactions_24h: 0, anomaly_rate_24h: 0 }]);
 

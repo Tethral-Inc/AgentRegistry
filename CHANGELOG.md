@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2.11.3] — @tethral/acr-mcp — 2026-06-10
+
+### Fixed
+- Lens reads now default to `source='all'` instead of `source='agent'`. The host-side hook (`@tethral/acr-hook`) is the primary capture path and tags receipts `source='claude-code-hook'`; the old `agent` default matched only self-reported `log_interaction` receipts, so friction/coverage/failure-registry/trend/stable-corridors/revealed-preference and `get_network_status` read empty even while the hook captured everything. Applies to both the MCP tools and the API routes.
+- `get_network_status` 24h totals always returned zero: the totals query cast a parameter to `STRING` (not a Postgres type), which threw and was swallowed by a `.catch`. Now `::text`. Same `::STRING[]` typo fixed in the pattern-detection job.
+- Dashboard: the MCP-minted `#k=` deeplink key now persists in `localStorage` (was `sessionStorage`), so viewing your own system doesn't require re-pasting an API key every visit.
+
 ## [2.2.0] — @tethral/acr-mcp — 2026-04-17
 
 ### Added

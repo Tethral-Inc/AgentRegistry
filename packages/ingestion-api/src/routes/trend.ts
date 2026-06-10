@@ -95,9 +95,9 @@ app.get('/agent/:agent_id/trend', async (c) => {
   const scope = scopeParsed.data;
   const { current, previous } = getScopeWindows(scope);
 
-  // Source defaults to 'agent' so trend reflects the agent's real interactions,
-  // not server-side self-log. Pass source=all to include both.
-  const sourceParam = c.req.query('source') ?? 'agent';
+  // Source defaults to 'all' so trend reflects every capture path — the
+  // host-side hook is primary. Pass source=agent/server to slice.
+  const sourceParam = c.req.query('source') ?? 'all';
   const sourceFilter = sourceParam === 'all' ? null : sourceParam;
 
   const resolved = await resolveAgentId(identifier);

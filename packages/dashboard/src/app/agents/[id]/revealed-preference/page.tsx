@@ -64,7 +64,7 @@ export default function RevealedPreferenceDashboard() {
   const id = params.id as string;
   const [data, setData] = useState<RevealedPreferenceResponse | null>(null);
   const [scope, setScope] = useState<string>('yesterday');
-  const [source, setSource] = useState<string>('agent');
+  const [source, setSource] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
