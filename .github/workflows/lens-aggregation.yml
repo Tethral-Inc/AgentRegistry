@@ -1,0 +1,55 @@
+name: Lens aggregation
+
+# Populates the lens rollup tables the MCP reads (system_health, chain_analysis,
+# skill anomaly counts, friction_baselines) by curling the ingestion API's cron
+# endpoints on schedule. These jobs are defined in the repo-root vercel.json as
+# Vercel crons, but the production deploy ships from packages/ingestion-api/
+# (whose vercel.json has no `crons`), so Vercel never registers them — driving
+# them from GitHub Actions is plan-independent and matches anomaly-tick.yml.
+#
+# All endpoints are idempotent no-ops when there's no new data. Clean-skips when
+# CRON_SECRET or INGESTION_API_URL aren't set.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      INGESTION_API_URL: ${{ secrets.INGESTION_API_URL }}
+    steps:
+      - name: Check secrets configured
+        id: check
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$INGESTION_API_URL" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CRON_SECRET or INGESTION_API_URL not set — skipping lens aggregation."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run due lens jobs
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          minute=$(date -u +%M); hour=$(date -u +%H)
+          fail=0
+          hit() {
+            echo "→ $1"
+            curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+              "$INGESTION_API_URL/api/cron/$1" || { echo "::warning::$1 failed"; fail=1; }
+          }
+          # Every 15 min: the high-frequency lenses.
+          hit system-health-aggregate
+          hit chain-analysis
+          # ~Every 30 min: skill anomaly counts (slots 00-14 and 30-44).
+          if [ "$minute" -lt 15 ] || { [ "$minute" -ge 30 ] && [ "$minute" -lt 45 ]; }; then
+            hit skill-threat-update
+          fi
+          # Daily ~02:00 UTC: friction baselines.
+          if [ "$hour" = "02" ] && [ "$minute" -lt 15 ]; then
+            hit friction-baseline-compute
+          fi
+          exit $fail

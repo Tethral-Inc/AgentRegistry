@@ -3,8 +3,8 @@
  * ACR receipt shape: target_system_id, target_system_type, interaction
  * category, and a rough activity classification.
  *
- * Heuristic, not exhaustive. Unknown tools default to `tool:<name>` and
- * `system_type='tool'`. The MCP tool namespace `mcp__<server>__<tool>`
+ * Heuristic, not exhaustive. Unknown tools default to `platform:<name>`
+ * and `system_type='platform'`. The MCP tool namespace `mcp__<server>__<tool>`
  * is parsed out so receipts aggregate cleanly by MCP server.
  */
 
@@ -19,14 +19,14 @@ export type MappedTarget = {
 
 const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
   Bash: {
-    target_system_id: 'tool:bash',
+    target_system_id: 'platform:bash',
     target_system_type: 'platform',
     category: 'code',
     activity_class: 'deterministic',
     interaction_purpose: 'execute',
   },
   Read: {
-    target_system_id: 'tool:fs-read',
+    target_system_id: 'platform:fs-read',
     target_system_type: 'platform',
     category: 'data_exchange',
     activity_class: 'deterministic',
@@ -34,7 +34,7 @@ const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
     data_shape: 'text',
   },
   Write: {
-    target_system_id: 'tool:fs-write',
+    target_system_id: 'platform:fs-write',
     target_system_type: 'platform',
     category: 'data_exchange',
     activity_class: 'deterministic',
@@ -42,7 +42,7 @@ const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
     data_shape: 'text',
   },
   Edit: {
-    target_system_id: 'tool:fs-edit',
+    target_system_id: 'platform:fs-edit',
     target_system_type: 'platform',
     category: 'code',
     activity_class: 'deterministic',
@@ -50,14 +50,14 @@ const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
     data_shape: 'text',
   },
   Glob: {
-    target_system_id: 'tool:fs-glob',
+    target_system_id: 'platform:fs-glob',
     target_system_type: 'platform',
     category: 'data_exchange',
     activity_class: 'deterministic',
     interaction_purpose: 'search',
   },
   Grep: {
-    target_system_id: 'tool:fs-grep',
+    target_system_id: 'platform:fs-grep',
     target_system_type: 'platform',
     category: 'data_exchange',
     activity_class: 'deterministic',
@@ -71,14 +71,14 @@ const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
     interaction_purpose: 'delegate',
   },
   TodoWrite: {
-    target_system_id: 'tool:todo',
+    target_system_id: 'platform:todo',
     target_system_type: 'platform',
     category: 'tool_call',
     activity_class: 'deterministic',
     interaction_purpose: 'write',
   },
   NotebookEdit: {
-    target_system_id: 'tool:notebook-edit',
+    target_system_id: 'platform:notebook-edit',
     target_system_type: 'platform',
     category: 'code',
     interaction_purpose: 'transform',
@@ -159,10 +159,12 @@ export function mapTool(toolName: string, toolInput: unknown): MappedTarget {
   const builtin = BUILTIN_TOOL_MAP[toolName];
   if (builtin) return builtin;
 
-  // Unknown — fall through to generic
+  // Unknown — fall through to generic. Built-ins are platform-level, and
+  // the ingestion TARGET_PATTERN only accepts mcp|api|agent|skill|platform
+  // as an id prefix (no `tool:`/`unknown:`), so emit a valid platform id.
   return {
-    target_system_id: `tool:${toolName.toLowerCase()}`,
-    target_system_type: 'unknown',
+    target_system_id: `platform:${toolName.toLowerCase()}`,
+    target_system_type: 'platform',
     category: 'tool_call',
   };
 }
