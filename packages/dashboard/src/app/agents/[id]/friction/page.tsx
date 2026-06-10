@@ -85,8 +85,10 @@ export default function FrictionDashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
         <Stat label="Interactions" value={summary.total_interactions} />
-        <Stat label="Total Wait" value={formatMs(summary.total_wait_time_ms)} />
-        <Stat label="Friction" value={`${summary.friction_percentage.toFixed(2)}%`} />
+        <Stat label="Total Call Time" value={formatMs(summary.total_wait_time_ms)} />
+        {/* Neutral label: this is call-time ÷ active span. "Friction" is the
+            interpretive name for the same number (active_time_ratio). */}
+        <Stat label="Active-time %" value={`${(summary.active_time_ratio ?? summary.friction_percentage).toFixed(2)}%`} />
         <Stat label="Failures" value={summary.total_failures} />
         <Stat label="Failure Rate" value={`${(summary.failure_rate * 100).toFixed(1)}%`} />
       </div>

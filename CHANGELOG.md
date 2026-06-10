@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2.11.4] — @tethral/acr-mcp — 2026-06-10
+
+### Changed
+- Friction report now separates **Readings (measured)** from **Derived (interpretation)** so the raw layer is never pre-judged by the framing. The API response gains a `derivation` block documenting every computed field — formula, reading inputs, the active-span model constants (`burst_gap_ms`, `min_active_ms`), and the assumptions behind `shadow_tax`/`wasted_tokens` — plus a neutrally-named `summary.active_time_ratio` (the same number as `friction_percentage`). A consumer can drop the derived fields and keep the unjudged readings. The MCP lens and dashboard reflect the split (the dashboard's headline stat is now "Active-time %"). No schema/migration change.
+
 ## [2.11.3] — @tethral/acr-mcp — 2026-06-10
 
 ### Fixed
