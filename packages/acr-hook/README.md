@@ -7,35 +7,47 @@ Observation at the transport boundary, no agent cooperation required. The
 `pre`/`post` hooks record every tool call; the `card` hook prints a short
 summary to your terminal as the session closes.
 
-## Install
+## Setup (one command)
 
 ```bash
 npm install -g @tethral/acr-hook
+acr-hook init
 ```
 
-## Configure
+`init` does everything:
+- **registers an identity** for you (no `@tethral/acr-mcp` required),
+- **wires the hooks** into `~/.claude/settings.json` (idempotent — it won't
+  duplicate, and it backs the file up first),
+- **verifies the loop** by emitting a test event and reading it back.
 
-Add to `~/.claude/settings.json`:
+That's it. From then on, capture runs on every tool call and a readout prints
+when each session ends.
+
+<details>
+<summary>Manual config (if you'd rather not run <code>init</code>)</summary>
+
+Add to `~/.claude/settings.json` (use the global <code>acr-hook</code> bin so
+the path is stable):
 
 ```json
 {
   "hooks": {
-    "PreToolUse":  [{ "matcher": "*", "hooks": [{ "type": "command", "command": "npx @tethral/acr-hook pre" }] }],
-    "PostToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "npx @tethral/acr-hook post" }] }],
-    "SessionEnd":  [{ "matcher": "",  "hooks": [{ "type": "command", "command": "npx @tethral/acr-hook card" }] }]
+    "PreToolUse":  [{ "matcher": "*", "hooks": [{ "type": "command", "command": "acr-hook pre" }] }],
+    "PostToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "acr-hook post" }] }],
+    "SessionEnd":  [{ "matcher": "",  "hooks": [{ "type": "command", "command": "acr-hook card" }] }]
   }
 }
 ```
+</details>
 
-That's the whole setup. The `SessionEnd` line is what gives you the readout.
+## No API key to manage, no MCP required
 
-## No API key to manage
-
-You never generate, paste, or even see an API key. On first run,
-`@tethral/acr-mcp` mints an identity (agent id + key + signing keypair) into
-`~/.claude/.acr-state.json`. The hook reads that file locally to send
-receipts and to fetch your readout — the key never leaves your machine and
-there's no setup step for it.
+You never generate, paste, or even see an API key. The hook self-registers on
+first run — generating a signing keypair and minting an identity into
+`~/.claude/.acr-state.json` — then reads that file locally to send receipts
+and fetch your readout. The key never leaves your machine and there's no setup
+step for it. (`@tethral/acr-mcp` shares the same identity file, so the two
+interoperate, but neither requires the other.)
 
 ## The readout
 

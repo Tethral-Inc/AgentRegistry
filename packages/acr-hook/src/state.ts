@@ -16,6 +16,11 @@ export interface AcrState {
   agent_id: string;
   api_url: string;
   api_key?: string;
+  // Persisted Ed25519 keypair (base64url raw bytes) so the same identity can
+  // be reused on every run — and shared with @tethral/acr-mcp, which reads
+  // the same file. Written when the hook self-bootstraps an identity.
+  public_key?: string;
+  private_key?: string;
 }
 
 const STATE_PATH = join(homedir(), '.claude', '.acr-state.json');
@@ -32,6 +37,26 @@ export function readState(): AcrState | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Persist identity to ~/.claude/.acr-state.json (atomic write). Shared with
+ * @tethral/acr-mcp — both read/write the same file, so an identity minted by
+ * either is reused by the other. Best-effort: a read-only home just means the
+ * identity won't persist across runs, which the caller can surface.
+ */
+export function writeState(state: AcrState): void {
+  const dir = dirname(STATE_PATH);
+  mkdirSync(dir, { recursive: true });
+  const tmp = STATE_PATH + '.tmp';
+  writeFileSync(tmp, JSON.stringify({
+    agent_id: state.agent_id,
+    api_url: state.api_url,
+    ...(state.api_key && { api_key: state.api_key }),
+    ...(state.public_key && { public_key: state.public_key }),
+    ...(state.private_key && { private_key: state.private_key }),
+  }));
+  renameSync(tmp, STATE_PATH);
 }
 
 export interface InflightEntry {

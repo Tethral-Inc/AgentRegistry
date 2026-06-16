@@ -1,7 +1,7 @@
 {
   "name": "@tethral/acr-hook",
-  "version": "0.3.0",
-  "description": "Claude Code hook that captures every tool call your agent makes and prints a readout when each session ends. Host-side observation — no log_interaction calls and no API key to manage. Pairs with @tethral/acr-mcp.",
+  "version": "0.4.0",
+  "description": "Claude Code hook that captures every tool call your agent makes and prints a readout when each session ends. One-command setup (acr-hook init) — self-registers, needs no MCP, no API key to manage. Pairs with @tethral/acr-mcp.",
   "type": "module",
   "repository": {
     "type": "git",

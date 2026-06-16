@@ -20,10 +20,14 @@
  *     }
  *   }
  */
-import { readState, recordStart, consumeStart } from './state.js';
+import { recordStart, consumeStart } from './state.js';
 import { mapTool, summarizeToolInput } from './map-tool.js';
 import { postReceipt, type HookReceipt } from './http.js';
 import { renderSessionCard } from './session-card.js';
+import { ensureIdentity } from './register.js';
+import { cmdInit } from './init.js';
+
+const API_URL = process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -73,7 +77,9 @@ async function cmdPre(): Promise<void> {
 }
 
 async function cmdPost(): Promise<void> {
-  const state = readState();
+  // Self-bootstrap: mint an identity on first use if none exists (no MCP
+  // required). Returns the cached identity on every subsequent call.
+  const state = await ensureIdentity(API_URL);
   if (!state) return;
 
   const payload = await parsePayload();
@@ -134,12 +140,14 @@ async function main(): Promise<void> {
     if (command === 'pre') await cmdPre();
     else if (command === 'post') await cmdPost();
     else if (command === 'card') await cmdCard();
+    else if (command === 'init') await cmdInit();
     else if (command === '--help' || command === '-h') {
       process.stderr.write(
-        'Usage: acr-hook {pre|post|card}\n' +
+        'Usage: acr-hook {init|pre|post|card}\n' +
+        '  init     : one-command setup — register an identity, wire the hooks into\n' +
+        '             ~/.claude/settings.json, and verify the loop. Run this once.\n' +
         '  pre|post : emit ACR receipts for Claude Code tool calls (PreToolUse/PostToolUse hooks).\n' +
-        '  card     : print the day\'s readout summary to stdout (SessionEnd hook).\n' +
-        '  Configure in ~/.claude/settings.json.\n',
+        '  card     : print the day\'s readout summary to stdout (SessionEnd hook).\n',
       );
     }
   } catch {

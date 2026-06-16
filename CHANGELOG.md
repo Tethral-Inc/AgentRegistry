@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.0] — @tethral/acr-hook — 2026-06-10
+
+### Added
+- **`acr-hook init`** — one-command setup: registers an identity, wires the Pre/Post/SessionEnd hooks into `~/.claude/settings.json` (idempotent, backs the file up first), and verifies the loop by emitting a test event and reading it back.
+- **Self-bootstrap identity.** The hook no longer needs `@tethral/acr-mcp` to exist: if there's no identity in `~/.claude/.acr-state.json`, it generates an Ed25519 keypair and self-registers (proof-of-possession), guarded by an exclusive lock so concurrent hooks at session start don't mint a pile of throwaway agents. The MCP and hook share the same identity file, so either bootstraps the other.
+
 ## [0.3.0] — @tethral/acr-hook — 2026-06-10
 
 ### Added
