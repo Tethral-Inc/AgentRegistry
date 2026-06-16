@@ -23,6 +23,7 @@
 import { readState, recordStart, consumeStart } from './state.js';
 import { mapTool, summarizeToolInput } from './map-tool.js';
 import { postReceipt, type HookReceipt } from './http.js';
+import { renderSessionCard } from './session-card.js';
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -115,16 +116,30 @@ async function cmdPost(): Promise<void> {
   await postReceipt(state.api_url, state.api_key, receipt);
 }
 
+/**
+ * SessionEnd hook: print a one-time readout card for the day to stdout,
+ * which Claude Code shows the user as the session closes. This is the ONE
+ * command that intentionally writes to stdout — pre/post stay silent. Stays
+ * fail-quiet: renderSessionCard returns null on any error and we print
+ * nothing rather than cluttering session close.
+ */
+async function cmdCard(): Promise<void> {
+  const card = await renderSessionCard();
+  if (card) process.stdout.write(card + '\n');
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   try {
     if (command === 'pre') await cmdPre();
     else if (command === 'post') await cmdPost();
+    else if (command === 'card') await cmdCard();
     else if (command === '--help' || command === '-h') {
       process.stderr.write(
-        'Usage: acr-hook {pre|post}\n' +
-        '  Emits ACR receipts for Claude Code tool calls.\n' +
-        '  Configure as PreToolUse + PostToolUse hooks in ~/.claude/settings.json.\n',
+        'Usage: acr-hook {pre|post|card}\n' +
+        '  pre|post : emit ACR receipts for Claude Code tool calls (PreToolUse/PostToolUse hooks).\n' +
+        '  card     : print the day\'s readout summary to stdout (SessionEnd hook).\n' +
+        '  Configure in ~/.claude/settings.json.\n',
       );
     }
   } catch {

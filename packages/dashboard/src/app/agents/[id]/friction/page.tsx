@@ -14,7 +14,10 @@ export default function FrictionDashboard() {
   const params = useParams();
   const id = params.id as string;
   const [data, setData] = useState<FrictionResponse | null>(null);
-  const [scope, setScope] = useState<string>('day');
+  // Default to the 7-day window: a single day is genuinely sparse for most
+  // agents (work happens in bursts), so landing on "Last 24h" greets people
+  // with an empty page and reads as broken. Week is where the data lives.
+  const [scope, setScope] = useState<string>('week');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedTargets, setExpandedTargets] = useState<Set<string>>(new Set());

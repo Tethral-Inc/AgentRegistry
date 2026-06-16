@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.0] — @tethral/acr-hook — 2026-06-10
+
+### Added
+- **End-of-session readout.** A new `card` command, wired as a Claude Code `SessionEnd` hook, prints a short summary to the terminal when a session closes: tool-call count, failures, % of active time spent waiting on tools, the top time sinks, and a pre-authenticated dashboard link. The readout *comes to the user* instead of requiring them to open a dashboard — and it uses the locally-stored key, so there is no API key for the user to generate, paste, or see. Dashboard friction view now defaults to the 7-day window (a single day is sparse and reads as "broken").
+
 ## [2.11.4] — @tethral/acr-mcp — 2026-06-10
 
 ### Changed
