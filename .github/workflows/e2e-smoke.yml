@@ -1,0 +1,42 @@
+name: E2E Smoke
+
+# Liveness check for the full ACR loop: emit a uniquely-marked receipt,
+# then assert it reads back through the DEFAULT friction lens. Catches the
+# class of silent regression that doesn't break "is the API up?" but does
+# break "can a user actually see their data" — e.g. the lens defaulting to
+# source='agent', or the network-totals query zeroing.
+#
+# Reuses one stable smoke agent (secrets ACR_SMOKE_AGENT_ID/ACR_SMOKE_API_KEY,
+# minted once via `node scripts/e2e-smoke.mjs --provision`) rather than
+# registering per run, so the check doesn't add to ephemeral-agent churn.
+
+on:
+  schedule:
+    - cron: '40 * * * *'   # hourly, offset from the lens-aggregation crons
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Check smoke secrets configured
+        id: chk
+        env:
+          ACR_SMOKE_AGENT_ID: ${{ secrets.ACR_SMOKE_AGENT_ID }}
+        run: |
+          if [ -z "$ACR_SMOKE_AGENT_ID" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ACR_SMOKE_AGENT_ID not set — skipping. Run 'node scripts/e2e-smoke.mjs --provision' and add ACR_SMOKE_AGENT_ID + ACR_SMOKE_API_KEY as repo secrets."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run E2E smoke (do → read default lens → assert)
+        if: steps.chk.outputs.configured == 'true'
+        env:
+          ACR_API_URL: https://acr.nfkey.ai
+          ACR_SMOKE_AGENT_ID: ${{ secrets.ACR_SMOKE_AGENT_ID }}
+          ACR_SMOKE_API_KEY: ${{ secrets.ACR_SMOKE_API_KEY }}
+        run: node scripts/e2e-smoke.mjs
