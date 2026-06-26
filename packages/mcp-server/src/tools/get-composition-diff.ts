@@ -4,6 +4,7 @@ import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 type DeclaredUsed = { kind: string; id: string; name?: string; target: string; interaction_count: number };
 type DeclaredUnused = { kind: string; id: string; name?: string; target: string };
@@ -67,6 +68,14 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
           declared_but_unused: DeclaredUnused[];
           used_but_undeclared: Undeclared[];
         };
+
+        // A degraded payload means a backend query threw — the empty buckets
+        // below are NOT a real reading, so don't render a clean all-clear diff.
+        if (isDegraded(data as Record<string, unknown>)) {
+          let text = `Composition Diff: ${displayName}\n${'='.repeat(32)}\n`;
+          text += renderDegradedNotice('Composition diff', data as Record<string, unknown>);
+          return { content: [{ type: 'text' as const, text }] };
+        }
 
         let text = `Composition Diff: ${displayName}\n${'='.repeat(32)}\n`;
         text += `Window: last ${data.window_days} day${data.window_days === 1 ? '' : 's'}\n`;

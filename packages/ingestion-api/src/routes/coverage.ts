@@ -60,6 +60,11 @@ app.get('/agent/:agent_id/coverage', async (c) => {
   // happened to have no retries as having "missing" retry coverage.
   //
   // For error_code and tokens_used we also track presence (non-null).
+  //
+  // degraded: when this query throws (e.g. a dialect rejection), we MUST NOT
+  // collapse to all-zeros and let the rule engine render "Covered — OK". The
+  // flag tells the renderer the numbers are unavailable, not an all-clear.
+  let degraded = false;
   const stats = await query<{
     total_receipts: number;
     total_failed_receipts: number;
@@ -92,14 +97,14 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(*) FILTER (WHERE retry_count IS NOT NULL AND retry_count > 0)::int AS "receipts_with_nonzero_retry_count",
        COUNT(*) FILTER (WHERE anomaly_flagged = true)::int AS "receipts_with_anomaly_flag",
        COUNT(DISTINCT target_system_type)::int AS "distinct_target_types",
-       COUNT(*) FILTER (WHERE categories ? 'activity_class')::int AS "receipts_with_activity_class",
-       COUNT(*) FILTER (WHERE categories IS NOT NULL AND categories != '{}'::jsonb)::int AS "receipts_with_any_category",
+       COUNT(*) FILTER (WHERE categories->>'activity_class' IS NOT NULL)::int AS "receipts_with_activity_class",
+       COUNT(*) FILTER (WHERE categories IS NOT NULL AND categories::string <> '{}')::int AS "receipts_with_any_category",
        COUNT(*) FILTER (WHERE tokens_used IS NOT NULL)::int AS "receipts_with_tokens_used",
        COUNT(*) FILTER (WHERE status != 'success' AND error_code IS NOT NULL)::int AS "failed_receipts_with_error_code"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1${statsSourceClause}`,
     statsParams,
-  ).catch((err) => { log.warn({ err, agentId }, 'Coverage stats query failed'); return []; });
+  ).catch((err) => { log.error({ err, agentId }, 'Coverage stats query failed'); degraded = true; return []; });
 
   const s = stats[0] ?? {
     total_receipts: 0,
@@ -236,6 +241,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
 
   return c.json({
     agent_id: agentId,
+    degraded,
+    ...(degraded ? { degraded_reason: 'coverage stats query failed' } : {}),
     signals: {
       total_receipts: s.total_receipts,
       total_failed_receipts: s.total_failed_receipts,

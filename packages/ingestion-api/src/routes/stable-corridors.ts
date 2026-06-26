@@ -81,6 +81,11 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
     sourceClause = ` AND source = $${params.length}`;
   }
 
+  // degraded: when this query throws (e.g. a dialect rejection), we MUST NOT
+  // collapse to an empty result and let the renderer print "No stable corridors
+  // data yet" — a silently-failed query reads identically to a genuinely empty
+  // window. The flag tells the renderer the result is unavailable, not empty.
+  let degraded = false;
   const rows = await query<CorridorRow>(
     `SELECT
        target_system_id AS "target_system_id",
@@ -108,7 +113,7 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
      ORDER BY COUNT(*) DESC
      LIMIT 50`,
     params,
-  ).catch(() => []);
+  ).catch((err) => { log.error({ err, agentId }, 'Stable corridors query failed'); degraded = true; return []; });
 
   // The SQL already filters to receipts >= 10, 0 failures, 0 anomalies.
   // Client-side: also drop entries where coefficient of variation is too
@@ -137,6 +142,8 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
   return c.json({
     agent_id: agentId,
     name: agentName,
+    degraded,
+    ...(degraded ? { degraded_reason: 'stable-corridors query failed' } : {}),
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),

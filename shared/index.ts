@@ -34,4 +34,5 @@ export { type APIError, type ErrorCode, makeError } from './types/errors.js';
 export * from './crypto/index.js';
 export { getPool, closePool, query, queryOne, execute } from './db/index.js';
 export { normalizeSystemId } from './canonical-names/normalize.js';
+export { BUILTIN_TOOL_TARGETS, canonicalTargetForBuiltinTool } from './canonical-names/builtin-tools.js';
 export { createLogger, logger } from './logger/index.js';

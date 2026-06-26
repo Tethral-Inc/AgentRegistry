@@ -10,6 +10,7 @@ import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { renderEmptyState } from '../utils/empty-state.js';
 import { section } from '../utils/style.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -49,6 +50,18 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
         }
         const data = await res.json() as Record<string, unknown>;
         displayName = agent_name || getAgentName() || displayName;
+
+        // A degraded payload means the corridors query threw — the empty
+        // matches below are NOT a real reading, so don't render the
+        // "No stable corridors data yet" all-clear framing.
+        if (isDegraded(data)) {
+          let text = renderNotificationHeader(unreadCount);
+          text += `Stable Corridors for ${displayName} (${scope})\n${'='.repeat(30)}\n`;
+          text += `Source: ${source ?? 'all'}\n`;
+          text += renderDegradedNotice('Stable corridors', data);
+          text += renderDashboardFooter(id, 'stable-corridors', { range: scope, source: source ?? 'all' });
+          return { content: [{ type: 'text' as const, text }] };
+        }
 
         const matches = data.matches as Array<Record<string, unknown>> ?? [];
         const filter = data.filter_applied as Record<string, unknown>;

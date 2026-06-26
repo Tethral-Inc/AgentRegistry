@@ -4,6 +4,7 @@ import {
   query,
   makeError,
   createLogger,
+  normalizeSystemId,
 } from '@acr/shared';
 
 import { resolveAgentId } from '../helpers/resolve-agent.js';
@@ -77,13 +78,18 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
     callSourceClause = ` AND source = $${callQueryParams.length}`;
   }
 
+  // degraded: when the bindings (declared-side) query throws, we MUST NOT
+  // collapse to an empty binding set and let every target read as
+  // called_unbound / "declared nothing" — a misleading all-clear. The flag
+  // tells the renderer the declared side is unavailable, not empty.
+  let degraded = false;
   const [bindingRows, callRows] = await Promise.all([
     query<{ source: BindingSource; composition: unknown }>(
       `SELECT source AS "source", composition AS "composition"
        FROM agent_composition_sources
        WHERE agent_id = $1`,
       [agentId],
-    ).catch((err) => { log.debug({ err }, 'Failed to fetch composition sources'); return []; }),
+    ).catch((err) => { log.error({ err }, 'Failed to fetch composition sources'); degraded = true; return []; }),
     query<{ target_system_id: string; call_count: number; last_called: string }>(
       `SELECT target_system_id AS "target_system_id",
               COUNT(*)::int AS "call_count",
@@ -134,8 +140,19 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
   }
   const callMap = new Map<string, { call_count: number; last_called: string }>();
   for (const row of callRows) {
-    allTargetIds.add(row.target_system_id);
-    callMap.set(row.target_system_id, { call_count: row.call_count, last_called: row.last_called });
+    // Normalize the called id so it shares the declared side's vocabulary.
+    // Receipts are normalized on write, but normalize defensively here so a
+    // legacy/un-normalized row still lines up with the candidate set.
+    const tid = normalizeSystemId(row.target_system_id);
+    allTargetIds.add(tid);
+    const existing = callMap.get(tid);
+    if (existing) {
+      // Two raw ids normalized to the same target — fold their counts.
+      existing.call_count += row.call_count;
+      if (row.last_called > existing.last_called) existing.last_called = row.last_called;
+    } else {
+      callMap.set(tid, { call_count: row.call_count, last_called: row.last_called });
+    }
   }
 
   // Classify every target. Track summary counts and source disagreements.
@@ -202,6 +219,8 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),
+    degraded,
+    ...(degraded ? { degraded_reason: 'composition-sources query failed' } : {}),
     summary,
     targets,
   });

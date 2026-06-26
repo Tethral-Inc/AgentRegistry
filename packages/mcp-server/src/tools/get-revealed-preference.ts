@@ -10,6 +10,7 @@ import {
   renderNextActionFooter,
   nextActionMeta,
 } from '../utils/next-action.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 const TOOL_DESCRIPTION = `Query the revealed-preference lens: what the agent *declared* in its composition vs what it *actually called* during the window. Only ACR can see both — so this is the view no self-report and no server log can produce alone.
 
@@ -65,8 +66,18 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
         }
 
         displayName = data.name || agent_name || getAgentName() || displayName;
-        const s = data.summary;
         const scopeLabel = scope ?? 'yesterday';
+
+        // A degraded payload means the bindings (declared-side) query threw —
+        // the empty binding set below is NOT a real reading, so don't render
+        // targets as called_unbound / "declared nothing" (a false all-clear).
+        if (isDegraded(data)) {
+          let text = `Revealed-Preference Report for ${displayName} (${scopeLabel})\n`;
+          text += renderDegradedNotice('Revealed preference', data);
+          return { content: [{ type: 'text' as const, text }] };
+        }
+
+        const s = data.summary;
 
         if (s.bound_targets === 0 && s.called_targets === 0) {
           return {

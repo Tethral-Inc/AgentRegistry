@@ -96,4 +96,39 @@ describe('extractBoundTargets()', () => {
     });
     expect(out.size).toBe(0);
   });
+
+  // --- Built-in tool resolution + normalization (taxonomy alignment) ---
+
+  it('resolves declared built-in tools to their canonical receipt id (not mcp:)', () => {
+    const out = extractBoundTargets({ tools: ['Bash', 'Read', 'Task', 'WebSearch'] });
+    expect(out.has('platform:bash')).toBe(true);
+    expect(out.has('platform:fs-read')).toBe(true);
+    expect(out.has('agent:subagent')).toBe(true);
+    expect(out.has('api:web-search')).toBe(true);
+    // Built-ins must NOT be mis-prefixed as mcp:* — that was the bug.
+    expect(out.has('mcp:bash')).toBe(false);
+  });
+
+  it('built-in resolution is case-insensitive', () => {
+    const out = extractBoundTargets({ tools: ['BASH', 'edit'] });
+    expect(out.has('platform:bash')).toBe(true);
+    expect(out.has('platform:fs-edit')).toBe(true);
+  });
+
+  it('resolves built-ins declared via tool_components too', () => {
+    const out = extractBoundTargets({ tool_components: [{ id: 'x', name: 'Bash' }] });
+    expect(out.has('platform:bash')).toBe(true);
+  });
+
+  it('non-built-in tools stay MCP-hosted', () => {
+    const out = extractBoundTargets({ tools: ['create-issue'] });
+    expect(out.has('mcp:create-issue')).toBe(true);
+    expect(out.has('platform:create-issue')).toBe(false);
+  });
+
+  it('normalizes declared candidates to lowercase so casing matches receipts', () => {
+    const out = extractBoundTargets({ mcps: ['mcp:GitHub'], skills: ['PDF'] });
+    expect(out.has('mcp:github')).toBe(true);
+    expect(out.has('skill:pdf')).toBe(true);
+  });
 });
