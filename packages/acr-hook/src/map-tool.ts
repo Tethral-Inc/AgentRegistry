@@ -15,7 +15,21 @@ export type MappedTarget = {
   activity_class?: string;
   interaction_purpose?: string;
   data_shape?: string;
+  /**
+   * Interactive/elicitation tools block on a human answer, so their wall-clock
+   * is human think-time, not machine latency. Receipts for these are emitted
+   * with duration_ms=null so the friction lens never sums human wait as tool
+   * cost (a 5-minute AskUserQuestion once read as 99% of "wait time").
+   */
+  interactive?: boolean;
 };
+
+/**
+ * Tools whose PostToolUse only fires after a human responds — their duration
+ * is human think-time, not machine latency. Keep this list in sync with the
+ * host's interactive/elicitation surface.
+ */
+const INTERACTIVE_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
 
 const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
   Bash: {
@@ -119,6 +133,18 @@ function parseMcpServerFromToolName(toolName: string): string | null {
 }
 
 export function mapTool(toolName: string, toolInput: unknown): MappedTarget {
+  // Interactive/elicitation tools — block on a human, so mark them so the
+  // caller can drop the (human) duration. Mapped to a stable platform id.
+  if (INTERACTIVE_TOOLS.has(toolName)) {
+    return {
+      target_system_id: `platform:${toolName.toLowerCase()}`,
+      target_system_type: 'platform',
+      category: 'communication',
+      interaction_purpose: 'elicitation',
+      interactive: true,
+    };
+  }
+
   // WebFetch — extract host from url for per-host aggregation
   if (toolName === 'WebFetch' && toolInput && typeof toolInput === 'object') {
     const url = (toolInput as Record<string, unknown>).url;

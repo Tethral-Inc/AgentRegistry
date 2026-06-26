@@ -10,6 +10,7 @@ import {
   renderNextActionFooter,
   nextActionMeta,
 } from '../utils/next-action.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 const TOOL_DESCRIPTION = `Query the compensation-signatures lens: how stereotyped is your chain-shape behavior, and which chain patterns dominate vs which are exploratory?
 
@@ -60,6 +61,16 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
         }
 
         displayName = data.name || agent_name || getAgentName() || displayName;
+
+        // A degraded payload means the chain_analysis query threw — don't
+        // render the reassuring "no multi-step chains" message, which would
+        // tell the user to fix their own logging for a server-side failure.
+        if (isDegraded(data as Record<string, unknown>)) {
+          let text = `Compensation Signatures for ${displayName} (${window ?? 'week'})\n`;
+          text += renderDegradedNotice('Compensation signatures', data as Record<string, unknown>);
+          return { content: [{ type: 'text' as const, text }] };
+        }
+
         const s = data.summary;
 
         if (s.total_chains === 0) {

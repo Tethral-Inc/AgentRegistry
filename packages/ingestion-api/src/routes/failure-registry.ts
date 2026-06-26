@@ -103,7 +103,8 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND status IN ('failure', 'timeout')${groupedSourceClause}
+       AND status != 'success'
+       AND (source IS NULL OR source != 'environmental')${groupedSourceClause}
      GROUP BY target_system_id, target_system_type, status, error_code, interaction_category
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
@@ -170,7 +171,8 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
-       AND created_at <= $3${totalSourceClause}`,
+       AND created_at <= $3
+       AND (source IS NULL OR source != 'environmental')${totalSourceClause}`,
     totalParams,
   ).catch((err) => { log.error({ err, agentId }, 'Failed to query failure-registry total'); degraded = true; return [] as Array<{ total: number }>; });
 

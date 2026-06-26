@@ -215,13 +215,14 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
     `SELECT target_system_id AS "target_system_id",
             target_system_type AS "target_system_type",
             COUNT(*)::int AS "interaction_count",
-            MAX(request_timestamp_ms)::text AS "last_seen"
+            MAX(created_at)::text AS "last_seen"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
-       AND request_timestamp_ms >= $2
+       AND created_at >= now() - ($2::int * INTERVAL '1 day')
+       AND (source IS NULL OR source != 'environmental')
      GROUP BY target_system_id, target_system_type
      ORDER BY COUNT(*) DESC`,
-    [agentId, Date.now() - windowDays * 86400000],
+    [agentId, windowDays],
   ).catch((err) => {
     log.error({ err, agentId }, 'composition-diff: receipts load failed');
     degraded = true;

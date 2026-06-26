@@ -68,7 +68,8 @@ app.get('/agent/:agent_id/profile', async (c) => {
        MIN(created_at)::text AS "first_seen",
        MAX(created_at)::text AS "last_seen"
      FROM interaction_receipts
-     WHERE emitter_agent_id = $1`,
+     WHERE emitter_agent_id = $1
+       AND (source IS NULL OR source != 'environmental')`,
     [agentId],
   ).catch(() => []);
 

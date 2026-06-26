@@ -88,10 +88,16 @@ async function cmdPost(): Promise<void> {
   const inflight = consumeStart(payload.session_id, payload.tool_name);
   const nowMs = Date.now();
   const startMs = inflight?.start_ms ?? null;
-  const durationMs = startMs !== null ? nowMs - startMs : null;
 
   const mapped = mapTool(payload.tool_name, payload.tool_input);
   const failed = isFailureResponse(payload.tool_response);
+
+  // Interactive tools block on a human answer — the elapsed wall-clock is
+  // think-time, not machine latency. Emit no duration so the friction lens
+  // never attributes human wait as tool cost.
+  const durationMs = mapped.interactive
+    ? null
+    : (startMs !== null ? nowMs - startMs : null);
 
   const receipt: HookReceipt = {
     emitter: {
@@ -115,6 +121,7 @@ async function cmdPost(): Promise<void> {
       ...(mapped.activity_class ? { activity_class: mapped.activity_class } : {}),
       ...(mapped.interaction_purpose ? { interaction_purpose: mapped.interaction_purpose } : {}),
       ...(mapped.data_shape ? { data_shape: mapped.data_shape } : {}),
+      ...(mapped.interactive ? { measurement: 'interactive-wait-excluded' } : {}),
       tool_name: payload.tool_name,
     },
   };

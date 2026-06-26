@@ -102,7 +102,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(*) FILTER (WHERE tokens_used IS NOT NULL)::int AS "receipts_with_tokens_used",
        COUNT(*) FILTER (WHERE status != 'success' AND error_code IS NOT NULL)::int AS "failed_receipts_with_error_code"
      FROM interaction_receipts
-     WHERE emitter_agent_id = $1${statsSourceClause}`,
+     WHERE emitter_agent_id = $1
+       AND (source IS NULL OR source != 'environmental')${statsSourceClause}`,
     statsParams,
   ).catch((err) => { log.error({ err, agentId }, 'Coverage stats query failed'); degraded = true; return []; });
 

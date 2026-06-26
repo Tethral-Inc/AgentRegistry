@@ -97,7 +97,8 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
        FROM interaction_receipts
        WHERE emitter_agent_id = $1
          AND created_at >= $2
-         AND created_at <= $3${callSourceClause}
+         AND created_at <= $3
+         AND (source IS NULL OR source != 'environmental')${callSourceClause}
        GROUP BY target_system_id`,
       callQueryParams,
     ),
