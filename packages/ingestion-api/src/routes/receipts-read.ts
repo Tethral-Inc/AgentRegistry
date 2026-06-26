@@ -111,7 +111,7 @@ app.get('/agent/:identifier/receipts', async (c) => {
   // List mode — cursor-based pagination
   const limitParam = parseInt(c.req.query('limit') ?? '50', 10);
   const limit = Math.min(Math.max(1, limitParam), 200);
-  const cursor = c.req.query('cursor'); // created_at of last item
+  const cursor = c.req.query('cursor'); // composite "created_at|receipt_id" of last item
   const target = c.req.query('target');
   const category = c.req.query('category');
   const status = c.req.query('status');
@@ -124,8 +124,23 @@ app.get('/agent/:identifier/receipts', async (c) => {
   const params: unknown[] = [agentId];
 
   if (cursor) {
-    params.push(cursor);
-    conditions.push(`created_at < $${params.length}`);
+    // Composite keyset cursor "created_at|receipt_id" matching the
+    // (created_at DESC, receipt_id DESC) ORDER BY. A plain created_at cursor
+    // with strict `<` drops every row that shares the boundary timestamp —
+    // CockroachDB stamps all rows written in one txn with the same created_at,
+    // so a page boundary inside such a group silently loses the rest.
+    const sep = cursor.indexOf('|');
+    if (sep !== -1) {
+      params.push(cursor.slice(0, sep));
+      const tsIdx = params.length;
+      params.push(cursor.slice(sep + 1));
+      const idIdx = params.length;
+      conditions.push(`(created_at, receipt_id) < ($${tsIdx}, $${idIdx})`);
+    } else {
+      // Back-compat: a legacy created_at-only cursor.
+      params.push(cursor);
+      conditions.push(`created_at < $${params.length}`);
+    }
   }
   if (target) {
     params.push(target);
@@ -176,9 +191,8 @@ app.get('/agent/:identifier/receipts', async (c) => {
 
   const hasMore = rows.length > limit;
   const receipts = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore && receipts.length > 0
-    ? receipts[receipts.length - 1]!.created_at
-    : null;
+  const last = hasMore && receipts.length > 0 ? receipts[receipts.length - 1]! : null;
+  const nextCursor = last ? `${last.created_at}|${last.receipt_id}` : null;
 
   return c.json({
     agent_id: agentId,
