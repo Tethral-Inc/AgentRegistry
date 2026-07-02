@@ -214,7 +214,7 @@ async function main() {
 
   const { res: nsRes, body: ns } = await req('/api/v1/network/status');
   assert(nsRes.ok && ns.degraded !== true, `network/status → ${nsRes.status}, degraded=${ns.degraded}`);
-  const { res: hRes, body: health } = await req('/health');
+  const { res: hRes, body: health } = await req('/api/v1/health');
   assert(hRes.ok, `/health → ${hRes.status} (status=${health.status})`);
   assert(health.status === 'ok', `/health status is 'ok' after a fresh aggregation run (got '${health.status}' — heartbeat wiring)`);
 
