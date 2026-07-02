@@ -98,7 +98,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
        COALESCE(error_code, '') AS "error_code",
        interaction_category AS "category",
        COUNT(*)::int AS "count",
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration_ms",
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration_ms",
        COALESCE(SUM(duration_ms), 0)::int AS "total_duration_ms"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1

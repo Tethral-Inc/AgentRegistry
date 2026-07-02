@@ -101,8 +101,8 @@ app.get('/baselines/cohort', async (c) => {
               MIN(target_system_type) AS "target_system_type",
               COUNT(DISTINCT emitter_agent_id)::int AS "cohort_size",
               COUNT(*)::int AS "total_interactions",
-              PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::float AS "median_duration_ms",
-              PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)::float AS "p95_duration_ms",
+              PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::float AS "median_duration_ms",
+              PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::float AS "p95_duration_ms",
               COALESCE(
                 COUNT(*) FILTER (WHERE status = 'failure')::float8 /
                 NULLIF(COUNT(*), 0)::float8, 0.0

@@ -68,7 +68,7 @@ async function fetchWindow(
   return query<TargetWindow>(
     `SELECT
        target_system_id AS "target",
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration_ms",
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration_ms",
        COALESCE(
          COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::float8 /
          NULLIF(COUNT(*), 0)::float8, 0.0

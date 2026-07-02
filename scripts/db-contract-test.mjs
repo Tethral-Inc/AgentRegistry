@@ -26,7 +26,7 @@
  *   CRON_SECRET                   (required — must match the served API)
  *   COCKROACH_CONNECTION_STRING   (required — for seeds/asserts with no API)
  */
-import { generateKeyPairSync, createPrivateKey, sign as nodeSign, createHash } from 'node:crypto';
+import { generateKeyPairSync, createPrivateKey, sign as nodeSign, createHash, randomBytes } from 'node:crypto';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pg = require('../shared/node_modules/pg');
@@ -39,6 +39,9 @@ if (!CRON_SECRET || !DB) {
   process.exit(1);
 }
 
+// Agent names are globally unique (idx_agents_name), so suffix per run —
+// re-registering a taken name is a 500, not an upsert.
+const RUN = randomBytes(3).toString('hex');
 const TEST_SKILL_NAME = 'contract-test-skill';
 const TEST_SKILL_HASH = createHash('sha256').update('contract-test-skill-content').digest('hex');
 
@@ -118,13 +121,14 @@ async function main() {
   // ── Seed: catalog row mapping the test skill's name to its hash ──
   // (the crawler owns this table in production; no public write endpoint)
   await db.query(
-    `UPSERT INTO skill_catalog (skill_name, skill_source, source_url, current_hash, description)
-     VALUES ($1, 'github', 'https://example.invalid/contract-test', $2, 'db-contract-test fixture')`,
+    `INSERT INTO skill_catalog (skill_name, skill_source, source_url, current_hash, description)
+     VALUES ($1, 'github', 'https://example.invalid/contract-test', $2, 'db-contract-test fixture')
+     ON CONFLICT (skill_name, skill_source) DO UPDATE SET current_hash = $2`,
     [TEST_SKILL_NAME, TEST_SKILL_HASH],
   );
 
   console.log('\n── Register + seed ──');
-  const main = await register('db-contract-main', {
+  const main = await register(`db-contract-main-${RUN}`, {
     skill_hashes: [TEST_SKILL_HASH],
     tools: ['bash', 'read'],
   });
@@ -140,7 +144,10 @@ async function main() {
   for (let i = 0; i < 24; i++) {
     await postReceipt(main, {
       target: targets[i % 3],
-      interaction: { duration_ms: 50 + i * 10, ...(i % 2 === 0 ? { chain_id: `chain-${i % 4}` } : {}) },
+      // chain_id is TOP-LEVEL on the receipt (not inside interaction) — the
+      // schema silently drops it elsewhere and the server infers one chain.
+      chain_id: `chain-${i % 4}`,
+      interaction: { duration_ms: 50 + i * 10 },
       categories: { activity_class: 'deterministic', interaction_purpose: 'execute' },
     });
   }
@@ -156,7 +163,7 @@ async function main() {
   // the notification path must resolve the name to the hash to match the
   // main agent's hash-keyed subscription.
   for (let i = 0; i < 25; i++) {
-    const reporter = await register(`db-contract-reporter-${i}`, { tools: ['x'] });
+    const reporter = await register(`db-contract-reporter-${RUN}-${i}`, { tools: ['x'] });
     const now = Date.now();
     const { res, body } = await req('/api/v1/receipts', {
       method: 'POST',
@@ -228,7 +235,9 @@ async function main() {
     assert(coverage.signals.total_receipts === 30, `coverage total_receipts == 30 (got ${coverage.signals.total_receipts})`);
     assert(coverage.signals.total_failed_receipts === 6, `coverage failed_receipts == 6 (got ${coverage.signals.total_failed_receipts})`);
     assert(coverage.signals.receipts_with_activity_class === 24, `coverage activity_class == 24 (got ${coverage.signals.receipts_with_activity_class})`);
-    assert(coverage.signals.distinct_chains === 4, `coverage distinct_chains == 4 (got ${coverage.signals.distinct_chains})`);
+    // 24 receipts carry chain-0..chain-3 explicitly; the 6 failure receipts
+    // get a server-inferred chain_id which may reuse or add one chain.
+    assert(coverage.signals.distinct_chains >= 4, `coverage distinct_chains >= 4 (got ${coverage.signals.distinct_chains})`);
   }
   if (friction) {
     const n = friction.summary?.total_interactions ?? friction.summary?.interactions;

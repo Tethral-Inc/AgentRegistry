@@ -113,6 +113,50 @@ async function getCurrentVersion(client) {
   return { version: parseInt(last.version, 10), dirty: last.dirty };
 }
 
+/**
+ * Execute a migration file statement-by-statement.
+ *
+ * pg sends a multi-statement string as ONE implicit transaction, and
+ * CockroachDB's schema changer rejects several combinations inside a single
+ * transaction — e.g. CREATE (partial) INDEX on a column added by an ALTER in
+ * the same txn ("cannot create partial index on column which is not public",
+ * hit by 000003 when bootstrapping a FRESH database; production never saw it
+ * because it evolved incrementally). Splitting on top-level semicolons and
+ * autocommitting each statement matches how golang-migrate executed these
+ * files originally. Splitter is comment-aware but not dollar-quote-aware —
+ * fine for this repo's plain-SQL migrations.
+ */
+function splitStatements(sql) {
+  const statements = [];
+  let cur = '';
+  let inLineComment = false;
+  let inString = false;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (inLineComment) { cur += ch; if (ch === '\n') inLineComment = false; continue; }
+    if (inString) {
+      cur += ch;
+      if (ch === "'") {
+        if (sql[i + 1] === "'") { cur += sql[++i]; } // escaped '' stays in-string
+        else inString = false;
+      }
+      continue;
+    }
+    if (ch === '-' && sql[i + 1] === '-') { inLineComment = true; cur += ch; continue; }
+    if (ch === "'") { inString = true; cur += ch; continue; }
+    if (ch === ';') { statements.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  statements.push(cur);
+  return statements.map((s) => s.trim()).filter((s) => s.replace(/--[^\n]*/g, '').trim().length > 0);
+}
+
+async function runSqlFile(client, sql) {
+  for (const stmt of splitStatements(sql)) {
+    await client.query(stmt);
+  }
+}
+
 async function markApplied(client, version) {
   await client.query(
     `INSERT INTO schema_migrations (version, dirty) VALUES ($1, false)
@@ -165,7 +209,7 @@ async function cmdUp(client, migrations, limit) {
     const sql = fs.readFileSync(path.join(migrationsDir, m.upFile), 'utf-8');
     console.log(`  -> ${m.upFile} ...`);
     try {
-      await client.query(sql);
+      await runSqlFile(client, sql);
       await markApplied(client, m.version);
       console.log(`     OK`);
     } catch (err) {
@@ -209,7 +253,7 @@ async function cmdDown(client, migrations, count) {
     const sql = fs.readFileSync(path.join(migrationsDir, m.downFile), 'utf-8');
     console.log(`  <- ${m.downFile} ...`);
     try {
-      await client.query(sql);
+      await runSqlFile(client, sql);
       await removeVersion(client, version);
       console.log(`     OK`);
     } catch (err) {

@@ -92,7 +92,7 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
        target_system_id AS "target_system_id",
        target_system_type AS "target_system_type",
        COUNT(*)::int AS "receipt_count",
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration_ms",
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration_ms",
        STDDEV(duration_ms)::int AS "stddev_duration_ms",
        COALESCE(
          COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::float8 /
