@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, createLogger } from '@acr/shared';
+import { query, createLogger, ELEVATED_SKILL_SIGNAL_SQL } from '@acr/shared';
 import { probeAggregationFreshness } from '../helpers/aggregation-freshness.js';
 
 const log = createLogger({ name: 'network-status' });
@@ -127,7 +127,7 @@ app.get('/network/status', async (c) => {
             first_seen_at::text AS "first_seen",
             last_updated::text AS "last_updated"
      FROM skill_hashes
-     WHERE anomaly_signal_count > 0
+     WHERE ${ELEVATED_SKILL_SIGNAL_SQL}
      ORDER BY anomaly_signal_count DESC, anomaly_signal_rate DESC
      LIMIT 20`,
   ).catch((err) => { log.error({ err }, 'network threats query failed'); degraded = true; return []; });

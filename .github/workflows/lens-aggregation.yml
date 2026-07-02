@@ -16,8 +16,8 @@ name: Lens aggregation
 on:
   schedule:
     - cron: '*/15 * * * *'   # high-frequency: system-health-aggregate + chain-analysis
-    - cron: '7,37 * * * *'   # ~2x/hour: skill-threat-update
-    - cron: '15 2 * * *'     # daily: friction-baseline-compute
+    - cron: '7,37 * * * *'   # ~2x/hour: skill-threat-update + watch-evaluation + pattern-detection
+    - cron: '15 2 * * *'     # daily: friction-baseline-compute + data-archival + agent-expiration
   workflow_dispatch:
     inputs:
       jobs:
@@ -67,12 +67,16 @@ jobs:
             fi
             case "$SCHEDULE" in
               '*/15 * * * *') case "$1" in system-health-aggregate|chain-analysis) return 0;; esac ;;
-              '7,37 * * * *') [ "$1" = skill-threat-update ] && return 0 ;;
-              '15 2 * * *')   [ "$1" = friction-baseline-compute ] && return 0 ;;
+              '7,37 * * * *') case "$1" in skill-threat-update|watch-evaluation|pattern-detection) return 0;; esac ;;
+              '15 2 * * *')   case "$1" in friction-baseline-compute|data-archival|agent-expiration) return 0;; esac ;;
             esac
             return 1
           }
-          for job in system-health-aggregate chain-analysis skill-threat-update friction-baseline-compute; do
+          # Every handler in cron.ts must appear here (or in anomaly-tick.yml):
+          # a cron endpoint with no scheduler is a claim the product doesn't keep
+          # (data-archival and agent-expiration back the privacy policy's
+          # retention promises; watch-evaluation backs set_watch notifications).
+          for job in system-health-aggregate chain-analysis skill-threat-update friction-baseline-compute watch-evaluation pattern-detection data-archival agent-expiration; do
             if due "$job"; then hit "$job"; fi
           done
           exit $fail

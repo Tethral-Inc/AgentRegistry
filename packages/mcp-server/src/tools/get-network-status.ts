@@ -50,10 +50,15 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         text += ` | Interactions: ${(t.interactions_24h ?? 0).toLocaleString()}\n`;
         text += `  Anomaly rate: ${fmtRatio(t.anomaly_rate_24h ?? 0)}\n`;
 
-        // Systems
+        // Systems. Each row is a 24h snapshot from the system's LAST active
+        // day — not the same window as the totals above. Without the as-of
+        // stamp, a burst from weeks ago ("74 agents") sat beside today's
+        // totals ("11 agents") as if they described the same period.
         const systems = data.systems ?? [];
         if (systems.length > 0) {
           text += `\n${section(`Systems (${systems.length}, worst-first)`)}\n`;
+          text += `  Each row = that system's last active 24h window (persistent agents only).\n`;
+          const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
           for (const s of systems.slice(0, 20)) {
             const totalN = s.total_interactions ?? 0;
             let line = `  ${s.system_id}`;
@@ -63,6 +68,9 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
             if (s.median_duration_ms != null) line += `, ${s.median_duration_ms}ms median`;
             if (s.p95_duration_ms != null) line += `, p95 ${s.p95_duration_ms}ms`;
             if (s.total_interactions != null) line += `, ${totalN} interactions ${confidence(totalN)}`;
+            if (s.last_seen_at && new Date(s.last_seen_at).getTime() < dayAgo) {
+              line += ` (as of ${String(s.last_seen_at).slice(0, 10)})`;
+            }
             text += line + '\n';
           }
           if (systems.length > 20) {

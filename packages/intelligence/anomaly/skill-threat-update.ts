@@ -37,17 +37,59 @@ export async function handler() {
       return { statusCode: 200, body: JSON.stringify({ updated: 0 }) };
     }
 
-    // 2. Extract skill hashes from targets that are skills
-    const skillSignals = new Map<string, Set<string>>();
+    // 2. Extract skill identities from targets that are skills.
+    //
+    // Skill identity contract: SHA-256 hashes are canonical. Receipt targets
+    // arrive as `skill:<name>` (agents log human names) while subscriptions
+    // (skill_subscriptions.skill_hash, auto-created at registration from
+    // composition.skill_hashes) are keyed by hash. Before this resolution
+    // step, name-keyed signals could never match a hash-keyed subscription,
+    // so the "we notify agents whose composition is affected" promise never
+    // fired for receipt-driven signals. Names resolve through skill_catalog
+    // (the crawler's name→current_hash mapping); unresolvable names keep the
+    // raw name as their key — still observed and counted, just not
+    // notification-capable — and are reported in the job result.
+    const HEX64 = /^[0-9a-f]{64}$/i;
+    const rawSkillTargets = new Map<string, { reporters: Set<string>; targetIds: Set<string> }>();
+    const addSignal = (key: string, agentId: string, targetId?: string) => {
+      let entry = rawSkillTargets.get(key);
+      if (!entry) {
+        entry = { reporters: new Set(), targetIds: new Set() };
+        rawSkillTargets.set(key, entry);
+      }
+      entry.reporters.add(agentId);
+      if (targetId) entry.targetIds.add(targetId);
+    };
+
+    // Resolve every named (non-hash) skill target in one round trip.
+    const namedTargets = [...new Set(
+      anomalyReceipts
+        .map((r) => r.target_system_id)
+        .filter((t) => t.startsWith('skill:'))
+        .map((t) => t.slice('skill:'.length))
+        .filter((k) => !HEX64.test(k)),
+    )];
+    const nameToHash = new Map<string, string>();
+    if (namedTargets.length > 0) {
+      const catalogRows = await query<{ skill_name: string; current_hash: string }>(
+        `SELECT skill_name AS "skill_name", current_hash AS "current_hash"
+         FROM skill_catalog
+         WHERE skill_name = ANY($1) AND current_hash IS NOT NULL`,
+        [namedTargets],
+      ).catch(() => []);
+      for (const row of catalogRows) nameToHash.set(row.skill_name, row.current_hash);
+    }
+    const unresolvedNames = namedTargets.filter((n) => !nameToHash.has(n));
+    if (unresolvedNames.length > 0) {
+      log.warn({ unresolvedNames }, 'skill targets not resolvable to a catalog hash — observed but not notification-capable');
+    }
 
     for (const receipt of anomalyReceipts) {
       // Direct skill targets
       if (receipt.target_system_id.startsWith('skill:')) {
-        const skillHash = receipt.target_system_id.replace('skill:', '');
-        if (!skillSignals.has(skillHash)) {
-          skillSignals.set(skillHash, new Set());
-        }
-        skillSignals.get(skillHash)!.add(receipt.emitter_agent_id);
+        const rawKey = receipt.target_system_id.slice('skill:'.length);
+        const key = HEX64.test(rawKey) ? rawKey : (nameToHash.get(rawKey) ?? rawKey);
+        addSignal(key, receipt.emitter_agent_id, receipt.target_system_id);
       }
 
       // 3. Also look up composition snapshots for the emitter's skills
@@ -62,10 +104,7 @@ export async function handler() {
 
         if (snapshots.length > 0) {
           for (const hash of snapshots[0]!.component_hashes) {
-            if (!skillSignals.has(hash)) {
-              skillSignals.set(hash, new Set());
-            }
-            skillSignals.get(hash)!.add(receipt.emitter_agent_id);
+            addSignal(hash, receipt.emitter_agent_id);
           }
         }
       }
@@ -74,15 +113,19 @@ export async function handler() {
     // 4. Compute raw signal counts and upsert
     const updates: SignalUpdate[] = [];
 
-    for (const [skillHash, reporters] of skillSignals) {
-      // Get total interaction count for this skill to compute anomaly rate
+    for (const [skillHash, { reporters, targetIds }] of rawSkillTargets) {
+      // Get total interaction count for this skill to compute anomaly rate.
+      // Count by the ORIGINAL receipt target ids (skill:<name> and/or
+      // skill:<hash>) — receipts logged under a name would never match a
+      // `skill:<hash>` lookup after resolution.
+      const countTargets = targetIds.size > 0 ? [...targetIds] : [`skill:${skillHash}`];
       const countResult = await query<{ total: string; anomalies: string }>(
         `SELECT COUNT(*)::text AS total,
          COUNT(*) FILTER (WHERE anomaly_flagged = true)::text AS anomalies
          FROM interaction_receipts
-         WHERE target_system_id = $1
+         WHERE target_system_id = ANY($1)
            AND created_at >= now() - INTERVAL '24 hours'`,
-        [`skill:${skillHash}`],
+        [countTargets],
       );
 
       const total = parseInt(countResult[0]?.total ?? '0', 10);
@@ -167,11 +210,18 @@ export async function handler() {
       }
     }
 
-    log.info({ updatedCount: updates.length, elevatedCount: elevated.length }, 'Skill signal update completed');
+    log.info(
+      { updatedCount: updates.length, elevatedCount: elevated.length, unresolvedNames: unresolvedNames.length },
+      'Skill signal update completed',
+    );
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ updated: updates.length, elevated: elevated.length }),
+      body: JSON.stringify({
+        updated: updates.length,
+        elevated: elevated.length,
+        unresolved_skill_names: unresolvedNames.length,
+      }),
     };
   } catch (err) {
     log.error({ err }, 'Skill signal update failed');

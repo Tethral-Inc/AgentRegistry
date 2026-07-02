@@ -4,7 +4,7 @@
  */
 import { Hono } from 'hono';
 import { cronAuth } from '../middleware/cron-auth.js';
-import { createLogger } from '@acr/shared';
+import { createLogger, execute } from '@acr/shared';
 
 import {
   systemHealthAggregate,
@@ -26,6 +26,20 @@ app.use('/cron/*', cronAuth);
 
 type JobHandler = () => Promise<{ statusCode: number; body: string }>;
 
+// Heartbeat: every run (success or failure) is recorded so freshness probes
+// can tell "pipeline broken" from "pipeline fine, network quiet". Best-effort:
+// a heartbeat failure (e.g. migration 000025 not yet applied) must never fail
+// the job itself.
+async function beat(name: string, status: string, elapsedMs: number, result: string | null): Promise<void> {
+  await execute(
+    `INSERT INTO job_heartbeats (job_name, last_run_at, last_status, elapsed_ms, last_result)
+     VALUES ($1, now(), $2, $3, $4)
+     ON CONFLICT (job_name) DO UPDATE SET
+       last_run_at = now(), last_status = $2, elapsed_ms = $3, last_result = $4`,
+    [name, status, elapsedMs, result ? result.slice(0, 512) : null],
+  ).catch((err) => { log.warn({ err, job: name }, 'job heartbeat upsert failed'); });
+}
+
 function wrapJob(name: string, handler: JobHandler) {
   return async (c: { json: (body: unknown, status?: number) => Response }) => {
     const start = Date.now();
@@ -34,6 +48,9 @@ function wrapJob(name: string, handler: JobHandler) {
       const result = await handler();
       const elapsed = Date.now() - start;
       log.info({ job: name, elapsed, statusCode: result.statusCode }, 'Cron job completed');
+      // Awaited: Vercel can freeze the function once the response returns,
+      // so a fire-and-forget heartbeat would be silently dropped.
+      await beat(name, result.statusCode < 300 ? 'ok' : `http_${result.statusCode}`, elapsed, result.body);
       let body: unknown;
       try { body = JSON.parse(result.body); } catch { body = { message: result.body }; }
       return c.json(body, result.statusCode);
@@ -41,6 +58,7 @@ function wrapJob(name: string, handler: JobHandler) {
       const elapsed = Date.now() - start;
       const msg = err instanceof Error ? err.message : 'Unknown error';
       log.error({ job: name, elapsed, err: msg }, 'Cron job failed');
+      await beat(name, 'error', elapsed, msg);
       return c.json({ error: msg, elapsed_ms: elapsed }, 500);
     }
   };

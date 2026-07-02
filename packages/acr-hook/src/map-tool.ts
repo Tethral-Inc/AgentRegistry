@@ -25,11 +25,23 @@ export type MappedTarget = {
 };
 
 /**
- * Tools whose PostToolUse only fires after a human responds — their duration
- * is human think-time, not machine latency. Keep this list in sync with the
- * host's interactive/elicitation surface.
+ * Tools whose wall-clock is not the latency of a target system, so their
+ * duration must not be summed as tool cost:
+ *   - AskUserQuestion / ExitPlanMode / EnterPlanMode block on a human answer
+ *     (a 5-minute AskUserQuestion once read as 99% of "wait time"; live data
+ *     showed askuserquestion + workflow at 81% of a week's reported wait).
+ *   - Workflow / Monitor block on orchestrated or external work whose real
+ *     tool calls are already measured individually — summing the wrapper
+ *     double-counts them.
+ * Keep in sync with the host's interactive/orchestration surface.
  */
-const INTERACTIVE_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
+const INTERACTIVE_TOOLS = new Set([
+  'AskUserQuestion',
+  'ExitPlanMode',
+  'EnterPlanMode',
+  'Workflow',
+  'Monitor',
+]);
 
 const BUILTIN_TOOL_MAP: Record<string, MappedTarget> = {
   Bash: {

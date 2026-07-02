@@ -34,5 +34,11 @@ export { type APIError, type ErrorCode, makeError } from './types/errors.js';
 export * from './crypto/index.js';
 export { getPool, closePool, query, queryOne, execute } from './db/index.js';
 export { normalizeSystemId } from './canonical-names/normalize.js';
+export { RECEIPT_ENV_EXCLUSION_SQL, RECEIPT_FAILURE_SQL } from './receipt-window.js';
+export {
+  SKILL_SIGNAL_MIN_REPORTERS,
+  SKILL_SIGNAL_MIN_INTERACTIONS,
+  ELEVATED_SKILL_SIGNAL_SQL,
+} from './signal-thresholds.js';
 export { BUILTIN_TOOL_TARGETS, canonicalTargetForBuiltinTool } from './canonical-names/builtin-tools.js';
 export { createLogger, logger } from './logger/index.js';

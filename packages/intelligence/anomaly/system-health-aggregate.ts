@@ -32,33 +32,47 @@ export async function handler() {
     // This is the fix for the network-status totals/systems contradiction: the
     // totals query filtered by source, the systems block read from this table
     // which had no source dimension. Both can now filter by the same value.
+    // distinct_agent_count counts PERSISTENT agents only (>= 5 receipts in
+    // the window). Ephemeral one-shot registrations (CI runs, throwaway
+    // sessions) once dominated the number — a system showed "74 agents, 74
+    // interactions" (exactly one call per "agent") and downstream population
+    // baselines treated that churn as a fleet. Interaction counts stay raw;
+    // only the agent-population number gets the persistence filter.
     const AGG_COLS = `
          COUNT(*)::text AS "total_count",
-         COUNT(DISTINCT emitter_agent_id)::text AS "distinct_agents",
-         COUNT(*) FILTER (WHERE anomaly_flagged = true)::text AS "anomaly_count",
-         COUNT(*) FILTER (WHERE status != 'success')::text AS "failure_count",
-         percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration",
-         percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p95_duration",
-         percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "p99_duration"`;
-    const WINDOW = `created_at >= now() - INTERVAL '24 hours'`;
+         COUNT(DISTINCT ir.emitter_agent_id) FILTER (WHERE p.agent_id IS NOT NULL)::text AS "distinct_agents",
+         COUNT(*) FILTER (WHERE ir.anomaly_flagged = true)::text AS "anomaly_count",
+         COUNT(*) FILTER (WHERE ir.status != 'success')::text AS "failure_count",
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY ir.duration_ms::FLOAT)::int AS "median_duration",
+         percentile_cont(0.95) WITHIN GROUP (ORDER BY ir.duration_ms::FLOAT)::int AS "p95_duration",
+         percentile_cont(0.99) WITHIN GROUP (ORDER BY ir.duration_ms::FLOAT)::int AS "p99_duration"`;
+    const WINDOW = `ir.created_at >= now() - INTERVAL '24 hours'`;
+    const FROM_JOINED = `
+       FROM interaction_receipts ir
+       LEFT JOIN persistent p ON p.agent_id = ir.emitter_agent_id`;
     const rows = await query<AggregateRow>(
-      `SELECT
-         target_system_id AS "target_system_id",
-         target_system_type AS "target_system_type",
-         source AS "source",
-         ${AGG_COLS}
-       FROM interaction_receipts
+      `WITH persistent AS (
+         SELECT emitter_agent_id AS agent_id
+         FROM interaction_receipts
+         WHERE created_at >= now() - INTERVAL '24 hours'
+         GROUP BY emitter_agent_id
+         HAVING COUNT(*) >= 5
+       )
+       SELECT
+         ir.target_system_id AS "target_system_id",
+         ir.target_system_type AS "target_system_type",
+         ir.source AS "source",
+         ${AGG_COLS}${FROM_JOINED}
        WHERE ${WINDOW}
-       GROUP BY target_system_id, target_system_type, source
+       GROUP BY ir.target_system_id, ir.target_system_type, ir.source
        UNION ALL
        SELECT
-         target_system_id AS "target_system_id",
-         target_system_type AS "target_system_type",
+         ir.target_system_id AS "target_system_id",
+         ir.target_system_type AS "target_system_type",
          NULL AS "source",
-         ${AGG_COLS}
-       FROM interaction_receipts
+         ${AGG_COLS}${FROM_JOINED}
        WHERE ${WINDOW}
-       GROUP BY target_system_id, target_system_type`,
+       GROUP BY ir.target_system_id, ir.target_system_type`,
     );
 
     if (rows.length === 0) {

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { query, createLogger } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, createLogger } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 
 const log = createLogger({ name: 'coverage' });
 const app = new Hono();
@@ -89,8 +90,8 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(DISTINCT interaction_category)::int AS "distinct_categories",
        COUNT(DISTINCT chain_id) FILTER (WHERE chain_id IS NOT NULL)::int AS "distinct_chains",
        COALESCE(
-         COUNT(*) FILTER (WHERE chain_id IS NOT NULL)::float /
-         NULLIF(COUNT(*), 0), 0
+         COUNT(*) FILTER (WHERE chain_id IS NOT NULL)::float8 /
+         NULLIF(COUNT(*), 0)::float8, 0.0
        ) AS "chain_coverage",
        COUNT(*) FILTER (WHERE queue_wait_ms IS NOT NULL)::int AS "receipts_with_queue_wait",
        COUNT(*) FILTER (WHERE retry_count IS NOT NULL)::int AS "receipts_with_retry_field_set",
@@ -103,9 +104,11 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(*) FILTER (WHERE status != 'success' AND error_code IS NOT NULL)::int AS "failed_receipts_with_error_code"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
-       AND (source IS NULL OR source != 'environmental')${statsSourceClause}`,
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}${statsSourceClause}`,
     statsParams,
   ).catch((err) => { log.error({ err, agentId }, 'Coverage stats query failed'); degraded = true; return []; });
+
+  if (degraded) return degraded503(c, agentId, 'coverage stats query failed');
 
   const s = stats[0] ?? {
     total_receipts: 0,
@@ -243,7 +246,6 @@ app.get('/agent/:agent_id/coverage', async (c) => {
   return c.json({
     agent_id: agentId,
     degraded,
-    ...(degraded ? { degraded_reason: 'coverage stats query failed' } : {}),
     signals: {
       total_receipts: s.total_receipts,
       total_failed_receipts: s.total_failed_receipts,

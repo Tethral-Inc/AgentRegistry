@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, makeError } from '@acr/shared';
+import { query, makeError, ELEVATED_SKILL_SIGNAL_SQL } from '@acr/shared';
 
 const app = new Hono();
 
@@ -34,7 +34,7 @@ app.get('/threats/feed', async (c) => {
             first_seen_at::text AS "first_seen_at",
             last_updated::text AS "last_updated"
      FROM skill_hashes
-     WHERE anomaly_signal_count > 0
+     WHERE ${ELEVATED_SKILL_SIGNAL_SQL}
        AND last_updated > $1
      ORDER BY last_updated DESC
      LIMIT $2`,

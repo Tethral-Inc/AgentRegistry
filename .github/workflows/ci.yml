@@ -12,6 +12,33 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Release discipline: a change to a published package that doesn't bump
+      # its version never reaches users — publish.yml skips already-published
+      # versions. PR #13 shipped the degraded-lens renderer and the hook's
+      # interactive carve-out this way: merged, deployed server-side, but the
+      # npm clients stayed at 2.11.4/0.4.0 and production behavior didn't
+      # change. This check makes the bump a merge requirement.
+      - name: Require version bump when a published package changes
+        run: |
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          fail=0
+          for pkg in mcp-server acr-hook ts-sdk python-sdk; do
+            dir="packages/$pkg"
+            changed=$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD -- "$dir" | grep -v -E '(^|/)(tests?|__tests__)/|\.md$' || true)
+            [ -z "$changed" ] && continue
+            if [ "$pkg" = python-sdk ]; then
+              base_ver=$(git show "origin/$GITHUB_BASE_REF:$dir/pyproject.toml" 2>/dev/null | grep -m1 '^version' | sed 's/.*"\(.*\)".*/\1/' || echo "")
+              head_ver=$(grep -m1 '^version' "$dir/pyproject.toml" | sed 's/.*"\(.*\)".*/\1/')
+            else
+              base_ver=$(git show "origin/$GITHUB_BASE_REF:$dir/package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" || echo "")
+              head_ver=$(node -p "require('./$dir/package.json').version")
+            fi
+            if [ -n "$base_ver" ] && [ "$base_ver" = "$head_ver" ]; then
+              echo "::error::$dir changed but its version is still $head_ver — bump it (and server.json for mcp-server) so the change actually publishes."
+              fail=1
+            fi
+          done
+          exit $fail
       # Guard against the 2.8/2.9/2.10 skew pattern: server.json version
       # fell behind mcp-server/package.json, and publish-mcp silently
       # skipped the registry sync instead of failing. Catching drift here
@@ -30,6 +57,53 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
+
+  # DB contract: the real API against a real CockroachDB. Unit tests mock the
+  # DB while production runs CRDB — the same coverage query broke in prod three
+  # consecutive times for three different dialect reasons (GROUPING SETS,
+  # jsonb !=, float/int COALESCE), each invisible to mocked tests. This job
+  # runs every migration, every cron handler, and every lens route against a
+  # single-node CRDB and asserts 200 + not-degraded + exact seeded counts,
+  # plus the notification promise end-to-end.
+  db-contract:
+    runs-on: ubuntu-latest
+    env:
+      COCKROACH_CONNECTION_STRING: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+      CRON_SECRET: db-contract-ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - name: Start CockroachDB
+        run: |
+          docker run -d --name crdb -p 26257:26257 -p 8080:8080 \
+            cockroachdb/cockroach:latest-v24.3 start-single-node --insecure
+          for i in $(seq 1 30); do
+            docker exec crdb ./cockroach sql --insecure -e 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec crdb ./cockroach sql --insecure -e 'SELECT version()'
+      - run: pnpm install --frozen-lockfile
+      - name: Run migrations against CRDB
+        run: node scripts/run-migration.mjs up
+      - name: Build and serve the ingestion API
+        env:
+          PORT: '3111'
+          # Documented dev/test escape hatch — production leaves PoP on.
+          REGISTER_POP_REQUIRED: 'true'
+          REGISTER_CHURN_CHECK_ENABLED: 'false'
+        run: |
+          pnpm --filter ingestion-api... build
+          node packages/ingestion-api/dist/src/serve.js &
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:3111/api/v1/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+      - name: Run DB contract test
+        env:
+          ACR_API_URL: http://localhost:3111
+        run: node scripts/db-contract-test.mjs
 
   # Terraform plan on PRs for drift visibility. Clean-skips when secrets
   # aren't configured (no silent continue-on-error masking real failures).

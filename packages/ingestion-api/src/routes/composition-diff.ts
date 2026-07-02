@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { query, createLogger, normalizeSystemId, canonicalTargetForBuiltinTool, makeError } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, createLogger, normalizeSystemId, canonicalTargetForBuiltinTool, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 
 const log = createLogger({ name: 'composition-diff' });
 const app = new Hono();
@@ -219,7 +220,7 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= now() - ($2::int * INTERVAL '1 day')
-       AND (source IS NULL OR source != 'environmental')
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}
      GROUP BY target_system_id, target_system_type
      ORDER BY COUNT(*) DESC`,
     [agentId, windowDays],
@@ -228,6 +229,8 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
     degraded = true;
     return [] as Array<{ target_system_id: string; target_system_type: string; interaction_count: number; last_seen: string }>;
   });
+
+  if (degraded) return degraded503(c, agentId, 'composition-diff query failed');
 
   // Normalize the called id so it shares the declared side's vocabulary
   // (receipts are normalized on write; normalize defensively here too).
@@ -266,7 +269,6 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
   return c.json({
     agent_id: agentId,
     degraded,
-    ...(degraded ? { degraded_reason: 'composition-diff query failed' } : {}),
     window_days: windowDays,
     declared_source: declaredSource,
     declared_updated_at: declaredUpdatedAt,

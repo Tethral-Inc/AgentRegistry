@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { query, createLogger, FrictionScope, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 
 const log = createLogger({ name: 'trend' });
 const app = new Hono();
@@ -67,10 +68,10 @@ async function fetchWindow(
   return query<TargetWindow>(
     `SELECT
        target_system_id AS "target",
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration_ms",
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration_ms",
        COALESCE(
-         COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::float /
-         NULLIF(COUNT(*), 0), 0
+         COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::float8 /
+         NULLIF(COUNT(*), 0)::float8, 0.0
        ) AS "failure_rate",
        COUNT(*)::int AS "receipt_count"
      FROM interaction_receipts
@@ -121,6 +122,8 @@ app.get('/agent/:agent_id/trend', async (c) => {
     }),
   ]);
 
+  if (degraded) return degraded503(c, agentId, 'trend query failed');
+
   const previousMap = new Map<string, TargetWindow>();
   for (const r of previousRows) previousMap.set(r.target, r);
 
@@ -161,7 +164,6 @@ app.get('/agent/:agent_id/trend', async (c) => {
     agent_id: agentId,
     name: agentName,
     degraded,
-    ...(degraded ? { degraded_reason: 'trend query failed' } : {}),
     scope,
     current_period: { start: current.start.toISOString(), end: current.end.toISOString() },
     comparison_period: { start: previous.start.toISOString(), end: previous.end.toISOString() },

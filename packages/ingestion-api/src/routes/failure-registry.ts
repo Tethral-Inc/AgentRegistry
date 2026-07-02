@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { query, createLogger, FrictionScope, makeError } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, createLogger, FrictionScope, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 
 const log = createLogger({ name: 'failure-registry' });
 const app = new Hono();
@@ -97,14 +98,14 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
        COALESCE(error_code, '') AS "error_code",
        interaction_category AS "category",
        COUNT(*)::int AS "count",
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration_ms",
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration_ms",
        COALESCE(SUM(duration_ms), 0)::int AS "total_duration_ms"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
        AND status != 'success'
-       AND (source IS NULL OR source != 'environmental')${groupedSourceClause}
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}${groupedSourceClause}
      GROUP BY target_system_id, target_system_type, status, error_code, interaction_category
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
@@ -172,9 +173,11 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND (source IS NULL OR source != 'environmental')${totalSourceClause}`,
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}${totalSourceClause}`,
     totalParams,
   ).catch((err) => { log.error({ err, agentId }, 'Failed to query failure-registry total'); degraded = true; return [] as Array<{ total: number }>; });
+
+  if (degraded) return degraded503(c, agentId, 'failure-registry query failed');
 
   const total = totalRows[0]?.total ?? 0;
   const failureRate = total > 0 ? totalFailures / total : 0;
@@ -185,7 +188,6 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
     agent_id: agentId,
     name: agentName,
     degraded,
-    ...(degraded ? { degraded_reason: 'failure-registry query failed' } : {}),
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),

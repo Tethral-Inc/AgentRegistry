@@ -8,7 +8,7 @@ import { coverageNextAction, renderNextActionFooter, nextActionMeta } from '../u
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
-import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
+import { isDegraded, renderDegradedNotice, renderIfDegraded503 } from '../utils/degraded.js';
 
 export function getCoverageTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -42,6 +42,8 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           getUnreadNotificationCount(apiUrl, id, authHeaders),
         ]);
         if (!res.ok) {
+          const degradedText = await renderIfDegraded503('Coverage', res);
+          if (degradedText) return { content: [{ type: 'text' as const, text: degradedText }] };
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Coverage error: ${errText}` }] };
         }
@@ -54,6 +56,14 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
         let text = renderNotificationHeader(unreadCount);
         text += `Coverage Report for ${displayName}\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'all'}\n`;
+        if ((source ?? 'all') !== 'agent') {
+          // The hook sits downstream of the host's error boundary: it only
+          // sees surface errors (is_error / error field on tool_response).
+          // Network failures, timeouts, and auth rejections never reach
+          // PostToolUse — so a zero failure count is a statement about
+          // visibility, not reliability.
+          text += `Failure visibility: hook capture sees surface errors only — 0 failures means 0 VISIBLE failures.\n`;
+        }
 
         // A degraded payload means the stats query threw — the zeros below are
         // NOT a real reading, so don't render the rules as "Covered — OK".

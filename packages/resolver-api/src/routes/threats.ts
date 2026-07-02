@@ -38,7 +38,8 @@ export async function handleActiveThreats(
        anomaly_signal_rate, agent_count,
        first_seen_at::text AS first_seen_at
        FROM skill_hashes
-       WHERE anomaly_signal_count > 0
+       -- keep in sync with ELEVATED_SKILL_SIGNAL_SQL in shared/signal-thresholds.ts
+       WHERE anomaly_signal_count > 0 AND agent_count >= 3 AND interaction_count >= 20
        ORDER BY anomaly_signal_count DESC
        LIMIT 50`,
       [],

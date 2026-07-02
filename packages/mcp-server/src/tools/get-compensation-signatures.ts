@@ -10,7 +10,7 @@ import {
   renderNextActionFooter,
   nextActionMeta,
 } from '../utils/next-action.js';
-import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
+import { isDegraded, renderDegradedNotice, renderIfDegraded503 } from '../utils/degraded.js';
 
 const TOOL_DESCRIPTION = `Query the compensation-signatures lens: how stereotyped is your chain-shape behavior, and which chain patterns dominate vs which are exploratory?
 
@@ -52,6 +52,8 @@ export function getCompensationSignaturesTool(server: McpServer, apiUrl: string)
         const params = new URLSearchParams({ window: window ?? 'week' });
         const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${id}/compensation?${params}`);
         if (!res.ok) {
+          const degradedText = await renderIfDegraded503('Compensation', res);
+          if (degradedText) return { content: [{ type: 'text' as const, text: degradedText }] };
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Compensation error: ${errText}` }] };
         }

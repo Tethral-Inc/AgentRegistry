@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { query, createLogger, FrictionScope, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 
 const log = createLogger({ name: 'stable-corridors' });
 const app = new Hono();
@@ -91,15 +92,15 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
        target_system_id AS "target_system_id",
        target_system_type AS "target_system_type",
        COUNT(*)::int AS "receipt_count",
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS "median_duration_ms",
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms::FLOAT)::int AS "median_duration_ms",
        STDDEV(duration_ms)::int AS "stddev_duration_ms",
        COALESCE(
-         COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::float /
-         NULLIF(COUNT(*), 0), 0
+         COUNT(*) FILTER (WHERE status IN ('failure', 'timeout'))::float8 /
+         NULLIF(COUNT(*), 0)::float8, 0.0
        ) AS "failure_rate",
        COALESCE(
-         COUNT(*) FILTER (WHERE anomaly_flagged = true)::float /
-         NULLIF(COUNT(*), 0), 0
+         COUNT(*) FILTER (WHERE anomaly_flagged = true)::float8 /
+         NULLIF(COUNT(*), 0)::float8, 0.0
        ) AS "anomaly_rate"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
@@ -114,6 +115,8 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
      LIMIT 50`,
     params,
   ).catch((err) => { log.error({ err, agentId }, 'Stable corridors query failed'); degraded = true; return []; });
+
+  if (degraded) return degraded503(c, agentId, 'stable-corridors query failed');
 
   // The SQL already filters to receipts >= 10, 0 failures, 0 anomalies.
   // Client-side: also drop entries where coefficient of variation is too
@@ -143,7 +146,6 @@ app.get('/agent/:agent_id/stable-corridors', async (c) => {
     agent_id: agentId,
     name: agentName,
     degraded,
-    ...(degraded ? { degraded_reason: 'stable-corridors query failed' } : {}),
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),

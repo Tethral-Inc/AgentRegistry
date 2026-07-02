@@ -14,6 +14,25 @@ export function isDegraded(data: Record<string, unknown> | null | undefined): bo
 }
 
 /**
+ * Server-side fail-safe companion: lens routes return HTTP 503 with
+ * `{ error: 'lens_degraded', ... }` when their backing query threw, so
+ * that clients which predate the degraded contract surface an error
+ * instead of rendering zeros as healthy. This helper lets current
+ * clients render that 503 as the standard degraded notice. Returns null
+ * when the response is not a degraded-lens 503.
+ */
+export async function renderIfDegraded503(lensLabel: string, res: Response): Promise<string | null> {
+  if (res.status !== 503) return null;
+  try {
+    const body = await res.clone().json() as Record<string, unknown>;
+    if (body && body.error === 'lens_degraded') return renderDegradedNotice(lensLabel, body);
+  } catch {
+    // Not JSON — a generic 503, let the caller's error path handle it.
+  }
+  return null;
+}
+
+/**
  * Standard notice for a degraded lens response. Render this instead of the
  * normal sections when `isDegraded(data)` is true.
  */

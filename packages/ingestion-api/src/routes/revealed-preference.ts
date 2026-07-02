@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import {
+import { RECEIPT_ENV_EXCLUSION_SQL,
   RevealedPreferenceScope,
   query,
   makeError,
@@ -8,6 +8,7 @@ import {
 } from '@acr/shared';
 
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 import { extractBoundTargets } from '../lib/composition-targets.js';
 import {
   classifyRevealedPreference,
@@ -98,11 +99,13 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND (source IS NULL OR source != 'environmental')${callSourceClause}
+         AND ${RECEIPT_ENV_EXCLUSION_SQL}${callSourceClause}
        GROUP BY target_system_id`,
       callQueryParams,
-    ),
+    ).catch((err) => { log.error({ err }, 'Failed to fetch called targets'); degraded = true; return []; }),
   ]);
+
+  if (degraded) return degraded503(c, agentId, 'revealed-preference query failed');
 
   // Build: candidateSet → Set<BindingSource>
   // A target counts as bound by a source if any candidate extracted from
@@ -221,7 +224,6 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
     period_start: start.toISOString(),
     period_end: end.toISOString(),
     degraded,
-    ...(degraded ? { degraded_reason: 'composition-sources query failed' } : {}),
     summary,
     targets,
   });

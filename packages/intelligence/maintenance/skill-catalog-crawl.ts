@@ -135,6 +135,20 @@ async function processSkill(
 
   const name = frontmatter?.name ?? skill.name;
   const description = frontmatter?.description ?? null;
+
+  // Quality gate: reject entries that can't be a usable catalog identity.
+  // Without this, search results filled with path-like names (e.g.
+  // ".claude/skills/api-versioning/SKILL.md") and description-less rows —
+  // 354 zero-signal matches for one "pdf" query, real skills buried.
+  const looksLikePath = /[\\/]|\.md$/i.test(name);
+  const tooLong = name.length > 120;
+  const emptyIdentity = name.trim().length === 0 || (!description && !contentSnippet);
+  if (looksLikePath || tooLong || emptyIdentity) {
+    result.skipped++;
+    log.info({ name: name.slice(0, 120), source: skill.source, looksLikePath, tooLong, emptyIdentity },
+      'Rejected low-quality catalog entry');
+    return;
+  }
   const version = frontmatter?.version ?? null;
   const author = frontmatter?.author ?? null;
   const tags = extractTags(frontmatter);
@@ -324,6 +338,7 @@ export async function handler() {
   const totalResult: CrawlResult = {
     totalDiscovered: 0,
     totalCrawled: 0,
+    skipped: 0,
     newSkills: 0,
     updatedSkills: 0,
     unchangedSkills: 0,
@@ -368,7 +383,7 @@ export async function handler() {
       log.info({ sourceId: source.source_id }, 'Starting crawl');
 
       const sourceResult: CrawlResult = {
-        totalDiscovered: 0, totalCrawled: 0, newSkills: 0,
+        totalDiscovered: 0, totalCrawled: 0, skipped: 0, newSkills: 0,
         updatedSkills: 0, unchangedSkills: 0, errors: 0, errorDetails: [],
       };
 
@@ -405,6 +420,7 @@ export async function handler() {
       // Accumulate totals
       totalResult.totalDiscovered += sourceResult.totalDiscovered;
       totalResult.totalCrawled += sourceResult.totalCrawled;
+      totalResult.skipped += sourceResult.skipped;
       totalResult.newSkills += sourceResult.newSkills;
       totalResult.updatedSkills += sourceResult.updatedSkills;
       totalResult.unchangedSkills += sourceResult.unchangedSkills;

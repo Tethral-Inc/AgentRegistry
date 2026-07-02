@@ -172,12 +172,28 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
         // overhead, population drift. Per-target bottleneck data comes
         // after — it's descriptive context, not the signal.
 
+        // Capability honesty: chain overhead, directional amplification, and
+        // retry overhead need fields (queue_wait_ms, preceded_by, retry_count)
+        // that only log_interaction can populate — the host-side hook cannot
+        // observe them. When every receipt in the window came from the hook or
+        // the MCP self-log, an empty section means "not measurable from this
+        // capture path", NOT "measured and clean" — say n/a so a structural
+        // blind spot never reads like a healthy zero.
+        const reportSources: Array<{ source: string }> = data.by_source ?? [];
+        const hookOnly =
+          reportSources.length > 0 &&
+          reportSources.every((s) => s.source === 'claude-code-hook' || s.source === 'server');
+
         text += '\n── Chain Analysis ──\n';
         if (data.chain_analysis) {
           const ca = data.chain_analysis;
           text += `  Distinct chains: ${ca.chain_count}\n`;
           text += `  Avg chain length: ${ca.avg_chain_length} calls\n`;
-          text += `  Total chain overhead: ${(ca.total_chain_overhead_ms / 1000).toFixed(1)}s\n`;
+          if (hookOnly && !ca.total_chain_overhead_ms) {
+            text += `  Chain overhead: n/a — needs queue_wait_ms, which hook capture can't observe (log_interaction can).\n`;
+          } else {
+            text += `  Total chain overhead: ${(ca.total_chain_overhead_ms / 1000).toFixed(1)}s\n`;
+          }
           if (ca.top_patterns && ca.top_patterns.length > 0) {
             text += '  Top patterns:\n';
             for (const p of ca.top_patterns) {
@@ -195,6 +211,8 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
             text += `  ${dp.source_target} -> ${dp.destination_target}: ${dp.amplification_factor.toFixed(2)}x amplification`;
             text += ` (${dp.avg_duration_when_preceded}ms after vs ${dp.avg_duration_standalone}ms standalone) ${confidence(dp.sample_count)}\n`;
           }
+        } else if (hookOnly) {
+          text += `  n/a — needs preceded_by, which hook capture can't observe (log_interaction can).\n`;
         } else {
           text += `  None recorded in this window.\n`;
           text += `  Tip: pass preceded_by to log_interaction, or let the correlation window stitch it from chain_id.\n`;
@@ -208,6 +226,8 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
           for (const t of ro.top_retry_targets ?? []) {
             text += `    ${t.target_system_id}: ${t.retry_count} retries, ${(t.wasted_ms / 1000).toFixed(1)}s wasted ${confidence(t.retry_count)}\n`;
           }
+        } else if (hookOnly) {
+          text += `  n/a — needs retry_count, which hook capture can't observe (log_interaction can).\n`;
         } else {
           text += `  None recorded in this window.\n`;
           text += `  Tip: pass retry_count to log_interaction to surface retry overhead.\n`;
@@ -360,7 +380,7 @@ export function getFrictionReportTool(server: McpServer, apiUrl: string) {
               } else if (sample.missing === 'local') {
                 text += `    (need ≥${LOCAL_MIN_INTERACTIONS} local interactions for a network comparison; you have ${t.interaction_count})\n`;
               } else if (sample.missing === 'network') {
-                text += `    (not enough network data for a verdict yet)\n`;
+                text += `    (network too small for a comparison — you are the baseline)\n`;
               }
             }
           }
