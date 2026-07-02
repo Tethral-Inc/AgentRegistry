@@ -88,14 +88,20 @@ export async function handler() {
     log.info({ pairsUpserted }, 'Directional pairs computed');
 
     // ── Step 2: Compute chain patterns ──
-    // Group by agent + chain_id, extract ordered target sequences
+    // Group by agent + chain_id, extract ordered target sequences.
+    //
+    // Window: 7 days, written under analysis_window='week'. This MUST match
+    // what the compensation reader queries (it defaults to 'week', as do the
+    // MCP tool and dashboard) and the directional-pairs window above — a
+    // previous mismatch (writer 'day' / reader 'week') left the lens
+    // permanently empty for every agent.
     const chains = await query<ChainPatternRow>(
       `SELECT emitter_agent_id AS "agent_id",
               chain_id AS "chain_id",
               array_agg(target_system_id ORDER BY chain_position) AS "targets",
               SUM(duration_ms)::int AS "total_duration_ms"
        FROM interaction_receipts
-       WHERE created_at >= now() - INTERVAL '1 day'
+       WHERE created_at >= now() - INTERVAL '7 days'
          AND chain_id IS NOT NULL
          AND chain_position IS NOT NULL
        GROUP BY emitter_agent_id, chain_id
@@ -128,7 +134,7 @@ export async function handler() {
           `INSERT INTO chain_analysis (
              agent_id, chain_pattern, pattern_hash, frequency, avg_overhead_ms,
              analysis_window, computed_at
-           ) VALUES ($1, $2, $3, $4, $5, 'day', now())
+           ) VALUES ($1, $2, $3, $4, $5, 'week', now())
            ON CONFLICT (agent_id, pattern_hash, analysis_window) DO UPDATE SET
              chain_pattern = $2,
              frequency = $4,
@@ -184,7 +190,7 @@ export async function handler() {
            pattern_hash, chain_pattern, analysis_window,
            agent_count, total_frequency, avg_chain_length,
            avg_total_ms, avg_overhead_ms, computed_at
-         ) VALUES ($1, $2, 'day', $3, $4, $5, $6, $6, now())
+         ) VALUES ($1, $2, 'week', $3, $4, $5, $6, $6, now())
          ON CONFLICT (pattern_hash, analysis_window) DO UPDATE SET
            chain_pattern = $2,
            agent_count = $3,

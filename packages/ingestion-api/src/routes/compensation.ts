@@ -23,6 +23,11 @@ app.get('/agent/:agent_id/compensation', async (c) => {
   // Pull the agent's precomputed chain patterns for the window.
   // chain_analysis is populated by the background job in
   // packages/intelligence/anomaly/chain-analysis.ts.
+  //
+  // degraded: a thrown query must not collapse to [] and render as the
+  // reassuring "no multi-step chains — pass chain_id" message, which tells
+  // the user to change their own logging when the query actually broke.
+  let degraded = false;
   const patternRows = await query<{
     pattern_hash: string;
     chain_pattern: string[];
@@ -40,7 +45,7 @@ app.get('/agent/:agent_id/compensation', async (c) => {
        AND analysis_window = $2
      ORDER BY frequency DESC`,
     [agentId, window],
-  ).catch((err) => { log.debug({ err }, 'Failed to fetch chain_analysis'); return []; });
+  ).catch((err) => { log.error({ err }, 'Failed to fetch chain_analysis'); degraded = true; return []; });
 
   const { scored, total_chains, agent_stability } = scorePatterns(
     patternRows.map((r) => ({
@@ -62,7 +67,7 @@ app.get('/agent/:agent_id/compensation', async (c) => {
          FROM chain_analysis_fleet
          WHERE pattern_hash = ANY($1) AND analysis_window = $2`,
         [patternHashes, window],
-      ).catch((err) => { log.debug({ err }, 'Failed to fetch chain_analysis_fleet'); return []; })
+      ).catch((err) => { log.error({ err }, 'Failed to fetch chain_analysis_fleet'); degraded = true; return []; })
     : [];
 
   const fleetMap = new Map(fleetRows.map((f) => [f.pattern_hash, f]));
@@ -91,6 +96,8 @@ app.get('/agent/:agent_id/compensation', async (c) => {
   return c.json({
     agent_id: agentId,
     name: agentName,
+    degraded,
+    ...(degraded ? { degraded_reason: 'chain_analysis query failed' } : {}),
     window,
     computed_at: computedAt,
     summary: {

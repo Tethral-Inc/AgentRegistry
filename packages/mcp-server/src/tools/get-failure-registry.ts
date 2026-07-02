@@ -9,6 +9,7 @@ import { failureRegistryNextAction, renderNextActionFooter, nextActionMeta } fro
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { renderEmptyState } from '../utils/empty-state.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -60,6 +61,14 @@ export function getFailureRegistryTool(server: McpServer, apiUrl: string) {
         const totalInteractions = (data.total_interactions as number) ?? 0;
         text += `Failure rate: ${((data.failure_rate as number) * 100).toFixed(1)}% ${confidence(totalInteractions)}\n`;
         text += `Distinct failing targets: ${data.distinct_failing_targets}\n`;
+
+        // A degraded payload means a backend query threw — the zeros above are
+        // NOT a real reading, so don't render "Healthy — no failures".
+        if (isDegraded(data)) {
+          text += renderDegradedNotice('Failure registry', data);
+          text += renderDashboardFooter(id, 'failure-registry', { range: scope, source: source ?? 'all' });
+          return { content: [{ type: 'text' as const, text }] };
+        }
 
         if (failures.length === 0) {
           if (totalInteractions === 0) {

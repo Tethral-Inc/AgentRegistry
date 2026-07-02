@@ -83,6 +83,12 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
   // Pull all failure rows grouped by (target, status, error_code, category).
   // Errors here must NOT be silently swallowed — the grouped result is the
   // source of truth for distinct_failing_targets and total_failures below.
+  //
+  // degraded: when either the grouped or the total query throws, we MUST NOT
+  // collapse to zero failures and let the renderer print "Healthy — no
+  // failures". The flag tells the renderer the numbers are unavailable, not
+  // an all-clear.
+  let degraded = false;
   const rows = await query<FailureRow>(
     `SELECT
        target_system_id AS "target_system_id",
@@ -97,12 +103,13 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND status IN ('failure', 'timeout')${groupedSourceClause}
+       AND status != 'success'
+       AND (source IS NULL OR source != 'environmental')${groupedSourceClause}
      GROUP BY target_system_id, target_system_type, status, error_code, interaction_category
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
     groupedParams,
-  ).catch((err) => { log.warn({ err, agentId }, 'Failed to query failure-registry grouped rows'); return [] as FailureRow[]; });
+  ).catch((err) => { log.error({ err, agentId }, 'Failed to query failure-registry grouped rows'); degraded = true; return [] as FailureRow[]; });
 
   // Group by target.
   type TargetGroup = {
@@ -164,9 +171,10 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= $2
-       AND created_at <= $3${totalSourceClause}`,
+       AND created_at <= $3
+       AND (source IS NULL OR source != 'environmental')${totalSourceClause}`,
     totalParams,
-  ).catch((err) => { log.warn({ err, agentId }, 'Failed to query failure-registry total'); return [] as Array<{ total: number }>; });
+  ).catch((err) => { log.error({ err, agentId }, 'Failed to query failure-registry total'); degraded = true; return [] as Array<{ total: number }>; });
 
   const total = totalRows[0]?.total ?? 0;
   const failureRate = total > 0 ? totalFailures / total : 0;
@@ -176,6 +184,8 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
   return c.json({
     agent_id: agentId,
     name: agentName,
+    degraded,
+    ...(degraded ? { degraded_reason: 'failure-registry query failed' } : {}),
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),

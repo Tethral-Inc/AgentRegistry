@@ -56,6 +56,7 @@ async function fetchWindow(
   start: Date,
   end: Date,
   sourceFilter: string | null,
+  onError: (err: unknown) => void,
 ): Promise<TargetWindow[]> {
   const params: unknown[] = [agentId, start.toISOString(), end.toISOString()];
   let sourceClause = '';
@@ -80,7 +81,7 @@ async function fetchWindow(
      GROUP BY target_system_id
      HAVING COUNT(*) >= 5`,
     params,
-  ).catch(() => []);
+  ).catch((err) => { onError(err); return []; });
 }
 
 app.get('/agent/:agent_id/trend', async (c) => {
@@ -104,9 +105,20 @@ app.get('/agent/:agent_id/trend', async (c) => {
   const agentId = resolved.agent_id;
   const agentName = resolved.name;
 
+  // degraded: when a window query throws (e.g. a dialect rejection), we MUST
+  // NOT collapse to an empty result and let the renderer print "No trend data
+  // yet" / clean deltas. The flag tells the renderer the numbers are
+  // unavailable, not a genuine no-data reading.
+  let degraded = false;
   const [currentRows, previousRows] = await Promise.all([
-    fetchWindow(agentId, current.start, current.end, sourceFilter),
-    fetchWindow(agentId, previous.start, previous.end, sourceFilter),
+    fetchWindow(agentId, current.start, current.end, sourceFilter, (err) => {
+      log.error({ err, agentId }, 'trend window query failed');
+      degraded = true;
+    }),
+    fetchWindow(agentId, previous.start, previous.end, sourceFilter, (err) => {
+      log.error({ err, agentId }, 'trend window query failed');
+      degraded = true;
+    }),
   ]);
 
   const previousMap = new Map<string, TargetWindow>();
@@ -148,6 +160,8 @@ app.get('/agent/:agent_id/trend', async (c) => {
   return c.json({
     agent_id: agentId,
     name: agentName,
+    degraded,
+    ...(degraded ? { degraded_reason: 'trend query failed' } : {}),
     scope,
     current_period: { start: current.start.toISOString(), end: current.end.toISOString() },
     comparison_period: { start: previous.start.toISOString(), end: previous.end.toISOString() },

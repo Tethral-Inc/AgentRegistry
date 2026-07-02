@@ -869,7 +869,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND categories ? 'activity_class'${catSourceClause}${catEnvClause}
+         AND categories->>'activity_class' IS NOT NULL${catSourceClause}${catEnvClause}
        GROUP BY categories->>'activity_class'
        UNION ALL
        SELECT 'target_type' AS "dimension",
@@ -880,7 +880,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND categories ? 'target_type'${catSourceClause}${catEnvClause}
+         AND categories->>'target_type' IS NOT NULL${catSourceClause}${catEnvClause}
        GROUP BY categories->>'target_type'
        UNION ALL
        SELECT 'interaction_purpose' AS "dimension",
@@ -891,7 +891,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND categories ? 'interaction_purpose'${catSourceClause}${catEnvClause}
+         AND categories->>'interaction_purpose' IS NOT NULL${catSourceClause}${catEnvClause}
        GROUP BY categories->>'interaction_purpose'`,
       catParams,
     );

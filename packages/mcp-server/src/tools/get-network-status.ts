@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { confidence } from '../utils/confidence.js';
 import { networkStatusNextAction, renderNextActionFooter, nextActionMeta } from '../utils/next-action.js';
 import { fmtRatio, section, truncHash } from '../utils/style.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -28,6 +29,15 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         const t = data.totals ?? {};
         let text = `ACR Network Dashboard\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'all'}\n`;
+
+        // A degraded payload means a backend query threw — the empty
+        // systems/threats/escalations below are NOT a real reading, so don't
+        // render "No system health data" / "No elevated anomaly signals" /
+        // "network looks healthy" as an all-clear. Bail with the notice first.
+        if (isDegraded(data)) {
+          text += renderDegradedNotice('Network status', data);
+          return { content: [{ type: 'text' as const, text }] };
+        }
 
         if (data.stale) {
           text += `\nDATA MAY BE STALE — background jobs may not have run recently.\n`;

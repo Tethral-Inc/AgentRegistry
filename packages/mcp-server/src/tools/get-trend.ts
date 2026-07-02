@@ -10,6 +10,7 @@ import { trendNextAction, renderNextActionFooter, nextActionMeta } from '../util
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { renderEmptyState } from '../utils/empty-state.js';
+import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
 
 export function getTrendTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -60,6 +61,15 @@ export function getTrendTool(server: McpServer, apiUrl: string) {
         text += `Source: ${source ?? 'all'}\n`;
         if (currentPeriod) text += `Current: ${currentPeriod.start} to ${currentPeriod.end}\n`;
         if (previousPeriod) text += `Previous: ${previousPeriod.start} to ${previousPeriod.end}\n`;
+
+        // A degraded payload means a window query threw — the empty/zero
+        // per-target set below is NOT a real reading, so don't render it as
+        // "No trend data yet" or as clean deltas.
+        if (isDegraded(data)) {
+          text += renderDegradedNotice('Trend', data);
+          text += renderDashboardFooter(id, 'trend', { range: scope, source: source ?? 'all' });
+          return { content: [{ type: 'text' as const, text }] };
+        }
 
         if (targets.length === 0) {
           // Standardized empty-state (F10) — replaces the bare

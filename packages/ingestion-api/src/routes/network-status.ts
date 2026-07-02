@@ -31,19 +31,25 @@ app.get('/network/status', async (c) => {
   const sourceClause = sourceParam === 'all' ? '' : ' AND source = $1';
   const totalsParams: unknown[] = sourceParam === 'all' ? [] : [sourceParam];
 
+  // degraded: a single flag raised by ANY query catch in this handler. When a
+  // query throws, we MUST NOT let its zero/empty default render as a healthy
+  // network (no failing systems / no threats / no escalations). The flag tells
+  // the renderer the reading is unavailable, not an all-clear.
+  let degraded = false;
+
   const agentsRow = await query<{ n: number }>(
     `SELECT COUNT(DISTINCT emitter_agent_id)::int AS "n"
      FROM interaction_receipts
      WHERE created_at >= now() - INTERVAL '24 hours'${sourceClause}`,
     totalsParams,
-  ).catch((err) => { log.warn({ err }, 'network totals: active_agents query failed'); return [{ n: 0 }]; });
+  ).catch((err) => { log.error({ err }, 'network totals: active_agents query failed'); degraded = true; return [{ n: 0 }]; });
 
   const systemsCountRow = await query<{ n: number }>(
     `SELECT COUNT(DISTINCT target_system_id)::int AS "n"
      FROM interaction_receipts
      WHERE created_at >= now() - INTERVAL '24 hours'${sourceClause}`,
     totalsParams,
-  ).catch((err) => { log.warn({ err }, 'network totals: active_systems query failed'); return [{ n: 0 }]; });
+  ).catch((err) => { log.error({ err }, 'network totals: active_systems query failed'); degraded = true; return [{ n: 0 }]; });
 
   const volumeRow = await query<{ total: number; anomalies: number }>(
     `SELECT COUNT(*)::int AS "total",
@@ -51,7 +57,7 @@ app.get('/network/status', async (c) => {
      FROM interaction_receipts
      WHERE created_at >= now() - INTERVAL '24 hours'${sourceClause}`,
     totalsParams,
-  ).catch((err) => { log.warn({ err }, 'network totals: volume query failed'); return [{ total: 0, anomalies: 0 }]; });
+  ).catch((err) => { log.error({ err }, 'network totals: volume query failed'); degraded = true; return [{ total: 0, anomalies: 0 }]; });
 
   const totalInteractions = volumeRow[0]?.total ?? 0;
   const totals = {
@@ -96,7 +102,7 @@ app.get('/network/status', async (c) => {
        total_interactions DESC
      LIMIT 50`,
     [sourceParam],
-  ).catch(() => []);
+  ).catch((err) => { log.error({ err }, 'network systems query failed'); degraded = true; return []; });
 
   // Staleness comes from the same probe /health uses, so the two
   // routes can never disagree about pipeline state.
@@ -124,7 +130,7 @@ app.get('/network/status', async (c) => {
      WHERE anomaly_signal_count > 0
      ORDER BY anomaly_signal_count DESC, anomaly_signal_rate DESC
      LIMIT 20`,
-  ).catch(() => []);
+  ).catch((err) => { log.error({ err }, 'network threats query failed'); degraded = true; return []; });
 
   // 4. Recent escalations
   const escalations = await query<{
@@ -142,7 +148,7 @@ app.get('/network/status', async (c) => {
        AND summary_date >= CURRENT_DATE - INTERVAL '7 days'
      ORDER BY summary_date DESC, anomaly_count DESC
      LIMIT 10`,
-  ).catch(() => []);
+  ).catch((err) => { log.error({ err }, 'network escalations query failed'); degraded = true; return []; });
 
   // 5. Batch-enrich escalations with provider + category data (single query per dimension)
   let enrichedEscalations = escalations;
@@ -158,7 +164,7 @@ app.get('/network/status', async (c) => {
          AND created_at >= now() - INTERVAL '7 days'
        GROUP BY target_system_id, emitter_provider_class`,
       [targetIds],
-    ).catch(() => []);
+    ).catch((err) => { log.error({ err }, 'network escalation provider-enrich query failed'); degraded = true; return []; });
 
     const categoryRows = await query<{ target_system_id: string; category: string }>(
       `SELECT target_system_id AS "target_system_id",
@@ -170,7 +176,7 @@ app.get('/network/status', async (c) => {
          AND created_at >= now() - INTERVAL '7 days'
        GROUP BY target_system_id, anomaly_category`,
       [targetIds],
-    ).catch(() => []);
+    ).catch((err) => { log.error({ err }, 'network escalation category-enrich query failed'); degraded = true; return []; });
 
     const providerMap = new Map<string, string[]>();
     for (const r of providerRows) {
@@ -198,6 +204,8 @@ app.get('/network/status', async (c) => {
   return c.json({
     timestamp: new Date().toISOString(),
     stale,
+    degraded,
+    ...(degraded ? { degraded_reason: 'network-status query failed' } : {}),
     totals,
     systems,
     threats,

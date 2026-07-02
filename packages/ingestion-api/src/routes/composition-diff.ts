@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, createLogger, normalizeSystemId, makeError } from '@acr/shared';
+import { query, createLogger, normalizeSystemId, canonicalTargetForBuiltinTool, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 
 const log = createLogger({ name: 'composition-diff' });
@@ -69,14 +69,15 @@ function declaredComponentsFromComposition(composition: Record<string, unknown>)
   if (Array.isArray(tools)) {
     for (const t of tools) {
       if (typeof t !== 'string' || !t) continue;
-      // tools are usually exposed under an MCP namespace (`mcp:github/list_repos`)
-      // but receipts typically log the MCP, not the tool. Store them as
-      // `tool:` for now — most won't match a target, which is OK.
+      // Built-in Claude Code tools (Bash, Read, Task, …) are emitted on
+      // receipts as platform:* / agent:*, so resolve them to that canonical
+      // id. Other tools are MCP-hosted; receipts log the MCP server, so we
+      // store them as mcp:<name> — the same vocabulary the called side uses.
       pushIfNew({
         kind: 'tool',
         id: t,
         name: t,
-        expected_target: normalizeSystemId(`tool:${t}`),
+        expected_target: canonicalTargetForBuiltinTool(t) ?? normalizeSystemId(`mcp:${t}`),
       });
     }
   }
@@ -118,11 +119,18 @@ function declaredComponentsFromComposition(composition: Record<string, unknown>)
       // Prefer `name` for the target (MCPs are usually referenced by human
       // name in receipts); fall back to id.
       const targetKey = name ?? id;
+      // tool_components carry both built-in and MCP-hosted tools; resolve to
+      // the same canonical id the called side uses (platform:*/agent:* for
+      // built-ins, mcp:* otherwise).
+      const expected_target =
+        kind === 'tool'
+          ? (canonicalTargetForBuiltinTool(targetKey) ?? normalizeSystemId(`mcp:${targetKey}`))
+          : normalizeSystemId(`${kind}:${targetKey}`);
       pushIfNew({
         kind,
         id,
         name,
-        expected_target: normalizeSystemId(`${kind}:${targetKey}`),
+        expected_target,
       });
     }
   };
@@ -150,6 +158,11 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
     windowDays = Math.min(n, 30);
   }
 
+  // degraded: when either query below throws (e.g. a dialect rejection), we MUST
+  // NOT collapse to empty buckets and let the renderer print a clean all-clear
+  // diff. The flag tells the renderer the diff is unavailable, not an all-clear.
+  let degraded = false;
+
   // Load declared composition — prefer agent_reported, fall back to mcp_observed.
   const declaredRows = await query<{
     source: string;
@@ -165,7 +178,8 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
      LIMIT 1`,
     [agentId],
   ).catch((err) => {
-    log.warn({ err, agentId }, 'composition-diff: declared-composition load failed');
+    log.error({ err, agentId }, 'composition-diff: declared-composition load failed');
+    degraded = true;
     return [] as Array<{ source: string; composition: string | Record<string, unknown>; updated_at: string }>;
   });
 
@@ -201,20 +215,24 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
     `SELECT target_system_id AS "target_system_id",
             target_system_type AS "target_system_type",
             COUNT(*)::int AS "interaction_count",
-            MAX(request_timestamp_ms)::text AS "last_seen"
+            MAX(created_at)::text AS "last_seen"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
-       AND request_timestamp_ms >= $2
+       AND created_at >= now() - ($2::int * INTERVAL '1 day')
+       AND (source IS NULL OR source != 'environmental')
      GROUP BY target_system_id, target_system_type
      ORDER BY COUNT(*) DESC`,
-    [agentId, Date.now() - windowDays * 86400000],
+    [agentId, windowDays],
   ).catch((err) => {
-    log.warn({ err, agentId }, 'composition-diff: receipts load failed');
+    log.error({ err, agentId }, 'composition-diff: receipts load failed');
+    degraded = true;
     return [] as Array<{ target_system_id: string; target_system_type: string; interaction_count: number; last_seen: string }>;
   });
 
+  // Normalize the called id so it shares the declared side's vocabulary
+  // (receipts are normalized on write; normalize defensively here too).
   const actualIndex = new Map<string, { target_system_id: string; target_system_type: string; interaction_count: number; last_seen: string }>();
-  for (const r of actualRows) actualIndex.set(r.target_system_id, r);
+  for (const r of actualRows) actualIndex.set(normalizeSystemId(r.target_system_id), r);
 
   // Classify.
   const declared_and_used: Array<{ kind: string; id: string; name?: string; target: string; interaction_count: number }> = [];
@@ -236,9 +254,9 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
 
   const used_but_undeclared: Array<{ target: string; target_type: string; interaction_count: number }> = [];
   for (const r of actualRows) {
-    if (!declaredIndex.has(r.target_system_id)) {
+    if (!declaredIndex.has(normalizeSystemId(r.target_system_id))) {
       used_but_undeclared.push({
-        target: r.target_system_id,
+        target: normalizeSystemId(r.target_system_id),
         target_type: r.target_system_type,
         interaction_count: r.interaction_count,
       });
@@ -247,6 +265,8 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
 
   return c.json({
     agent_id: agentId,
+    degraded,
+    ...(degraded ? { degraded_reason: 'composition-diff query failed' } : {}),
     window_days: windowDays,
     declared_source: declaredSource,
     declared_updated_at: declaredUpdatedAt,

@@ -258,9 +258,12 @@ app.post('/receipts', async (c) => {
             receipt_id: rows[0].receipt_id,
           });
         }
-      } catch {
-        // Non-fatal: if the lookup fails, receipts just land without chain_id
-        // rather than blocking ingest. Chain analysis is a nice-to-have.
+      } catch (err) {
+        // Non-fatal: if the lookup fails, receipts just land without an
+        // inferred chain_id rather than blocking ingest. But log it — a
+        // silent failure here degrades every chain lens to all-length-1
+        // (the swallow that made chain stitching look broken).
+        log.warn({ err, agentId }, 'chain tail lookup failed; receipts will land chainless');
       }
     }
   }
