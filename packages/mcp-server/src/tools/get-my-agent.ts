@@ -5,6 +5,7 @@ import { renderUpgradeBanner } from '../version-check.js';
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { nextActionMeta } from '../utils/next-action.js';
 import { appendKeyFragment } from '../utils/dashboard-link.js';
+import { advancedEnabled } from '../utils/advanced-mode.js';
 
 const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nfkey.ai';
 
@@ -20,18 +21,31 @@ const DASHBOARD_URL = process.env.ACR_DASHBOARD_URL ?? 'https://dashboard.acr.nf
  * (and the README walkthrough) have one source of truth for the tool
  * grouping.
  */
-const TOOL_MENU = `
+const CORE_MENU = `
 ── Available Tools ──
-  Your agent:    get_my_agent · register_agent · update_composition · configure_deep_composition
-  Onboarding:    orient_me · whats_new · summarize_my_agent
-  Logging:       log_interaction
-  Your profile:  get_profile · get_friction_report · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_revealed_preference · get_compensation_signatures · get_composition_diff
+  Core:          orient_me · get_my_agent · log_interaction · get_friction_report · summarize_my_agent
+  Notifications: get_notifications · acknowledge_signal`.trimStart();
+
+const ADVANCED_MENU = `
+  Your agent:    register_agent · update_composition · configure_deep_composition
+  Onboarding:    whats_new
+  Your profile:  get_profile · get_coverage · get_failure_registry · get_stable_corridors · get_trend · get_interaction_log · get_revealed_preference · get_compensation_signatures · get_composition_diff
   Patterns:      dismiss_pattern
   Watches:       set_watch · list_watches
-  Notifications: get_notifications · acknowledge_signal
   Network:       get_network_status · check_environment · check_entity
   Registry:      search_skills · get_skill_tracker · get_skill_versions
-  Tier:          get_tier_features`.trimStart();
+  Tier:          get_tier_features`.replace(/^\n/, '');
+
+/** Menu for the mode the server is actually running in. The menu must
+ *  never list a tool that isn't registered — a menu entry the model
+ *  can't call is its own kind of false advertising. */
+function toolMenu(advanced: boolean): string {
+  return advanced
+    ? `${CORE_MENU}\n${ADVANCED_MENU}`
+    : `${CORE_MENU}\n  Advanced:      22 more tools (secondary lenses, composition, skills, watches) — set ACR_ADVANCED=1 in the MCP server env to enable.`;
+}
+
+const TOOL_MENU = `${CORE_MENU}\n${ADVANCED_MENU}`;
 
 /**
  * Exported for the tool-menu test. Keep this list mirrored with the
@@ -87,6 +101,7 @@ export function getMyAgentTool(server: McpServer) {
         if (agent?.status) text += `Status: ${agent.status}\n`;
         if (agent?.last_active_at) text += `Last active: ${agent.last_active_at}\n`;
 
+        text += `\n${toolMenu(advancedEnabled())}\n`;
         text += `\n→ Next step: call \`orient_me\` to see what to do next, or call any lens tool directly.\n`;
 
         const meta = nextActionMeta({ text: '', tool: 'orient_me', args: {} });

@@ -14,7 +14,8 @@
  * Fail-quiet: any error (no state, offline, empty data) returns null and the
  * caller prints nothing. A readout must never delay or clutter session close.
  */
-import { readState } from './state.js';
+import { readState, writeState } from './state.js';
+import { postReceipt } from './http.js';
 
 const FRICTION_TIMEOUT_MS = 2500;
 
@@ -80,5 +81,27 @@ export async function renderSessionCard(): Promise<string | null> {
   ];
   if (sinks.length) lines.push(`  where the time went: ${sinks.join(' · ')}`);
   if (link) lines.push(`  full view → ${link}`);
+
+  // TTFR funnel: the first time a card actually renders is the moment value
+  // reached a human — the metric the whole onboarding exists for. Stamp it
+  // once and emit a funnel receipt with the init→first-card delta.
+  // Best-effort and fail-quiet, like everything else on session close.
+  if (!state.first_card_at) {
+    state.first_card_at = Date.now();
+    try { writeState(state); } catch { /* read-only home */ }
+    const now = Date.now();
+    await postReceipt(state.api_url, state.api_key, {
+      emitter: { agent_id: state.agent_id, provider_class: 'anthropic' },
+      target: { system_id: 'platform:acr-funnel', system_type: 'platform' },
+      interaction: { category: 'tool_call', status: 'success', request_timestamp_ms: now, response_timestamp_ms: now + 1, duration_ms: 1 },
+      anomaly: { flagged: false },
+      source: 'claude-code-hook',
+      categories: {
+        funnel_stage: 'first_card',
+        ...(state.init_at ? { ttfr_ms: String(state.first_card_at - state.init_at) } : {}),
+      },
+    }).catch(() => { /* telemetry, not a gate */ });
+  }
+
   return lines.join('\n');
 }

@@ -21,6 +21,11 @@ export interface AcrState {
   // the same file. Written when the hook self-bootstraps an identity.
   public_key?: string;
   private_key?: string;
+  // TTFR funnel stamps (epoch ms). init_at is set once by `acr-hook init`;
+  // first_card_at is set the first time a SessionEnd card actually renders.
+  // Their delta is the product's core adoption metric: time to first readout.
+  init_at?: number;
+  first_card_at?: number;
 }
 
 const STATE_PATH = join(homedir(), '.claude', '.acr-state.json');
@@ -55,6 +60,8 @@ export function writeState(state: AcrState): void {
     ...(state.api_key && { api_key: state.api_key }),
     ...(state.public_key && { public_key: state.public_key }),
     ...(state.private_key && { private_key: state.private_key }),
+    ...(state.init_at && { init_at: state.init_at }),
+    ...(state.first_card_at && { first_card_at: state.first_card_at }),
   }));
   renameSync(tmp, STATE_PATH);
 }
