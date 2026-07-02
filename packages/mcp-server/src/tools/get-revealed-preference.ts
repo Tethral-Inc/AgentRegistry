@@ -10,7 +10,7 @@ import {
   renderNextActionFooter,
   nextActionMeta,
 } from '../utils/next-action.js';
-import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
+import { isDegraded, renderDegradedNotice, renderIfDegraded503 } from '../utils/degraded.js';
 
 const TOOL_DESCRIPTION = `Query the revealed-preference lens: what the agent *declared* in its composition vs what it *actually called* during the window. Only ACR can see both — so this is the view no self-report and no server log can produce alone.
 
@@ -56,6 +56,8 @@ export function getRevealedPreferenceTool(server: McpServer, apiUrl: string) {
         });
         const res = await fetchAuthed(`${apiUrl}/api/v1/agent/${id}/revealed-preference?${params}`);
         if (!res.ok) {
+          const degradedText = await renderIfDegraded503('Revealed preference', res);
+          if (degradedText) return { content: [{ type: 'text' as const, text: degradedText }] };
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Revealed-preference error: ${errText}` }] };
         }

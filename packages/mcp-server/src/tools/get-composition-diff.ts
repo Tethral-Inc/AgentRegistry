@@ -4,7 +4,7 @@ import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js
 import { fetchAuthed } from '../utils/fetch-authed.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
-import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
+import { isDegraded, renderDegradedNotice, renderIfDegraded503 } from '../utils/degraded.js';
 
 type DeclaredUsed = { kind: string; id: string; name?: string; target: string; interaction_count: number };
 type DeclaredUnused = { kind: string; id: string; name?: string; target: string };
@@ -50,6 +50,8 @@ export function getCompositionDiffTool(server: McpServer, apiUrl: string) {
       try {
         const res = await fetchAuthed(url.toString());
         if (!res.ok) {
+          const degradedText = await renderIfDegraded503('Composition diff', res);
+          if (degradedText) return { content: [{ type: 'text' as const, text: degradedText }] };
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Composition diff error: ${errText}` }] };
         }

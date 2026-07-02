@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { CompensationWindow, query, makeError, createLogger } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 import { scorePatterns } from '../lib/stability-score.js';
 
 const log = createLogger({ name: 'compensation' });
@@ -70,6 +71,8 @@ app.get('/agent/:agent_id/compensation', async (c) => {
       ).catch((err) => { log.error({ err }, 'Failed to fetch chain_analysis_fleet'); degraded = true; return []; })
     : [];
 
+  if (degraded) return degraded503(c, agentId, 'chain_analysis query failed');
+
   const fleetMap = new Map(fleetRows.map((f) => [f.pattern_hash, f]));
 
   // Build output list. Keep the overhead alongside the pattern so a user
@@ -97,7 +100,6 @@ app.get('/agent/:agent_id/compensation', async (c) => {
     agent_id: agentId,
     name: agentName,
     degraded,
-    ...(degraded ? { degraded_reason: 'chain_analysis query failed' } : {}),
     window,
     computed_at: computedAt,
     summary: {

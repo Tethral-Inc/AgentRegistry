@@ -104,12 +104,12 @@ app.get('/baselines/cohort', async (c) => {
               PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)::float AS "median_duration_ms",
               PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)::float AS "p95_duration_ms",
               COALESCE(
-                COUNT(*) FILTER (WHERE status = 'failure')::float /
-                NULLIF(COUNT(*), 0), 0
+                COUNT(*) FILTER (WHERE status = 'failure')::float8 /
+                NULLIF(COUNT(*), 0)::float8, 0.0
               ) AS "failure_rate",
               COALESCE(
-                COUNT(*) FILTER (WHERE anomaly_flagged = true)::float /
-                NULLIF(COUNT(*), 0), 0
+                COUNT(*) FILTER (WHERE anomaly_flagged = true)::float8 /
+                NULLIF(COUNT(*), 0)::float8, 0.0
               ) AS "anomaly_rate"
        FROM interaction_receipts
        WHERE emitter_provider_class = $1

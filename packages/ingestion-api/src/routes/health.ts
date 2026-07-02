@@ -16,6 +16,9 @@ interface HealthResponse {
   database: 'connected' | 'unreachable';
   last_aggregation_at: string | null;
   freshness_seconds: number | null;
+  /** Neutral activity signal: when aggregation last saw a receipt. Old data
+   *  on a healthy pipeline means a quiet network, not a broken one. */
+  last_data_observed_at?: string | null;
   known_issues: KnownIssue[];
   timestamp: string;
 }
@@ -57,21 +60,24 @@ app.get('/health', async (c) => {
     status = 'down';
     issues.push({
       component: 'aggregation',
-      message: 'system_health is empty — aggregation has never run',
+      message: 'aggregation has never run',
     });
   } else if (freshness.down) {
     status = 'down';
     const minutes = Math.floor((freshness.freshness_seconds ?? 0) / 60);
     issues.push({
       component: 'aggregation',
-      message: `system_health is ${minutes} min stale (cron likely stuck)`,
+      message: `aggregation job last ran ${minutes} min ago (cron likely stuck)`,
     });
   } else if (freshness.stale) {
     status = 'stale';
     const minutes = Math.floor((freshness.freshness_seconds ?? 0) / 60);
     issues.push({
       component: 'aggregation',
-      message: `system_health is ${minutes} min stale`,
+      message:
+        freshness.last_run_status && freshness.last_run_status !== 'ok'
+          ? `aggregation job is running but failing (last run: ${freshness.last_run_status})`
+          : `aggregation job last ran ${minutes} min ago`,
     });
   } else if (issues.length > 0) {
     status = 'degraded';
@@ -84,6 +90,7 @@ app.get('/health', async (c) => {
     database: 'connected',
     last_aggregation_at: freshness.last_aggregation_at,
     freshness_seconds: freshness.freshness_seconds,
+    last_data_observed_at: freshness.last_data_observed_at,
     known_issues: issues,
     timestamp: new Date().toISOString(),
   });

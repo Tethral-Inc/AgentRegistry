@@ -10,7 +10,7 @@ import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { renderEmptyState } from '../utils/empty-state.js';
 import { section } from '../utils/style.js';
-import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
+import { isDegraded, renderDegradedNotice, renderIfDegraded503 } from '../utils/degraded.js';
 
 export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -45,6 +45,8 @@ export function getStableCorridorsTool(server: McpServer, apiUrl: string) {
           getUnreadNotificationCount(apiUrl, id, authHeaders),
         ]);
         if (!res.ok) {
+          const degradedText = await renderIfDegraded503('Stable corridors', res);
+          if (degradedText) return { content: [{ type: 'text' as const, text: degradedText }] };
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Stable corridors error: ${errText}` }] };
         }

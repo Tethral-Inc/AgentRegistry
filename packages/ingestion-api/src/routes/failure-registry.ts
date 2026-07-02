@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { query, createLogger, FrictionScope, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
+import { degraded503 } from '../helpers/degraded-response.js';
 
 const log = createLogger({ name: 'failure-registry' });
 const app = new Hono();
@@ -176,6 +177,8 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
     totalParams,
   ).catch((err) => { log.error({ err, agentId }, 'Failed to query failure-registry total'); degraded = true; return [] as Array<{ total: number }>; });
 
+  if (degraded) return degraded503(c, agentId, 'failure-registry query failed');
+
   const total = totalRows[0]?.total ?? 0;
   const failureRate = total > 0 ? totalFailures / total : 0;
 
@@ -185,7 +188,6 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
     agent_id: agentId,
     name: agentName,
     degraded,
-    ...(degraded ? { degraded_reason: 'failure-registry query failed' } : {}),
     scope,
     period_start: start.toISOString(),
     period_end: end.toISOString(),

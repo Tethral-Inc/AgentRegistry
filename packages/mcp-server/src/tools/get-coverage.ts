@@ -8,7 +8,7 @@ import { coverageNextAction, renderNextActionFooter, nextActionMeta } from '../u
 import { renderDashboardFooter } from '../utils/dashboard-link.js';
 import { createSnapshot, renderSnapshotFooter } from '../utils/snapshot.js';
 import { section } from '../utils/style.js';
-import { isDegraded, renderDegradedNotice } from '../utils/degraded.js';
+import { isDegraded, renderDegradedNotice, renderIfDegraded503 } from '../utils/degraded.js';
 
 export function getCoverageTool(server: McpServer, apiUrl: string) {
   server.registerTool(
@@ -42,6 +42,8 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
           getUnreadNotificationCount(apiUrl, id, authHeaders),
         ]);
         if (!res.ok) {
+          const degradedText = await renderIfDegraded503('Coverage', res);
+          if (degradedText) return { content: [{ type: 'text' as const, text: degradedText }] };
           const errText = await res.text().catch(() => `HTTP ${res.status}`);
           return { content: [{ type: 'text' as const, text: `Coverage error: ${errText}` }] };
         }
