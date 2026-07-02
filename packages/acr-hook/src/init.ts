@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { ensureIdentity } from './register.js';
 import { postReceipt, type HookReceipt } from './http.js';
-import type { AcrState } from './state.js';
+import { writeState, type AcrState } from './state.js';
 
 const API_URL = process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
 const DASHBOARD = 'https://dashboard.acr.nfkey.ai';
@@ -178,6 +178,23 @@ export async function cmdInit(): Promise<void> {
   out(ok
     ? '  ✓ loop verified — a test event was captured and read back'
     : '  ✗ could not confirm the loop within 30s (capture may still work; check again later)');
+
+  // 4. TTFR funnel: stamp the init moment (first init only — re-running init
+  // must not reset the clock) and emit a funnel receipt so the init→first-card
+  // conversion is measurable with ACR's own data. Best-effort, never blocks.
+  if (!state.init_at) {
+    state.init_at = Date.now();
+    try { writeState(state); } catch { /* read-only home — funnel just won't persist */ }
+  }
+  const fnow = Date.now();
+  await postReceipt(state.api_url, state.api_key, {
+    emitter: { agent_id: state.agent_id, provider_class: 'anthropic' },
+    target: { system_id: 'platform:acr-funnel', system_type: 'platform' },
+    interaction: { category: 'tool_call', status: 'success', request_timestamp_ms: fnow, response_timestamp_ms: fnow + 1, duration_ms: 1 },
+    anomaly: { flagged: false },
+    source: 'claude-code-hook',
+    categories: { funnel_stage: 'init', loop_verified: String(ok) },
+  }).catch(() => { /* funnel is telemetry, not a gate */ });
 
   out('');
   out('Done. A readout prints at the end of each session.');

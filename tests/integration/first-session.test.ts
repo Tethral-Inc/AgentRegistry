@@ -34,35 +34,47 @@ const { SessionState } = await import('../../packages/mcp-server/src/session-sta
  * Tools the README "First Session" walkthrough names. If any of these
  * are renamed or removed, the README breaks — and so does this test.
  */
-const FIRST_SESSION_TOOLS = [
-  // Step 1 — discover
-  'get_my_agent',
-  // Step 2 — log
-  'log_interaction',
-  // Step 3 — orient
+const CORE_TOOLS = [
+  // The default surface: the whole primary loop in seven tools.
   'orient_me',
-  // Step 4 — read a lens (the lenses orient_me routes to)
+  'get_my_agent',
+  'log_interaction',
   'get_friction_report',
+  'summarize_my_agent',
+  'get_notifications',
+  'acknowledge_signal',
+] as const;
+
+/** Advanced-only tools the README/orient_me mention behind ACR_ADVANCED=1. */
+const ADVANCED_TOOLS = [
   'get_coverage',
   'get_stable_corridors',
-  // Step 5 — environment / health awareness
   'check_environment',
+  'get_trend',
+  'update_composition',
+  'search_skills',
 ] as const;
+
+const FIRST_SESSION_TOOLS = [...CORE_TOOLS, ...ADVANCED_TOOLS] as const;
 
 describe('first-session walkthrough — README contract', () => {
   let registered: Set<string>;
+  let coreRegistered: Set<string>;
 
   beforeAll(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
 
-    const session = new SessionState('stdio');
-    const server = createAcrServer({ session });
-
-    // Pull the registered tool set off the underlying SDK server. The
-    // mcp-server exposes tools via its private registry; we read it
-    // through the same surface tool-menu.test.ts uses.
-    const _tools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools;
-    registered = new Set(_tools ? Object.keys(_tools) : []);
+    const toolSet = (opts: { advanced?: boolean }) => {
+      const session = new SessionState('stdio');
+      const server = createAcrServer({ session, ...opts });
+      // Pull the registered tool set off the underlying SDK server. The
+      // mcp-server exposes tools via its private registry; we read it
+      // through the same surface tool-menu.test.ts uses.
+      const _tools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools;
+      return new Set(_tools ? Object.keys(_tools) : []);
+    };
+    registered = toolSet({ advanced: true });
+    coreRegistered = toolSet({ advanced: false });
   });
 
   afterAll(() => {
@@ -81,5 +93,22 @@ describe('first-session walkthrough — README contract', () => {
 
   it('registers at least the first-session tools (sanity floor)', () => {
     expect(registered.size).toBeGreaterThanOrEqual(FIRST_SESSION_TOOLS.length);
+  });
+
+  // The default surface is deliberately small: every tool schema costs
+  // context in the host agent's window on every session. Core mode must
+  // register exactly the primary loop — a tool leaking into the default
+  // set silently re-inflates every install's context cost.
+  it.each(CORE_TOOLS)('core mode registers "%s"', (toolName) => {
+    expect(coreRegistered.has(toolName)).toBe(true);
+  });
+
+  it('core mode registers ONLY the core tools', () => {
+    const extra = [...coreRegistered].filter((t) => !(CORE_TOOLS as readonly string[]).includes(t)).sort();
+    expect(extra, `Tools leaked into the default surface: ${extra.join(', ')}`).toEqual([]);
+  });
+
+  it.each(ADVANCED_TOOLS)('advanced-only tool "%s" is NOT in core mode', (toolName) => {
+    expect(coreRegistered.has(toolName)).toBe(false);
   });
 });

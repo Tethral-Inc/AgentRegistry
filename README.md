@@ -84,7 +84,13 @@ The hook and the MCP share the same identity file — either bootstraps the othe
 | `get_notifications` | Unread anomaly-signal notifications for your composition |
 | `get_my_agent` | Identity, dashboard link, registration state |
 
-Beyond these, the server exposes the full lens set (`get_coverage`, `get_trend`, `get_revealed_preference`, `get_failure_registry`, `get_composition_diff`, `get_stable_corridors`, `get_network_status`, `check_environment`, `whats_new`, …), composition management (`register_agent`, `update_composition`, `acknowledge_signal`), and the skill registry (`search_skills`, `check_entity`, `get_skill_tracker`, `get_skill_versions`, `set_watch`).
+These seven are the whole default surface — deliberately small, because every tool schema costs context in the host agent's window. The full 29-tool set (secondary lenses like `get_coverage`/`get_trend`/`get_revealed_preference`/`get_stable_corridors`, composition management, the skill registry, watches, network views) enables with one env var in your MCP config:
+
+```json
+{ "command": "npx", "args": ["-y", "@tethral/acr-mcp@latest"], "env": { "ACR_ADVANCED": "1" } }
+```
+
+`orient_me` and `get_my_agent` tell the model the advanced set exists, so nothing is hidden — just not paid for by default.
 
 ## Add to any agent (SDK)
 

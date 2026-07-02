@@ -51,6 +51,14 @@ export interface AcrServerOptions {
   session?: SessionState;
   /** Correlation window for in-flight receipt linkage. One per session. */
   correlationWindow?: CorrelationWindow;
+  /**
+   * Register the full 29-tool surface instead of the core seven.
+   * Defaults to ACR_ADVANCED=1 in the env. Core covers the primary loop
+   * (orient, identity, log, friction, summary, notifications+ack); the
+   * rest is opt-in so every host session doesn't pay 30 tool schemas of
+   * context for a product it's just trying out.
+   */
+  advanced?: boolean;
 }
 
 /**
@@ -133,36 +141,54 @@ export function createAcrServer(options?: AcrServerOptions): McpServer {
   // Apply self-logging middleware before tool registration
   withSelfLogging(server, () => session, apiUrl);
 
-  registerAgentTool(server, apiUrl);
-  logInteractionTool(server, apiUrl, correlationWindow);
-  checkEntityTool(server, apiUrl, resolverUrl);
-  checkEnvironmentTool(server, apiUrl, resolverUrl);
-  getFrictionReportTool(server, apiUrl);
-  getRevealedPreferenceTool(server, apiUrl);
-  getCompensationSignaturesTool(server, apiUrl);
+  // Tool surface: CORE by default, the full set behind ACR_ADVANCED=1.
+  //
+  // Thirty tool schemas land in every host agent's context window on every
+  // session — real adoption friction for a friction-measurement product, and
+  // a wall of choices for a model that just wants "where did my time go".
+  // The core seven cover the whole primary loop: orientation, identity,
+  // logging, the flagship lens, the session summary, and notifications
+  // (with acknowledgement, since surfacing a signal you can't act on is a
+  // dead end). Everything else — secondary lenses, composition management,
+  // the skill registry, watches — enables with ACR_ADVANCED=1 in the MCP
+  // server's env. orient_me tells the model the advanced set exists, so
+  // discoverability doesn't depend on reading this comment.
+  const advanced = options?.advanced ?? process.env.ACR_ADVANCED === '1';
+
+  // Core: the primary loop.
+  orientMeTool(server, apiUrl);
   getMyAgentTool(server);
-  getInteractionLogTool(server, apiUrl);
-  getNetworkStatusTool(server, apiUrl);
-  getSkillTrackerTool(server, apiUrl);
-  searchSkillsTool(server, apiUrl);
-  getSkillVersionsTool(server, apiUrl, resolverUrl);
-  updateCompositionTool(server, apiUrl);
+  logInteractionTool(server, apiUrl, correlationWindow);
+  getFrictionReportTool(server, apiUrl);
+  summarizeMyAgentTool(server, apiUrl);
   getNotificationsTool(server, apiUrl);
   acknowledgeSignalTool(server, apiUrl);
-  disableDeepCompositionTool(server);
-  getProfileTool(server, apiUrl);
-  getCoverageTool(server, apiUrl);
-  getStableCorridorsTool(server, apiUrl);
-  getFailureRegistryTool(server, apiUrl);
-  getTrendTool(server, apiUrl);
-  summarizeMyAgentTool(server, apiUrl);
-  orientMeTool(server, apiUrl);
-  whatsNewTool(server, apiUrl);
-  getCompositionDiffTool(server, apiUrl);
-  dismissPatternTool(server, apiUrl);
-  setWatchTool(server, apiUrl);
-  listWatchesTool(server, apiUrl);
-  getTierFeaturesTool(server);
+
+  if (advanced) {
+    registerAgentTool(server, apiUrl);
+    checkEntityTool(server, apiUrl, resolverUrl);
+    checkEnvironmentTool(server, apiUrl, resolverUrl);
+    getRevealedPreferenceTool(server, apiUrl);
+    getCompensationSignaturesTool(server, apiUrl);
+    getInteractionLogTool(server, apiUrl);
+    getNetworkStatusTool(server, apiUrl);
+    getSkillTrackerTool(server, apiUrl);
+    searchSkillsTool(server, apiUrl);
+    getSkillVersionsTool(server, apiUrl, resolverUrl);
+    updateCompositionTool(server, apiUrl);
+    disableDeepCompositionTool(server);
+    getProfileTool(server, apiUrl);
+    getCoverageTool(server, apiUrl);
+    getStableCorridorsTool(server, apiUrl);
+    getFailureRegistryTool(server, apiUrl);
+    getTrendTool(server, apiUrl);
+    whatsNewTool(server, apiUrl);
+    getCompositionDiffTool(server, apiUrl);
+    dismissPatternTool(server, apiUrl);
+    setWatchTool(server, apiUrl);
+    listWatchesTool(server, apiUrl);
+    getTierFeaturesTool(server);
+  }
 
   // Fire the environmental probe in the background. We register the
   // agent first (if needed) then fire probes to common public targets

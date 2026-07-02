@@ -18,6 +18,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { advancedEnabled } from '../utils/advanced-mode.js';
 import { z } from 'zod';
 import { getAgentName } from '../state.js';
 import { resolveAgentId, renderResolveError } from '../utils/resolve-agent-id.js';
@@ -143,7 +144,9 @@ export function orientMeTool(server: McpServer, apiUrl: string) {
         text += `→ Next step: call \`log_interaction\` after every external tool call or API request.\n`;
         text += `   Each call adds a receipt. After ~10 receipts, lenses like \`get_friction_report\` start showing your own numbers.\n`;
         if (compositionEmpty) {
-          text += `\nAlso worth doing: call \`update_composition\` with your skills, MCPs, and tools.\n`;
+          text += `\nAlso worth doing: ${advancedEnabled()
+            ? 'call `update_composition` with your skills, MCPs, and tools.'
+            : 'declare your composition (skills, MCPs, tools) via `update_composition` — an advanced tool; set ACR_ADVANCED=1 in the MCP server env to enable it.'}\n`;
           text += `   Without it, anomaly signal notifications stay network-wide instead of scoped to what you use.\n`;
         }
       } else if (state === 'SOME_DATA') {
@@ -156,7 +159,9 @@ export function orientMeTool(server: McpServer, apiUrl: string) {
         if (coverageGaps.length > 0) {
           text += `\nWhile you're at it: your log_interaction calls are missing some fields.\n`;
           text += `   Gaps: ${coverageGaps.join(', ')}\n`;
-          text += `   Call \`get_coverage\` to see what each gap disables.\n`;
+          text += advancedEnabled()
+            ? `   Call \`get_coverage\` to see what each gap disables.\n`
+            : `   The \`get_coverage\` lens shows what each gap disables (advanced — set ACR_ADVANCED=1 to enable).\n`;
         }
       } else {
         // STEADY — the operator has enough data; route to the most
@@ -169,11 +174,16 @@ export function orientMeTool(server: McpServer, apiUrl: string) {
           text += `→ Next step: call \`get_friction_report\` to read your behavior this week.\n`;
           text += `   Coverage is complete, so every lens has signal.\n`;
         }
-        text += `\nAlternative lenses when you have a specific question:\n`;
-        text += `  \`get_trend\` — period-over-period changes\n`;
-        text += `  \`get_failure_registry\` — what's failing and why\n`;
-        text += `  \`get_stable_corridors\` — paths you can trust\n`;
-        text += `  \`whats_new\` — yesterday + today + week digest\n`;
+        if (advancedEnabled()) {
+          text += `\nAlternative lenses when you have a specific question:\n`;
+          text += `  \`get_trend\` — period-over-period changes\n`;
+          text += `  \`get_failure_registry\` — what's failing and why\n`;
+          text += `  \`get_stable_corridors\` — paths you can trust\n`;
+          text += `  \`whats_new\` — yesterday + today + week digest\n`;
+        } else {
+          text += `\nMore lenses exist (trend, failure registry, stable corridors, coverage, network view…) — `;
+          text += `set ACR_ADVANCED=1 in the MCP server env to enable the full 29-tool surface.\n`;
+        }
       }
 
       text += renderDashboardFooter(id, 'overview');
