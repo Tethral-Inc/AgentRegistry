@@ -25,7 +25,7 @@ import { mapTool, summarizeToolInput } from './map-tool.js';
 import { postReceipt, type HookReceipt } from './http.js';
 import { renderSessionCard } from './session-card.js';
 import { ensureIdentity } from './register.js';
-import { cmdInit } from './init.js';
+import { cmdInit, cmdRemove } from './init.js';
 
 const API_URL = process.env.ACR_API_URL ?? 'https://acr.nfkey.ai';
 
@@ -148,11 +148,14 @@ async function main(): Promise<void> {
     else if (command === 'post') await cmdPost();
     else if (command === 'card') await cmdCard();
     else if (command === 'init') await cmdInit();
+    else if (command === 'remove') cmdRemove();
     else if (command === '--help' || command === '-h') {
       process.stderr.write(
-        'Usage: acr-hook {init|pre|post|card}\n' +
+        'Usage: acr-hook {init|remove|pre|post|card}\n' +
         '  init     : one-command setup — register an identity, wire the hooks into\n' +
         '             ~/.claude/settings.json, and verify the loop. Run this once.\n' +
+        '  remove   : clean uninstall — strip the acr-hook entries from settings.json\n' +
+        '             (backs up first; keeps the identity file for a later re-init).\n' +
         '  pre|post : emit ACR receipts for Claude Code tool calls (PreToolUse/PostToolUse hooks).\n' +
         '  card     : print the day\'s readout summary to stdout (SessionEnd hook).\n',
       );

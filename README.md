@@ -1,51 +1,64 @@
 # ACR — Agent Composition Records
 
-**A behavioral registry and observation network for AI agents.** Agents register their composition, log their interactions, and query behavioral profiles through lenses. If we observe anomaly signals affecting an agent's composition, we notify the agent.
+**A behavioral registry for AI agents.** ACR captures every external tool call your agent makes, compiles those signals into an interaction profile, and shows you where the time went — starting with a readout card at the end of every session.
 
+[![npm](https://img.shields.io/npm/v/@tethral/acr-hook)](https://www.npmjs.com/package/@tethral/acr-hook)
 [![npm](https://img.shields.io/npm/v/@tethral/acr-mcp)](https://www.npmjs.com/package/@tethral/acr-mcp)
 [![npm](https://img.shields.io/npm/v/@tethral/acr-sdk)](https://www.npmjs.com/package/@tethral/acr-sdk)
 
-## What ACR Is
+## Get started (60 seconds, Claude Code)
 
-ACR is an **interaction profile registry**. Agents log what they do (external tool calls, API requests, MCP interactions). Those signals compile into a behavioral profile over time, which you can query through **lenses** — each lens a different way of interpreting the same underlying signals.
+```bash
+npm i -g @tethral/acr-hook && acr-hook init
+```
 
-The **friction lens** is the first one shipped: bottleneck detection, chain overhead analysis, retry waste, population baselines, directional friction between targets. More lenses (reliability, quality) are on the roadmap.
+That's the whole setup. The hook mints an identity for your agent (no account, no API key to manage), wires itself into Claude Code's tool hooks, and captures every tool call automatically. When your next session ends, a card prints in your terminal:
 
-ACR is **not a security product**. We don't evaluate skills, test for compromise, or block anything. We're closer to HIBP or contact tracing: we register events and propagate notifications. If we observe anomaly signals affecting an agent's composition, we notify the agent. We don't track the agent's owner, so we have no mechanism to notify them beyond the agent's activities.
+```
+── ACR session card ──
+  142 tool calls | 4.1% of active time waiting
+  Top sinks: platform:bash 38s · mcp:github 12s
+  Full report: https://dashboard.acr.nfkey.ai/agents/…
+```
 
-> **Anomaly signal**: a behavioral pattern observed across multiple unrelated agents — not a security alert. It means the network saw something unusual on this component. You decide if it matters.
+Uninstall any time with `acr-hook remove` (restores your settings backup).
 
-## What ACR Does
+## What ACR is
 
-- **Registers agents** — zero-config identity, composition tracking, persistent across sessions
-- **Logs interactions** — every external tool call an agent makes, with timing, status, chain position, anomaly signals
-- **Builds interaction profiles** — raw signals compiled over time into the behavioral record for each agent
-- **Surfaces the friction lens** — where your agent is losing time and tokens, with chain analysis, retry overhead, population drift, and directional friction
-- **Anomaly signal notifications** — if ACR observes anomalies affecting a component in an agent's composition, we notify that agent
+ACR is an **interaction profile registry**. Agents log what they do (tool calls, API requests, MCP interactions); those signals compile into a behavioral profile you query through **lenses** — each lens a different way of reading the same underlying receipts.
 
-## Before and after
+The **friction lens** is the first one shipped: per-target latency and failure breakdowns, time sinks, trend against your own history. More lenses exist for coverage, revealed preference (declared vs actually-used composition), failures, trends, and stability.
 
-**Before ACR:** Your agent makes 40 tool calls in a session. It's slow. You don't know why — there's no visibility into which targets are failing, which are slow, or which are eating retry budget.
+ACR is **not a security product**. It doesn't evaluate skills, test for compromise, or block anything. It records events and propagates notifications: if the network observes anomaly signals on a component in your agent's composition, your agent gets a notification. You decide if it matters.
 
-**After ACR:** `get_friction_report` tells you `api:openai.com` is responsible for 68% of total wait time at a 4 500 ms median, and `api:flaky-vendor.com` has a 100% failure rate across 6 calls — matching the network-wide rate, so it's infrastructure, not your code. You cache the OpenAI calls, drop the flaky vendor, and cut session time in half.
+## What works today vs. what grows with the network
 
-ACR doesn't make that decision. It gives you the numbers.
+ACR is honest about its own maturity. Every lens tells you which of three states it's in: real data, not-enough-data (with the action that changes it), or degraded (a query failed — rendered as *unavailable*, never as a healthy zero).
 
-## The Skill Registry
+**Works on day one, fleet of one:**
+- Automatic capture of every tool call (timing, status, target) via the hook
+- The friction lens on your own data: time sinks, per-target latency/failure, session cards
+- Trend against your own history (this week vs last)
+- Coverage: which signals you're populating, and which lenses that unlocks
 
-We maintain a registry of agent skills that we update continuously. **We are not a security check.** If we observe anomaly signals affecting a skill in an agent's composition, we notify the agent. Because we do not track the agent's owner, we have no mechanism to notify them beyond the agent's activities.
+**Lights up as the network grows** (population features are gated on a minimum of 5 persistent agents per target — below that, lenses say "you are the baseline" instead of inventing a comparison):
+- Population baselines ("42% slower than the network on `api:openai.com`")
+- Network status: system health across the fleet, worst-first
+- Anomaly signal notifications: ≥3 distinct agents reporting anomalies on ≥20 interactions of a component you declare → you get notified
 
-Agents don't get skills from ACR — we observe skills that already exist in the ecosystem (via public registries like npm and GitHub) and keep track of behavioral signals tied to them.
+**What the hook cannot see** (and the lenses say so instead of showing zeros):
+- Deep failures — the hook observes surface errors only; network/timeout/auth failures that never reach the tool-result boundary don't appear. `0 failures` means `0 visible failures`.
+- Retry counts, queue wait, chain structure, token usage — only agents that call `log_interaction` with those fields populate them. Hook-only profiles render those sections as **n/a**, not as clean zeros.
 
-## Add to Claude Code (30 seconds)
+## Add the MCP server (optional, for querying lenses from inside your agent)
 
-One command, available in every directory:
+The hook captures; the MCP server lets your agent *read* its own profile and log richer signals. One command in Claude Code:
 
 ```bash
 claude mcp add acr -s user -- npx -y @tethral/acr-mcp@latest
 ```
 
-Or, for any MCP client (Cursor, Continue, Claude Desktop, etc.) — add to `.mcp.json` for project-scope, or your client's user-scope MCP config:
+Or for any MCP client (Cursor, Continue, Claude Desktop, etc.):
 
 ```json
 {
@@ -58,18 +71,22 @@ Or, for any MCP client (Cursor, Continue, Claude Desktop, etc.) — add to `.mcp
 }
 ```
 
-Your agent auto-registers, gets a name (e.g. `anthropic-amber-fox`), and starts building its interaction profile on the first `log_interaction` call.
+The hook and the MCP share the same identity file — either bootstraps the other. Not sure where to start? Call `orient_me`.
 
-## Get started in 4 steps
+### Core MCP tools
 
-1. **Add to Claude Code** — paste the config snippet above (30 seconds)
-2. **Call `get_my_agent`** — get your dashboard link, API key, and a health snapshot
-3. **Call `log_interaction` after every external tool call** — every lens depends on these signals
-4. **Call `summarize_my_agent` after a session** — see where your time went
+| Tool | What it does |
+|------|-------------|
+| `orient_me` | Where am I, what should I do next — state-aware routing |
+| `log_interaction` | Log an interaction with rich fields (retry_count, chain_id, tokens_used…) |
+| `get_friction_report` | The friction lens: where time and tokens go |
+| `summarize_my_agent` | End-of-session summary |
+| `get_notifications` | Unread anomaly-signal notifications for your composition |
+| `get_my_agent` | Identity, dashboard link, registration state |
 
-Not sure where you are? Call `getting_started` for a personalised checklist.
+Beyond these, the server exposes the full lens set (`get_coverage`, `get_trend`, `get_revealed_preference`, `get_failure_registry`, `get_composition_diff`, `get_stable_corridors`, `get_network_status`, `check_environment`, `whats_new`, …), composition management (`register_agent`, `update_composition`, `acknowledge_signal`), and the skill registry (`search_skills`, `check_entity`, `get_skill_tracker`, `get_skill_versions`, `set_watch`).
 
-## Add to Any Agent (SDK)
+## Add to any agent (SDK)
 
 ```bash
 npm install @tethral/acr-sdk    # TypeScript/Node.js
@@ -88,7 +105,7 @@ const reg = await acr.register({
   composition: { skill_hashes: ['hash1', 'hash2'] },
 });
 
-// Log an interaction (this is the foundation — everything else flows from this)
+// Log an interaction (the foundation — every lens reads these)
 await acr.logInteraction({
   target_system_id: 'mcp:github',
   category: 'tool_call',
@@ -96,135 +113,78 @@ await acr.logInteraction({
   duration_ms: 340,
 });
 
-// Query the friction lens of your profile
+// Query the friction lens
 const friction = await acr.getFrictionReport(reg.agent_id, { scope: 'day' });
 
 // Check for anomaly signal notifications
 const notifs = await acr.getNotifications(reg.agent_id);
 ```
 
-## What Agents See
+## Anomaly signal notifications
 
-### Friction lens output (example)
+An **anomaly signal** is a behavioral pattern observed across multiple unrelated agents — not a security alert. When you register (or update your composition), ACR subscribes you to the components you declare. If the network later observes elevated anomaly signals on one of them — at least 3 distinct reporting agents across at least 20 interactions — a notification is delivered to your agent:
+
 ```
-Friction Report for anthropic-amber-fox (day)
-
-── Summary ──
-  Interactions: 847
-  Total wait: 132.4s
-  Friction: 14.2% of active time
-  Failures: 12 (1.4% rate)
-
-── Top Targets ──
-  mcp:github (mcp_server)
-    214 calls | 38.1% of wait time
-    median 280ms | p95 1840ms
-    vs population: 42% slower than baseline (volatility 1.8)
-```
-
-### Jeopardy notification (example)
-```
-You have 1 unread notification:
-
 [HIGH] Component in your composition reported anomalies
-   A skill in your current composition has been reported with
-   suspicious activity across multiple agents in the network.
-   Review with your operator before continuing use.
+   3 agents reported anomalies across 41 interactions.
+   Anomaly rate: 34.1%. Review with your operator before continuing use.
 ```
 
-## MCP Tools
+This path is exercised end-to-end in CI (see `scripts/db-contract-test.mjs`): seeded anomaly reports on a subscribed skill must produce a notification, or the build fails. ACR doesn't track the human behind an agent, so notifications reach the agent, not the owner.
 
-| Tool | What it does |
-|------|-------------|
-| `log_interaction` | Log an interaction — the foundation for everything |
-| `get_friction_report` | Query the friction lens of your interaction profile |
-| `get_interaction_log` | Raw interaction history with network context |
-| `get_network_status` | The COVID-tracker / HIBP view for agent infrastructure |
-| `get_my_agent` | Your agent identity and registration state |
-| `check_environment` | Active compromise flags and network health on startup |
-| `get_notifications` | Unread anomaly signal notifications for your composition |
-| `acknowledge_threat` | Acknowledge a notification after reviewing it |
-| `update_composition` | Update your composition without re-registering |
-| `register_agent` | Explicit registration (auto-registration is default) |
-| `check_entity` | Ask the network what it knows about a skill/agent/system |
-| `get_skill_tracker` | Adoption and anomaly signals for tracked skills |
-| `get_skill_versions` | Version history for a skill hash |
-| `search_skills` | Query the network's knowledge of a skill by name |
+## The skill registry
+
+ACR observes skills that already exist in public registries (npm, GitHub) and tracks behavioral signals tied to them: adoption counts, anomaly signals, version history. It is not a catalog you install from and not a security check — it records what the network observed. Search ranks signal-bearing skills first; catalog entries without a usable identity are rejected at crawl time.
 
 ## Architecture
 
 ```
 Agents (Claude, OpenClaw, custom)
   |
-  +--> MCP Server (@tethral/acr-mcp)
-  |      or SDK (@tethral/acr-sdk / tethral-acr)
+  +--> Capture hook (@tethral/acr-hook — primary capture path)
+  |      PreToolUse/PostToolUse receipts, SessionEnd card
+  |
+  +--> MCP Server (@tethral/acr-mcp) or SDK (@tethral/acr-sdk / tethral-acr)
+  |      Lens queries, log_interaction, notifications
   |
   +--> Resolver API (Cloudflare Workers, edge-cached)
   |      Lookups, composition checks, notification feed
   |
   +--> Ingestion API (Vercel serverless)
-  |      Registration, interaction receipts, friction queries, notifications
+  |      Registration, interaction receipts, lens queries, notifications
   |
   +--> CockroachDB (distributed SQL)
   |      Interaction profiles, agent registry, skill observation data
   |
-  +--> Background Jobs
-         Skill observation crawlers
-         Anomaly signal computation
-         Friction baseline computation
-         Notification dispatch
+  +--> Scheduled jobs (GitHub Actions -> /api/cron/*)
+         system-health aggregation + chain analysis (15 min)
+         skill signal computation + watch evaluation + pattern detection (30 min)
+         friction baselines + data archival + agent expiration (daily)
+         Every run writes a heartbeat; /health reports pipeline liveness
+         separately from network activity.
 ```
 
-## Data Collection
+## Data collection
 
-ACR collects **interaction metadata only**: target system names, timing, status, chain context, and provider class. No request/response content, API keys, prompts, or PII is collected. Your interaction profile is visible only to you. Population baselines use aggregate statistics.
+ACR collects **interaction metadata only**: target system names, timing, status, chain context, and provider class. No request/response content, API keys, prompts, or PII. Your interaction profile is visible only to you; population baselines use aggregate statistics over persistent agents.
 
-[Full terms](https://acr.nfkey.ai/terms)
+**What we collect:** target system names (`mcp:github`, `api:stripe.com`), interaction timing (duration, timestamps, queue wait, retry count), interaction status, agent provider class, composition hashes (SHA-256 of SKILL.md content), chain context, agent-reported anomaly flags (category only).
 
-## Privacy Policy
+**What we do NOT collect:** request/response payloads, credentials, prompts or completions, PII, file contents, or the identity of the human behind the agent.
 
-**What we collect:**
-- Target system names (e.g., `mcp:github`, `api:stripe.com`)
-- Interaction timing (duration, timestamps, queue wait, retry count)
-- Interaction status (success, failure, timeout, partial)
-- Agent provider class (e.g., `anthropic`, `openai`)
-- Composition hashes (SHA-256 of SKILL.md content)
-- Chain context (`chain_id`, `chain_position`, `preceded_by`)
-- Agent-reported anomaly flags (category only, no payload)
+**Retention** (enforced by the scheduled `data-archival` and `agent-expiration` jobs): interaction receipts 90 days then archived to daily summaries; notifications 90 days; agent registrations soft-expired after 90 days of inactivity; skill observation data retained while the skill is observed.
 
-**What we do NOT collect:**
-- Request or response content/payloads
-- API keys, tokens, or credentials
-- Prompts, completions, or conversation content
-- Personally identifiable information (PII)
-- File contents or user data
-- Agent owner identity (we intentionally don't track the human behind the agent)
+**Third-party sharing:** none. **Contact:** security@tethral.com · [Full terms](https://acr.nfkey.ai/terms)
 
-**Data usage:**
-- Your interaction profile: visible only to the agent that generated it
-- Population baselines: aggregated statistics, no individual data shared
-- Jeopardy notifications: delivered to agents whose composition is affected
-- Skill observation: only publicly available skill metadata is indexed
-
-**Data retention:**
-- Interaction receipts: 90 days, then archived to daily summaries
-- Skill observation data: retained while the skill is observed
-- Notifications: retained for 90 days
-- Agent registrations: soft-expired after 90 days of inactivity
-
-**Third-party sharing:** None. ACR does not sell, share, or transfer interaction data to third parties.
-
-**Contact:** security@tethral.com
-
-[Full terms](https://acr.nfkey.ai/terms)
-
-## Run the Test Harness
+## Test harnesses
 
 ```bash
-node scripts/test-agent-lifecycle.mjs
+node scripts/test-agent-lifecycle.mjs   # full agent lifecycle against the live API
+node scripts/e2e-smoke.mjs              # do -> read-back loop through the default lens (runs in CI on schedule)
+node scripts/db-contract-test.mjs       # every migration, cron, and lens against a real CockroachDB (runs in PR CI)
 ```
 
-Simulates a full agent lifecycle: register, log interactions, query the friction lens, check for notifications.
+The db-contract harness exists because unit tests mock the database while production runs CockroachDB — dialect differences broke the same lens query three separate times before it was added. Every lens route must return 200, non-degraded, and counts that match the seeded data; the notification promise is asserted end-to-end.
 
 ## Development
 
@@ -233,10 +193,11 @@ pnpm install                    # Install dependencies
 pnpm build                      # Build all packages
 pnpm test:unit                  # Run unit tests
 node scripts/run-migration.mjs up      # Run DB migrations
-node scripts/test-agent-lifecycle.mjs  # Run integration test
 ```
 
-**Optional: dogfood ACR while working on this repo.** Copy [`.mcp.json.example`](.mcp.json.example) to `.mcp.json` and any MCP-aware client (Claude Code, Cursor, Continue, etc.) opening this directory will load the published `@tethral/acr-mcp`. Opt-in by design: `.mcp.json` itself is gitignored so contributors are never enrolled implicitly. To test local MCP changes instead of the published version, point `command` at `node` and `args` at `./packages/mcp-server/dist/cli/stdio.js` after `pnpm build`.
+**Release rule:** changing `packages/mcp-server`, `packages/acr-hook`, or an SDK requires a version bump (PR CI enforces it), and merges to master auto-publish any bumped package. A merged fix that never ships to npm is a fix that never happened.
+
+**Optional: dogfood ACR while working on this repo.** Copy [`.mcp.json.example`](.mcp.json.example) to `.mcp.json` and any MCP-aware client opening this directory will load the published `@tethral/acr-mcp`. Opt-in by design: `.mcp.json` is gitignored so contributors are never enrolled implicitly. To test local MCP changes, point `command` at `node` and `args` at `./packages/mcp-server/dist/cli/stdio.js` after `pnpm build`.
 
 ## License
 
@@ -245,6 +206,7 @@ MIT
 ## Links
 
 - **API**: https://acr.nfkey.ai
+- **npm (hook)**: [@tethral/acr-hook](https://www.npmjs.com/package/@tethral/acr-hook)
 - **npm (MCP)**: [@tethral/acr-mcp](https://www.npmjs.com/package/@tethral/acr-mcp)
 - **npm (SDK)**: [@tethral/acr-sdk](https://www.npmjs.com/package/@tethral/acr-sdk)
 - **PyPI**: [tethral-acr](https://pypi.org/project/tethral-acr/)

@@ -104,6 +104,53 @@ async function verifyLoop(state: AcrState): Promise<boolean> {
   return false;
 }
 
+/**
+ * `acr-hook remove` — clean uninstall of the capture hooks.
+ *
+ * Strips every acr-hook entry from ~/.claude/settings.json (backing the file
+ * up first) and leaves everything else untouched. The identity file
+ * (~/.claude/.acr-state.json) is kept so re-running init restores the same
+ * agent; delete it manually to abandon the identity. Trust plumbing for an
+ * always-on telemetry hook: leaving must be as easy as joining.
+ */
+export function cmdRemove(): void {
+  out('acr-hook remove');
+  const settingsPath = join(homedir(), '.claude', 'settings.json');
+  if (!existsSync(settingsPath)) {
+    out('  • no ~/.claude/settings.json — nothing to remove.');
+    return;
+  }
+  let settings: Record<string, any>;
+  try { settings = JSON.parse(readFileSync(settingsPath, 'utf8')); } catch {
+    out('  ✗ settings.json is not valid JSON — not touching it.');
+    process.exitCode = 1;
+    return;
+  }
+
+  let removed = 0;
+  const hooks: Record<string, any[]> = settings.hooks ?? {};
+  for (const event of Object.keys(hooks)) {
+    const arr = hooks[event];
+    if (!Array.isArray(arr)) continue;
+    const kept = arr.filter((g) => !(g?.hooks ?? []).some(
+      (h: any) => typeof h?.command === 'string' && h.command.includes('acr-hook'),
+    ));
+    removed += arr.length - kept.length;
+    if (kept.length > 0) hooks[event] = kept;
+    else delete hooks[event];
+  }
+  if (Object.keys(hooks).length === 0) delete settings.hooks;
+
+  if (removed === 0) {
+    out('  • no acr-hook entries found — nothing to remove.');
+    return;
+  }
+  copyFileSync(settingsPath, settingsPath + '.bak');
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  out(`  ✓ removed ${removed} hook entr${removed === 1 ? 'y' : 'ies'} (backup at settings.json.bak)`);
+  out('  • identity kept at ~/.claude/.acr-state.json — delete it to abandon the agent identity.');
+}
+
 export async function cmdInit(): Promise<void> {
   out('acr-hook init');
 
