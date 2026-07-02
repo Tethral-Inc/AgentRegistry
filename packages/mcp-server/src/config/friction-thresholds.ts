@@ -24,8 +24,13 @@
 /** Minimum local interactions before a comparative verdict fires. */
 export const LOCAL_MIN_INTERACTIONS = 10;
 
-/** Minimum distinct agents on the network side before a verdict fires. */
-export const NETWORK_MIN_AGENTS = 3;
+/**
+ * Minimum distinct agents on the network side before a verdict fires.
+ * The aggregator counts persistent agents only (>= 5 receipts in-window),
+ * so this floor is over real fleet members, not one-shot registrations —
+ * a "74-agent population" of CI churn once passed a lower floor here.
+ */
+export const NETWORK_MIN_AGENTS = 5;
 
 /** Minimum total network interactions before a verdict fires. */
 export const NETWORK_MIN_INTERACTIONS = 50;

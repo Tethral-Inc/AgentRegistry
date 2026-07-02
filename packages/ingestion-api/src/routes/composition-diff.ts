@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, createLogger, normalizeSystemId, canonicalTargetForBuiltinTool, makeError } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, createLogger, normalizeSystemId, canonicalTargetForBuiltinTool, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 import { degraded503 } from '../helpers/degraded-response.js';
 
@@ -220,7 +220,7 @@ app.get('/agent/:agent_id/composition-diff', async (c) => {
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
        AND created_at >= now() - ($2::int * INTERVAL '1 day')
-       AND (source IS NULL OR source != 'environmental')
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}
      GROUP BY target_system_id, target_system_type
      ORDER BY COUNT(*) DESC`,
     [agentId, windowDays],

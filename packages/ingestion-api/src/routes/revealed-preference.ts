@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import {
+import { RECEIPT_ENV_EXCLUSION_SQL,
   RevealedPreferenceScope,
   query,
   makeError,
@@ -99,7 +99,7 @@ app.get('/agent/:agent_id/revealed-preference', async (c) => {
        WHERE emitter_agent_id = $1
          AND created_at >= $2
          AND created_at <= $3
-         AND (source IS NULL OR source != 'environmental')${callSourceClause}
+         AND ${RECEIPT_ENV_EXCLUSION_SQL}${callSourceClause}
        GROUP BY target_system_id`,
       callQueryParams,
     ).catch((err) => { log.error({ err }, 'Failed to fetch called targets'); degraded = true; return []; }),

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, createLogger, FrictionScope, makeError } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, createLogger, FrictionScope, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 import { degraded503 } from '../helpers/degraded-response.js';
 
@@ -105,7 +105,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
        AND created_at >= $2
        AND created_at <= $3
        AND status != 'success'
-       AND (source IS NULL OR source != 'environmental')${groupedSourceClause}
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}${groupedSourceClause}
      GROUP BY target_system_id, target_system_type, status, error_code, interaction_category
      ORDER BY COUNT(*) DESC
      LIMIT 200`,
@@ -173,7 +173,7 @@ app.get('/agent/:agent_id/failure-registry', async (c) => {
      WHERE emitter_agent_id = $1
        AND created_at >= $2
        AND created_at <= $3
-       AND (source IS NULL OR source != 'environmental')${totalSourceClause}`,
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}${totalSourceClause}`,
     totalParams,
   ).catch((err) => { log.error({ err, agentId }, 'Failed to query failure-registry total'); degraded = true; return [] as Array<{ total: number }>; });
 

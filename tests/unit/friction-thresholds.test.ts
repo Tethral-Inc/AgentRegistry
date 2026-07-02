@@ -25,7 +25,7 @@ import {
 describe('friction-thresholds constants', () => {
   it('has sane defaults', () => {
     expect(LOCAL_MIN_INTERACTIONS).toBe(10);
-    expect(NETWORK_MIN_AGENTS).toBe(3);
+    expect(NETWORK_MIN_AGENTS).toBe(5);
     expect(NETWORK_MIN_INTERACTIONS).toBe(50);
     expect(NETWORK_HEALTHY_PCT).toBe(5);
     expect(LOCAL_CONFIG_FLOOR_PCT).toBe(5);
@@ -81,7 +81,7 @@ describe('hasEnoughSampleForVerdict', () => {
   it('enough when all floors cleared', () => {
     const r = hasEnoughSampleForVerdict({
       localInteractionCount: 10,
-      networkAgentCount: 3,
+      networkAgentCount: 5,
       networkInteractionCount: 50,
     });
     expect(r.enough).toBe(true);

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, queryOne, createLogger, makeError } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, queryOne, createLogger, makeError } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 
 const log = createLogger({ name: 'profile' });
@@ -69,7 +69,7 @@ app.get('/agent/:agent_id/profile', async (c) => {
        MAX(created_at)::text AS "last_seen"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
-       AND (source IS NULL OR source != 'environmental')`,
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}`,
     [agentId],
   ).catch(() => []);
 

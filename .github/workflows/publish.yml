@@ -2,6 +2,18 @@ name: Publish Packages
 on:
   push:
     tags: ['v*']
+    # Auto-publish on master pushes that touch a published package. Each job
+    # is idempotent — it skips when the version is already on the registry —
+    # so this only publishes when a PR bumped a version (which PR CI now
+    # requires for package changes). Without this, merged client fixes sat
+    # unpublished until someone remembered to tag or dispatch.
+    branches: [master]
+    paths:
+      - 'packages/mcp-server/**'
+      - 'packages/acr-hook/**'
+      - 'packages/ts-sdk/**'
+      - 'packages/python-sdk/**'
+      - 'server.json'
   workflow_dispatch:
     inputs:
       package:

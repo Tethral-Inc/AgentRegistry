@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import {
+import { RECEIPT_ENV_EXCLUSION_SQL,
   FrictionScope,
   query,
   makeError,
@@ -139,7 +139,7 @@ app.get('/agent/:agent_id/friction', async (c) => {
     queryParams.push(sourceFilter);
     whereExtra += ` AND source = $${queryParams.length}`;
   } else if (!includeEnv) {
-    whereExtra += ` AND (source IS NULL OR source != 'environmental')`;
+    whereExtra += ` AND ${RECEIPT_ENV_EXCLUSION_SQL}`;
   }
 
   const rows = await query<{

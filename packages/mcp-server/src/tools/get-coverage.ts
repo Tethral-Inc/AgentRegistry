@@ -56,6 +56,14 @@ export function getCoverageTool(server: McpServer, apiUrl: string) {
         let text = renderNotificationHeader(unreadCount);
         text += `Coverage Report for ${displayName}\n${'='.repeat(30)}\n`;
         text += `Source: ${source ?? 'all'}\n`;
+        if ((source ?? 'all') !== 'agent') {
+          // The hook sits downstream of the host's error boundary: it only
+          // sees surface errors (is_error / error field on tool_response).
+          // Network failures, timeouts, and auth rejections never reach
+          // PostToolUse — so a zero failure count is a statement about
+          // visibility, not reliability.
+          text += `Failure visibility: hook capture sees surface errors only — 0 failures means 0 VISIBLE failures.\n`;
+        }
 
         // A degraded payload means the stats query threw — the zeros below are
         // NOT a real reading, so don't render the rules as "Covered — OK".

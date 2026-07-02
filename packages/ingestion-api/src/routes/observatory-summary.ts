@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, createLogger } from '@acr/shared';
+import { query, createLogger, ELEVATED_SKILL_SIGNAL_SQL } from '@acr/shared';
 
 const log = createLogger({ name: 'observatory-summary' });
 const app = new Hono();
@@ -51,7 +51,7 @@ app.get('/network/observatory-summary', async (c) => {
   const skillsWithSignalsRows = await query<{ skills_with_signals: number }>(
     `SELECT COUNT(*)::int AS "skills_with_signals"
      FROM skill_hashes
-     WHERE anomaly_signal_count > 0`,
+     WHERE ${ELEVATED_SKILL_SIGNAL_SQL}`,
   ).catch(() => [{ skills_with_signals: 0 }]);
 
   const totals = {

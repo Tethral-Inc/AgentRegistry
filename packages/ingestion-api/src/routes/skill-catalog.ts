@@ -113,7 +113,7 @@ app.get('/skill-catalog/search', async (c) => {
      LEFT JOIN skill_hashes sh ON sh.skill_hash = sc.current_hash
      ${whereClause}
        AND sc.search_vector @@ plainto_tsquery('english', $${tsQueryParam})
-     ORDER BY "rank" DESC, sc.updated_at DESC
+     ORDER BY (COALESCE(sh.agent_count, 0) > 0)::int DESC, "rank" DESC, sc.updated_at DESC
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
     params,
   ).catch(() => []);
@@ -145,7 +145,7 @@ app.get('/skill-catalog/search', async (c) => {
        LEFT JOIN skill_hashes sh ON sh.skill_hash = sc.current_hash
        ${whereClause}
          AND (sc.skill_name ILIKE $${tsQueryParam} OR sc.description ILIKE $${tsQueryParam})
-       ORDER BY sc.updated_at DESC
+       ORDER BY (COALESCE(sh.agent_count, 0) > 0)::int DESC, sc.updated_at DESC
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params,
     ).catch(() => []);

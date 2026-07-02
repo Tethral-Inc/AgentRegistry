@@ -16,6 +16,7 @@ import {
   verifyRegistrationSignature,
   isTimestampFresh,
   POP_TIMESTAMP_WINDOW_MS,
+  ELEVATED_SKILL_SIGNAL_SQL,
 } from '@acr/shared';
 import {
   parseRegisterChurnThreshold,
@@ -78,7 +79,7 @@ async function buildEnvironmentBriefing() {
      anomaly_signal_count AS "anomaly_signal_count",
      agent_count AS "agent_count",
      first_seen_at::text AS "first_seen_at"
-     FROM skill_hashes WHERE anomaly_signal_count > 0
+     FROM skill_hashes WHERE ${ELEVATED_SKILL_SIGNAL_SQL}
      ORDER BY anomaly_signal_count DESC LIMIT 10`,
   );
   return {

@@ -25,6 +25,8 @@ export interface CrawlSourceAdapter {
 export interface CrawlResult {
   totalDiscovered: number;
   totalCrawled: number;
+  /** Entries rejected by the catalog quality gate (path-like/empty identity). */
+  skipped: number;
   newSkills: number;
   updatedSkills: number;
   unchangedSkills: number;

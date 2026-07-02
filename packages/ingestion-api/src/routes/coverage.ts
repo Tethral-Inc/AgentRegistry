@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query, createLogger } from '@acr/shared';
+import { RECEIPT_ENV_EXCLUSION_SQL, query, createLogger } from '@acr/shared';
 import { resolveAgentId } from '../helpers/resolve-agent.js';
 import { degraded503 } from '../helpers/degraded-response.js';
 
@@ -104,7 +104,7 @@ app.get('/agent/:agent_id/coverage', async (c) => {
        COUNT(*) FILTER (WHERE status != 'success' AND error_code IS NOT NULL)::int AS "failed_receipts_with_error_code"
      FROM interaction_receipts
      WHERE emitter_agent_id = $1
-       AND (source IS NULL OR source != 'environmental')${statsSourceClause}`,
+       AND ${RECEIPT_ENV_EXCLUSION_SQL}${statsSourceClause}`,
     statsParams,
   ).catch((err) => { log.error({ err, agentId }, 'Coverage stats query failed'); degraded = true; return []; });
 
