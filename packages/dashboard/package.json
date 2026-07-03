@@ -9,12 +9,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "^14",
-    "react": "^18",
-    "react-dom": "^18",
+    "next": "^15.5.16",
+    "react": "^19",
+    "react-dom": "^19",
     "typescript": "^5",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@types/node": "^20"
   },
   "license": "MIT",

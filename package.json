@@ -11,17 +11,25 @@
     "migrate:down": "node scripts/run-migration.mjs down"
   },
   "dependencies": {
-    "hono": "^4.12.14"
+    "hono": "^4.12.25"
   },
   "devDependencies": {
     "typescript": "^5.4",
     "@types/node": "^20",
-    "vitest": "^1.6",
+    "vitest": "^3.2.6",
     "turbo": "^2.0"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.15.9"
+  "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "overrides": {
+      "ws": ">=8.21.0",
+      "undici": ">=6.27.0",
+      "fast-uri": ">=3.1.2",
+      "vite": ">=6.4.3"
+    }
+  }
 }
