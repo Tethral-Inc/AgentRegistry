@@ -248,6 +248,39 @@ async function main() {
     assert(failureReg.total_interactions === 30, `failure-registry total_interactions == 30 (got ${failureReg.total_interactions})`);
   }
 
+  // ── Idempotency: retrying the same receipt must not double-count ──
+  // receipt_id derives from (agent, target, request_timestamp_ms); the unique
+  // index from migration 000027 + target-less ON CONFLICT make the second
+  // POST a no-op. Before 000027 this silently double-counted.
+  console.log('\n── Receipt idempotency ──');
+  const fixedTs = Date.now();
+  const idemReceipt = {
+    emitter: { agent_id: main.agentId, provider_class: 'custom' },
+    target: { system_id: 'api:idempotency-check', system_type: 'api' },
+    interaction: {
+      category: 'tool_call', status: 'success',
+      request_timestamp_ms: fixedTs, response_timestamp_ms: fixedTs + 50, duration_ms: 50,
+    },
+    anomaly: { flagged: false },
+    source: 'claude-code-hook',
+  };
+  for (let i = 0; i < 2; i++) {
+    const { res } = await req('/api/v1/receipts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': main.apiKey },
+      body: JSON.stringify(idemReceipt),
+    });
+    if (!res.ok) bad(`idempotency receipt POST ${i + 1} → HTTP ${res.status}`);
+  }
+  const idemCount = await db.query(
+    `SELECT COUNT(*)::int AS n FROM interaction_receipts
+     WHERE emitter_agent_id = $1 AND target_system_id = 'api:idempotency-check'`,
+    [main.agentId],
+  );
+  // pg returns CRDB int8 as a string — coerce before comparing.
+  assert(Number(idemCount.rows[0].n) === 1,
+    `same receipt POSTed twice stored exactly once (got ${idemCount.rows[0].n} rows)`);
+
   // ── The flagship promise: anomaly signals → notification for subscriber ──
   console.log('\n── Notification promise (E2E) ──');
   const notif = await db.query(
