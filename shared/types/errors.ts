@@ -3,6 +3,7 @@ export type ErrorCode =
   | 'MISSING_FIELD'
   | 'INVALID_FORMAT'
   | 'NOT_FOUND'
+  | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'

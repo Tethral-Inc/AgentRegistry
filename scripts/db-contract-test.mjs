@@ -281,6 +281,26 @@ async function main() {
   assert(Number(idemCount.rows[0].n) === 1,
     `same receipt POSTed twice stored exactly once (got ${idemCount.rows[0].n} rows)`);
 
+  // ── Name collision: a taken agent name is a 409, not a raw 500 ──
+  {
+    const kp = genKeypair();
+    const ts = Date.now();
+    const { res, body } = await req('/api/v1/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        public_key: kp.publicKey,
+        registration_timestamp_ms: ts,
+        signature: signRegistration(kp, ts),
+        provider_class: 'custom',
+        name: `db-contract-main-${RUN}`, // taken by the main agent above
+        composition: { tools: ['x'] },
+      }),
+    });
+    assert(res.status === 409 && body?.error?.code === 'CONFLICT',
+      `duplicate agent name → 409 CONFLICT (got ${res.status} ${body?.error?.code ?? JSON.stringify(body).slice(0, 80)})`);
+  }
+
   // ── The flagship promise: anomaly signals → notification for subscriber ──
   console.log('\n── Notification promise (E2E) ──');
   const notif = await db.query(

@@ -255,7 +255,28 @@ app.post('/register', async (c) => {
       env?.client_type ?? null,
       env?.transport_type ?? null,
     ],
-  );
+  ).catch((err: unknown) => {
+    // ON CONFLICT above only arbitrates public_key. A collision on the
+    // UNIQUE agent-name index (idx_agents_name, migration 000003) is a
+    // different constraint and used to escape as an unhandled 23505 →
+    // HTTP 500 INTERNAL_ERROR. A taken name is a client-resolvable
+    // conflict, not a server fault — say so.
+    const e = err as { code?: string; constraint?: string };
+    if (e?.code === '23505' && e?.constraint === 'idx_agents_name') {
+      return 'NAME_TAKEN' as const;
+    }
+    throw err;
+  });
+
+  if (insertRows === 'NAME_TAKEN') {
+    return c.json(
+      makeError(
+        'CONFLICT',
+        `Agent name "${agentName}" is already taken. Omit "name" to get a generated one, or choose another.`,
+      ),
+      409,
+    );
+  }
 
   const isReRegistration = insertRows.length === 0;
 
