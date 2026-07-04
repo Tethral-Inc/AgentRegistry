@@ -1,0 +1,24 @@
+# Dependabot SECURITY updates only — auto-opened PRs when a real advisory
+# affects the lockfile, validated by the same CI as any change (build, unit
+# tests, and the db-contract gate against real CockroachDB).
+#
+# Deliberately NOT enabled: routine version-update PRs
+# (open-pull-requests-limit: 0 turns those off). Dependency bumps with no
+# advisory behind them are noise for a repo this size; security fixes are
+# the ones that shouldn't wait on someone remembering to sweep.
+#
+# Caveat that stays manual: transitive vulnerabilities that no direct bump
+# can fix (Dependabot won't write pnpm overrides). See the pnpm.overrides
+# block in package.json for the existing ones.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Disables version-update PRs; security updates are unaffected.
+    open-pull-requests-limit: 0
+    groups:
+      security-fixes:
+        applies-to: security-updates
+        patterns: ["*"]
