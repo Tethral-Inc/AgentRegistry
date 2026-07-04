@@ -38,9 +38,21 @@ export async function handler() {
     // interactions" (exactly one call per "agent") and downstream population
     // baselines treated that churn as a fleet. Interaction counts stay raw;
     // only the agent-population number gets the persistence filter.
+    //
+    // EXCEPTION: platform:acr-funnel. This is the TTFR adoption funnel — every
+    // emitter posts at most two receipts by design (one 'init', one
+    // 'first_card' from @tethral/acr-hook), so NO funnel agent can ever reach
+    // the >= 5 persistence bar. Applying the filter there would zero the
+    // distinct-install count permanently and defeat the very metric the funnel
+    // exists to measure. Count every distinct agent for the funnel; the
+    // one-shot shape that the persistence filter guards against is the intended
+    // shape here. (system_id must match the target emitted by acr-hook's
+    // init.ts / session-card.ts.)
     const AGG_COLS = `
          COUNT(*)::text AS "total_count",
-         COUNT(DISTINCT ir.emitter_agent_id) FILTER (WHERE p.agent_id IS NOT NULL)::text AS "distinct_agents",
+         COUNT(DISTINCT ir.emitter_agent_id) FILTER (
+           WHERE p.agent_id IS NOT NULL OR ir.target_system_id = 'platform:acr-funnel'
+         )::text AS "distinct_agents",
          COUNT(*) FILTER (WHERE ir.anomaly_flagged = true)::text AS "anomaly_count",
          COUNT(*) FILTER (WHERE ir.status != 'success')::text AS "failure_count",
          percentile_cont(0.5) WITHIN GROUP (ORDER BY ir.duration_ms::FLOAT)::int AS "median_duration",
