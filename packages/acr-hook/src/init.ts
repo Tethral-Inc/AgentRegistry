@@ -185,16 +185,20 @@ export async function cmdInit(): Promise<void> {
   if (!state.init_at) {
     state.init_at = Date.now();
     try { writeState(state); } catch { /* read-only home — funnel just won't persist */ }
+    // Emit the init event ONLY on the first init — the funnel counts distinct
+    // installs reaching init, so re-running `acr-hook init` must not re-emit.
+    // (The emit lives inside this guard for that reason; retries because this
+    // one-shot event has no second chance if the single post is dropped.)
+    const fnow = Date.now();
+    await postReceipt(state.api_url, state.api_key, {
+      emitter: { agent_id: state.agent_id, provider_class: 'anthropic' },
+      target: { system_id: 'platform:acr-funnel', system_type: 'platform' },
+      interaction: { category: 'tool_call', status: 'success', request_timestamp_ms: fnow, response_timestamp_ms: fnow + 1, duration_ms: 1 },
+      anomaly: { flagged: false },
+      source: 'claude-code-hook',
+      categories: { funnel_stage: 'init', loop_verified: String(ok) },
+    }, { retries: 2 }).catch(() => { /* funnel is telemetry, not a gate */ });
   }
-  const fnow = Date.now();
-  await postReceipt(state.api_url, state.api_key, {
-    emitter: { agent_id: state.agent_id, provider_class: 'anthropic' },
-    target: { system_id: 'platform:acr-funnel', system_type: 'platform' },
-    interaction: { category: 'tool_call', status: 'success', request_timestamp_ms: fnow, response_timestamp_ms: fnow + 1, duration_ms: 1 },
-    anomaly: { flagged: false },
-    source: 'claude-code-hook',
-    categories: { funnel_stage: 'init', loop_verified: String(ok) },
-  }).catch(() => { /* funnel is telemetry, not a gate */ });
 
   out('');
   out('Done. A readout prints at the end of each session.');

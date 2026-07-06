@@ -159,6 +159,20 @@ async function main() {
   }
   ok('30 receipts seeded through /api/v1/receipts (24 ok, 6 failures)');
 
+  // A single one-shot funnel install: one receipt to platform:acr-funnel from a
+  // throwaway agent that never becomes persistent (1 < 5 receipts). It must
+  // survive BOTH low-volume gates or the TTFR adoption funnel is invisible
+  // exactly when it matters most (the first trickle of installs):
+  //   - the >=5 persistence filter on the agent count (system-health-aggregate)
+  //   - the >=3 display gate on the systems list (network-status)
+  // PR #20 fixed the first and shipped without a test; the second was missed.
+  const funnelAgent = await register(`db-contract-funnel-${RUN}`, { tools: ['x'] });
+  await postReceipt(funnelAgent, {
+    target: { system_id: 'platform:acr-funnel', system_type: 'platform' },
+    categories: { funnel_stage: 'init' },
+  });
+  ok('1 funnel receipt seeded (platform:acr-funnel, non-persistent agent)');
+
   // 25 distinct reporters each flag one anomaly on the NAMED skill target —
   // the notification path must resolve the name to the hash to match the
   // main agent's hash-keyed subscription.
@@ -221,6 +235,16 @@ async function main() {
 
   const { res: nsRes, body: ns } = await req('/api/v1/network/status');
   assert(nsRes.ok && ns.degraded !== true, `network/status → ${nsRes.status}, degraded=${ns.degraded}`);
+
+  // The one-shot funnel install seeded above must render despite total_interactions=1.
+  // Guards the display-gate exemption (network-status.ts) against regression —
+  // the twin of PR #20's persistence exemption, which shipped untested.
+  const funnelRow = (ns.systems ?? []).find((s) => s.system_id === 'platform:acr-funnel');
+  assert(!!funnelRow, 'network/status systems includes platform:acr-funnel despite total_interactions < 3 (low-volume funnel exemption)');
+  if (funnelRow) {
+    assert(funnelRow.total_interactions === 1, `funnel total_interactions == 1 (got ${funnelRow.total_interactions})`);
+    assert(funnelRow.agent_count >= 1, `funnel distinct agents >= 1 despite non-persistence (got ${funnelRow.agent_count})`);
+  }
   const { res: hRes, body: health } = await req('/api/v1/health');
   assert(hRes.ok, `/health → ${hRes.status} (status=${health.status})`);
   assert(health.status === 'ok', `/health status is 'ok' after a fresh aggregation run (got '${health.status}' — heartbeat wiring)`);

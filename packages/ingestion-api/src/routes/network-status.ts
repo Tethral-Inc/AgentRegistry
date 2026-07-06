@@ -94,7 +94,15 @@ app.get('/network/status', async (c) => {
             last_seen_at::text AS "last_seen_at"
      FROM system_health
      WHERE source = $1
-       AND total_interactions >= 3
+       -- Low-volume systems are hidden to cut dashboard noise. EXCEPTION:
+       -- platform:acr-funnel is the TTFR adoption funnel — each install emits
+       -- at most two receipts by design (one 'init', one 'first_card'), so it
+       -- can never clear a >=3 bar. Suppressing it here hides the very metric
+       -- it exists to surface, exactly in the nascent-adoption regime where the
+       -- first one or two installs matter most. This is the display-side twin
+       -- of the persistence-filter exemption in system-health-aggregate.ts —
+       -- keep the two in lockstep, or the funnel row exists but never renders.
+       AND (total_interactions >= 3 OR system_id = 'platform:acr-funnel')
        AND last_seen_at >= now() - INTERVAL '30 days'
      ORDER BY
        failure_rate DESC,

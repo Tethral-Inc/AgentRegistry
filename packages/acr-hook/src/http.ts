@@ -3,6 +3,7 @@
  * returns quickly so the host process isn't blocked waiting on ACR.
  */
 const TIMEOUT_MS = 1500;
+const RETRY_BACKOFF_MS = 300;
 
 export interface HookReceipt {
   emitter: {
@@ -26,7 +27,7 @@ export interface HookReceipt {
   categories?: Record<string, string>;
 }
 
-export async function postReceipt(
+async function attemptPost(
   apiUrl: string,
   apiKey: string | undefined,
   receipt: HookReceipt,
@@ -49,5 +50,30 @@ export async function postReceipt(
     }
   } catch {
     return false;
+  }
+}
+
+/**
+ * Post a receipt. Default is a single fire-and-forget attempt (`retries: 0`) —
+ * the capture hot-path posts hundreds of these per session and must never block
+ * or amplify load, so its behavior is unchanged.
+ *
+ * `retries` is opt-in for ONE-SHOT events (the TTFR funnel's init / first_card):
+ * those fire at most once in an install's lifetime, so a single transient
+ * failure permanently erases that install from the adoption metric. A couple of
+ * short-backoff retries buy resilience there without touching the hot path. The
+ * success path never sleeps — only a failed attempt waits before retrying.
+ */
+export async function postReceipt(
+  apiUrl: string,
+  apiKey: string | undefined,
+  receipt: HookReceipt,
+  opts?: { retries?: number },
+): Promise<boolean> {
+  const retries = opts?.retries ?? 0;
+  for (let attempt = 0; ; attempt++) {
+    if (await attemptPost(apiUrl, apiKey, receipt)) return true;
+    if (attempt >= retries) return false;
+    await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS * (attempt + 1)));
   }
 }
