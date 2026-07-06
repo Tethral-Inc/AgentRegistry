@@ -17,6 +17,7 @@ import {
   agentAnomalyDetect,
   patternDetection,
   watchEvaluation,
+  anomalyCorrelation,
 } from '@acr/intelligence';
 
 const log = createLogger({ name: 'cron' });
@@ -83,6 +84,13 @@ app.get('/cron/agent-anomaly-detect', wrapJob('agent-anomaly-detect', agentAnoma
 // active agent hourly; MCP tools read from `agent_patterns` and render
 // a "Things we noticed" section.
 app.get('/cron/pattern-detection', wrapJob('pattern-detection', patternDetection));
+
+// Phase L: Cross-agent anomaly correlation. Clusters last-6h anomaly receipts
+// by target and writes daily_summaries[entity_type='correlation'] escalations,
+// which network-status reads for "Recent cross-agent escalations". Previously
+// unscheduled (orphaned from the retired Lambda pipeline) → that section was
+// always empty. Reads the same interaction_receipts the other lenses read.
+app.get('/cron/anomaly-correlation', wrapJob('anomaly-correlation', anomalyCorrelation));
 
 // Phase K: Watch evaluation. Evaluates enabled watches every hour,
 // writes notifications on fresh threshold crossings. Runs off the

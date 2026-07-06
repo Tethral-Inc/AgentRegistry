@@ -11,3 +11,4 @@ export { handler as agentBaselineCompute } from './anomaly/agent-baseline-comput
 export { handler as agentAnomalyDetect } from './anomaly/agent-anomaly-detect.js';
 export { handler as patternDetection } from './patterns/index.js';
 export { handler as watchEvaluation } from './watches/index.js';
+export { handler as anomalyCorrelation } from './anomaly/correlation.js';

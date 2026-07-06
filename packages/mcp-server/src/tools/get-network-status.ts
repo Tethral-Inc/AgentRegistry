@@ -50,11 +50,23 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         text += ` | Interactions: ${(t.interactions_24h ?? 0).toLocaleString()}\n`;
         text += `  Anomaly rate: ${fmtRatio(t.anomaly_rate_24h ?? 0)}\n`;
 
+        // Adoption is a distinct fact from health, and its ABSENCE must be
+        // visible rather than rendered as green. platform:acr-funnel carries
+        // one event per install reaching first readout; when no funnel row is
+        // present, zero new adopters were observed — say so explicitly instead
+        // of letting a low-failure, low-anomaly board read as "all good".
+        const systems = data.systems ?? [];
+        const hasFunnel = systems.some(
+          (s: Record<string, unknown>) => s.system_id === 'platform:acr-funnel',
+        );
+        if (!hasFunnel) {
+          text += `  Adoption: no install→first-readout funnel events in 24h (no confirmed new adopters).\n`;
+        }
+
         // Systems. Each row is a 24h snapshot from the system's LAST active
         // day — not the same window as the totals above. Without the as-of
         // stamp, a burst from weeks ago ("74 agents") sat beside today's
         // totals ("11 agents") as if they described the same period.
-        const systems = data.systems ?? [];
         if (systems.length > 0) {
           text += `\n${section(`Systems (${systems.length}, worst-first)`)}\n`;
           text += `  Each row = that system's last active 24h window (persistent agents only).\n`;

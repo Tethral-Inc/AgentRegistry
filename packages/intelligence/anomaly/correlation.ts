@@ -134,3 +134,22 @@ export async function correlateAnomalies(): Promise<{
   log.info({ clusters: clusters.size, escalations }, 'Anomaly correlation completed');
   return { clusters: clusters.size, escalations };
 }
+
+/**
+ * Cron handler wrapper (matches the { statusCode, body } contract the cron
+ * route/heartbeat layer expects). correlateAnomalies() is the ONLY writer of
+ * daily_summaries[entity_type='correlation'], which network-status reads for
+ * "Recent cross-agent escalations". It was written for the retired AWS-Lambda
+ * pipeline and never rewired to the GitHub-Actions cron, so that whole section
+ * was permanently empty. This handler is what re-connects it.
+ */
+export async function handler() {
+  try {
+    const result = await correlateAnomalies();
+    return { statusCode: 200, body: JSON.stringify(result) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    log.error({ err }, 'Anomaly correlation failed');
+    return { statusCode: 500, body: JSON.stringify({ error: msg }) };
+  }
+}

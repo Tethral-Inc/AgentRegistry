@@ -103,7 +103,15 @@ app.get('/network/status', async (c) => {
        -- of the persistence-filter exemption in system-health-aggregate.ts —
        -- keep the two in lockstep, or the funnel row exists but never renders.
        AND (total_interactions >= 3 OR system_id = 'platform:acr-funnel')
-       AND last_seen_at >= now() - INTERVAL '30 days'
+       -- 24h, not 30 days. system_health rows are UPSERTed (never deleted) and
+       -- last_seen_at is stamped now() only for systems present in the current
+       -- 24h aggregation window — so a 30-day gate rendered weeks-old fossils
+       -- (e.g. a system last active 9 days ago) as if they were current, which
+       -- is exactly the "same systems every run" staleness. A system whose row
+       -- wasn't touched in the last 24h did NOT appear in the last window and is
+       -- not currently active. Funnel is exempt: it emits at most 2 receipts per
+       -- install and must stay visible in the nascent-adoption regime.
+       AND (last_seen_at >= now() - INTERVAL '24 hours' OR system_id = 'platform:acr-funnel')
      ORDER BY
        failure_rate DESC,
        anomaly_rate DESC,
