@@ -48,7 +48,17 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         text += `  Active agents: ${t.active_agents ?? 0}`;
         text += ` | Systems: ${t.active_systems ?? 0}`;
         text += ` | Interactions: ${(t.interactions_24h ?? 0).toLocaleString()}\n`;
-        text += `  Anomaly rate: ${fmtRatio(t.anomaly_rate_24h ?? 0)}\n`;
+        const anomalyRate24h = t.anomaly_rate_24h ?? 0;
+        text += `  Anomaly rate: ${fmtRatio(anomalyRate24h)}`;
+        // anomaly_flagged is a self-report field (log_interaction only); the
+        // host-side hook — the primary capture path — never sets it, and the
+        // server-side detector runs in shadow mode. So 0% over hook-dominated
+        // traffic means "nobody flagged anything", NOT "verified healthy".
+        // Say so, or the number reads as an all-clear it can't earn.
+        if (anomalyRate24h === 0) {
+          text += `  (self-reported flags only — hook capture never flags, so 0% is expected, not verified-healthy)`;
+        }
+        text += `\n`;
 
         // Adoption is a distinct fact from health, and its ABSENCE must be
         // visible rather than rendered as green. platform:acr-funnel carries

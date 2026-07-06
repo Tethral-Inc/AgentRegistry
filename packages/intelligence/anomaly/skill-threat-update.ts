@@ -1,4 +1,11 @@
-import { query, queryOne, execute, createLogger } from '@acr/shared';
+import {
+  query,
+  queryOne,
+  execute,
+  createLogger,
+  SKILL_SIGNAL_MIN_REPORTERS,
+  SKILL_SIGNAL_MIN_INTERACTIONS,
+} from '@acr/shared';
 
 const log = createLogger({ name: 'skill-threat-update' });
 
@@ -157,9 +164,20 @@ export async function handler() {
       }
     }
 
-    // Notify subscribed agents when signal counts are elevated
-    // (using raw thresholds: 25+ reporters AND 40%+ anomaly rate)
-    const elevated = updates.filter((u) => u.reporterCount >= 25 && u.anomalyRate >= 0.40);
+    // Notify subscribed agents when a signal clears the SAME elevation floor the
+    // read paths use (ELEVATED_SKILL_SIGNAL_SQL: >= MIN_REPORTERS distinct agents
+    // AND >= MIN_INTERACTIONS observations), plus a push-worthy anomaly rate. The
+    // old hardcoded 25-reporter gate was unreachable at this network's scale, so
+    // a skill could render as "elevated" on every dashboard while the notifier
+    // stayed permanently silent — display and push disagreeing about the same
+    // signal. Push is a strict subset of what's displayed (adds the 40% rate),
+    // and both now share the reporter/volume floor so they can't drift apart.
+    const elevated = updates.filter(
+      (u) =>
+        u.reporterCount >= SKILL_SIGNAL_MIN_REPORTERS &&
+        u.totalCount >= SKILL_SIGNAL_MIN_INTERACTIONS &&
+        u.anomalyRate >= 0.40,
+    );
     if (elevated.length > 0) {
       const catalogLookups = new Map<string, { skill_name: string; description: string; version: string } | null>();
       for (const c of elevated) {
