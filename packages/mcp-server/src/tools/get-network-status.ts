@@ -48,13 +48,35 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
         text += `  Active agents: ${t.active_agents ?? 0}`;
         text += ` | Systems: ${t.active_systems ?? 0}`;
         text += ` | Interactions: ${(t.interactions_24h ?? 0).toLocaleString()}\n`;
-        text += `  Anomaly rate: ${fmtRatio(t.anomaly_rate_24h ?? 0)}\n`;
+        const anomalyRate24h = t.anomaly_rate_24h ?? 0;
+        text += `  Anomaly rate: ${fmtRatio(anomalyRate24h)}`;
+        // anomaly_flagged is a self-report field (log_interaction only); the
+        // host-side hook — the primary capture path — never sets it, and the
+        // server-side detector runs in shadow mode. So 0% over hook-dominated
+        // traffic means "nobody flagged anything", NOT "verified healthy".
+        // Say so, or the number reads as an all-clear it can't earn.
+        if (anomalyRate24h === 0) {
+          text += `  (self-reported flags only — hook capture never flags, so 0% is expected, not verified-healthy)`;
+        }
+        text += `\n`;
+
+        // Adoption is a distinct fact from health, and its ABSENCE must be
+        // visible rather than rendered as green. platform:acr-funnel carries
+        // one event per install reaching first readout; when no funnel row is
+        // present, zero new adopters were observed — say so explicitly instead
+        // of letting a low-failure, low-anomaly board read as "all good".
+        const systems = data.systems ?? [];
+        const hasFunnel = systems.some(
+          (s: Record<string, unknown>) => s.system_id === 'platform:acr-funnel',
+        );
+        if (!hasFunnel) {
+          text += `  Adoption: no install→first-readout funnel events in 24h (no confirmed new adopters).\n`;
+        }
 
         // Systems. Each row is a 24h snapshot from the system's LAST active
         // day — not the same window as the totals above. Without the as-of
         // stamp, a burst from weeks ago ("74 agents") sat beside today's
         // totals ("11 agents") as if they described the same period.
-        const systems = data.systems ?? [];
         if (systems.length > 0) {
           text += `\n${section(`Systems (${systems.length}, worst-first)`)}\n`;
           text += `  Each row = that system's last active 24h window (persistent agents only).\n`;

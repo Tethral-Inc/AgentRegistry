@@ -100,7 +100,7 @@ export async function renderSessionCard(): Promise<string | null> {
         funnel_stage: 'first_card',
         ...(state.init_at ? { ttfr_ms: String(state.first_card_at - state.init_at) } : {}),
       },
-    }).catch(() => { /* telemetry, not a gate */ });
+    }, { retries: 2 }).catch(() => { /* telemetry, not a gate — but retry: one-shot */ });
   }
 
   return lines.join('\n');
