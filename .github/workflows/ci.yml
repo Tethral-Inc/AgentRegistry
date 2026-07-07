@@ -8,6 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the version-bump gate below diffs against the PR's
+          # merge base. With the default shallow (depth 1) checkout there is no
+          # reachable merge base, the diff errors, and the gate silently no-ops.
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
@@ -20,7 +25,17 @@ jobs:
       # change. This check makes the bump a merge requirement.
       - name: Require version bump when a published package changes
         run: |
-          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          # Un-shallow fetch of the base (the old --depth=1 left no merge base,
+          # so the three-dot diff below failed "no merge base", returned empty,
+          # skipped every package, and the gate silently passed — which is how
+          # an unbumped mcp-server change reached master and broke publish).
+          git fetch --no-tags origin "$GITHUB_BASE_REF"
+          # Fail LOUD if a merge base still can't be computed, rather than
+          # letting the diff no-op back into a silent pass.
+          if ! git merge-base "origin/$GITHUB_BASE_REF" HEAD >/dev/null 2>&1; then
+            echo "::error::cannot compute merge base with origin/$GITHUB_BASE_REF — version-bump gate cannot run (checkout needs fetch-depth: 0)"
+            exit 1
+          fi
           fail=0
           for pkg in mcp-server acr-hook ts-sdk python-sdk; do
             dir="packages/$pkg"
