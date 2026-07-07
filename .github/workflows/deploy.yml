@@ -109,26 +109,31 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx wrangler deploy
-      # Deploy ingestion API to Vercel (production) — prebuilt to avoid remote OOM on monorepo resolution
+      # Deploy ingestion API to Vercel (production) — prebuilt to avoid remote OOM on monorepo resolution.
+      # Vercel CLI is PINNED (not @latest): 54.21.0 broke the prebuilt deploy of this
+      # pnpm monorepo — "File does not exist: packages/ingestion-api/node_modules/hono"
+      # — while 54.20.1 (last green deploy, 2026-07-04) works. Do not float this back
+      # to @latest without re-verifying a prebuilt deploy; the symlink-tracing behaviour
+      # regresses across CLI versions. Bump deliberately.
       - name: Pull Vercel environment
         working-directory: packages/ingestion-api
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: npx vercel@54.20.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Build with Vercel
         working-directory: packages/ingestion-api
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+        run: npx vercel@54.20.1 build --prod --token="$VERCEL_TOKEN"
       - name: Deploy prebuilt to Vercel
         working-directory: packages/ingestion-api
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: npx vercel@54.20.1 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
   # Dashboard: separate Vercel project (Next.js). It was never wired into CI —
   # production sat on a months-old manual `vercel deploy`, so dashboard-side
@@ -166,4 +171,4 @@ jobs:
       - name: Deploy dashboard to Vercel (remote build)
         if: steps.vercel_check.outputs.configured == 'true'
         working-directory: packages/dashboard
-        run: npx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+        run: npx vercel@54.20.1 deploy --prod --yes --token="$VERCEL_TOKEN"
