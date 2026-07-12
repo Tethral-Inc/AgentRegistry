@@ -5,9 +5,12 @@ name: Anomaly tick
 # Clean-skips when CRON_SECRET or INGESTION_API_URL aren't set, so the
 # workflow is safe to merge before the secrets land.
 
+# SUSPENDED 2026-07-12: schedule removed while ACR has no external users — the
+# */15 tick was firing idempotent no-ops against empty data. Kept as manual-only.
+# Re-enable by uncommenting the `schedule:` block below.
 on:
-  schedule:
-    - cron: '*/15 * * * *'
+  # schedule:
+  #   - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:

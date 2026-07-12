@@ -1,7 +1,10 @@
 name: Nightly
+# SUSPENDED 2026-07-12: nightly terraform-drift + dependency-audit paused while
+# ACR has no external users. Kept as manual-only. Re-enable by uncommenting the
+# `schedule:` block below. (Dependabot still watches the lockfile continuously.)
 on:
-  schedule:
-    - cron: '0 6 * * *'
+  # schedule:
+  #   - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
