@@ -10,9 +10,12 @@ name: E2E Smoke
 # minted once via `node scripts/e2e-smoke.mjs --provision`) rather than
 # registering per run, so the check doesn't add to ephemeral-agent churn.
 
+# SUSPENDED 2026-07-12: hourly liveness check paused while ACR has no external
+# users — monitoring a loop nobody exercises. Kept as manual-only. Re-enable by
+# uncommenting the `schedule:` block below.
 on:
-  schedule:
-    - cron: '40 * * * *'   # hourly, offset from the lens-aggregation crons
+  # schedule:
+  #   - cron: '40 * * * *'   # hourly, offset from the lens-aggregation crons
   workflow_dispatch:
 
 jobs:
