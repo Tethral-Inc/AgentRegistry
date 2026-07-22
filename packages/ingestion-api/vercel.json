@@ -1,6 +1,14 @@
 {
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm --filter @acr/shared build && pnpm --filter @acr/intelligence build && pnpm --filter ingestion-api bundle:vercel",
+  "functions": {
+    "api/[[...route]].ts": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    { "path": "/api/cron/daily-tick", "schedule": "15 2 * * *" }
+  ],
   "rewrites": [
     { "source": "/lookup", "destination": "/public/lookup.html" },
     { "source": "/(.*)", "destination": "/api/[[...route]]" }

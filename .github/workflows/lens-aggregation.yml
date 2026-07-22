@@ -1,28 +1,28 @@
 name: Lens aggregation
 
-# Populates the lens rollup tables the MCP reads (system_health, chain_analysis,
-# skill anomaly counts, friction_baselines) by curling the ingestion API's cron
-# endpoints on schedule. These jobs are defined in the repo-root vercel.json as
-# Vercel crons, but the production deploy ships from packages/ingestion-api/
-# (whose vercel.json has no `crons`), so Vercel never registers them — driving
-# them from GitHub Actions is plan-independent and matches anomaly-tick.yml.
+# Manual runner for the lens rollup jobs (system_health, chain_analysis, skill
+# anomaly counts, friction_baselines) — it curls the ingestion API's cron
+# endpoints. All endpoints are idempotent no-ops when there's no new data, so
+# running this by hand is always safe.
 #
-# Routing is by `github.event.schedule` (the cron string that triggered the run)
-# rather than wall-clock minute math: GitHub's scheduler routinely fires late
-# (a ~02:00 run can land at 02:27), and a late run still carries its schedule —
-# so the daily friction-baseline job can't be missed by a delayed trigger.
-# All endpoints are idempotent no-ops when there's no new data.
-
-# SUSPENDED 2026-07-12: schedules removed while ACR has no external users — these
-# were aggregating only self-dogfood data. Kept as manual-only (workflow_dispatch
-# still routes via DISPATCH_JOBS). Re-enable by uncommenting the `schedule:` block.
-# NOTE: while suspended, the lens rollups the MCP reads (system_health,
-# friction_baselines, etc.) stop updating — network/friction reports freeze.
+# THIS WORKFLOW NO LONGER SCHEDULES ANYTHING, on purpose.
+#
+# History: the schedule lived here because the repo-root vercel.json's `crons`
+# never registered (the production deploy ships from packages/ingestion-api/,
+# whose vercel.json had no `crons`). GitHub Actions was the plan-independent
+# workaround. It cost us twice: its scheduler fires late enough under throttle
+# that a */15 cron landed ~2h apart, and on 2026-07-12 commenting out the
+# `schedule:` block silently froze every lens the MCP reads for 10 days while
+# /health reported "cron likely stuck".
+#
+# Both are fixed at the root: the schedule now lives in
+# packages/ingestion-api/vercel.json (where the deploy actually reads it) as a
+# single daily /api/cron/daily-tick, and job_schedules (migration 000028)
+# declares the expected cadence so a deliberate pause reports as `paused`
+# instead of `down`. To suspend aggregation now, update the job_schedules row —
+# that keeps /health and get_network_status honest. Do not re-add a `schedule:`
+# here: two schedulers writing the same heartbeats makes freshness unreadable.
 on:
-  # schedule:
-  #   - cron: '*/15 * * * *'   # high-frequency: system-health-aggregate + chain-analysis
-  #   - cron: '7,37 * * * *'   # ~2x/hour: skill-threat-update + watch-evaluation + pattern-detection
-  #   - cron: '15 2 * * *'     # daily: friction-baseline-compute + data-archival + agent-expiration
   workflow_dispatch:
     inputs:
       jobs:
@@ -35,7 +35,6 @@ jobs:
     env:
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
       INGESTION_API_URL: ${{ secrets.INGESTION_API_URL }}
-      SCHEDULE: ${{ github.event.schedule }}
       DISPATCH_JOBS: ${{ github.event.inputs.jobs }}
     steps:
       - name: Check secrets configured
@@ -63,24 +62,16 @@ jobs:
               *) echo "::warning::$1 returned $code"; fail=1 ;;
             esac
           }
-          # Decide whether endpoint $1 is due for this trigger.
+          # Manual-only now, so "due" is just: did the operator ask for it?
+          # (The schedule-routing case statement this replaced was dead code
+          # once the `schedule:` triggers moved to Vercel — see header.)
           due() {
-            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-              [ "${DISPATCH_JOBS:-all}" = "all" ] && return 0
-              printf ' %s ' "$DISPATCH_JOBS" | grep -q " $1 "
-              return $?
-            fi
-            case "$SCHEDULE" in
-              '*/15 * * * *') case "$1" in system-health-aggregate|chain-analysis) return 0;; esac ;;
-              '7,37 * * * *') case "$1" in skill-threat-update|watch-evaluation|pattern-detection|anomaly-correlation) return 0;; esac ;;
-              '15 2 * * *')   case "$1" in friction-baseline-compute|data-archival|agent-expiration) return 0;; esac ;;
-            esac
-            return 1
+            [ "${DISPATCH_JOBS:-all}" = "all" ] && return 0
+            printf ' %s ' "$DISPATCH_JOBS" | grep -q " $1 "
           }
-          # Every handler in cron.ts must appear here (or in anomaly-tick.yml):
-          # a cron endpoint with no scheduler is a claim the product doesn't keep
-          # (data-archival and agent-expiration back the privacy policy's
-          # retention promises; watch-evaluation backs set_watch notifications).
+          # Scheduling lives in packages/ingestion-api/vercel.json; this list is
+          # the manual escape hatch, one name per job so an operator can re-run a
+          # single lens without triggering the whole daily tick.
           for job in system-health-aggregate chain-analysis skill-threat-update friction-baseline-compute watch-evaluation pattern-detection anomaly-correlation data-archival agent-expiration; do
             if due "$job"; then hit "$job"; fi
           done
