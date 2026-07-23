@@ -12,7 +12,10 @@ import { truncHash } from '../utils/style.js';
  * loud isError instead of a silent "unknown" status.
  */
 const HealthResponseSchema = z.object({
-  status: z.enum(['ok', 'degraded', 'stale', 'down']),
+  // 'paused' (added with migration 000028) = aggregation is suspended on
+  // purpose. Keep it in the enum or check_environment fails to parse a
+  // perfectly healthy response.
+  status: z.enum(['ok', 'degraded', 'paused', 'stale', 'down']),
   database: z.enum(['connected', 'unreachable']),
   last_aggregation_at: z.string().nullable(),
   freshness_seconds: z.number().nullable(),

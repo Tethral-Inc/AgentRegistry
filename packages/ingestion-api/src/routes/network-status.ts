@@ -124,6 +124,11 @@ app.get('/network/status', async (c) => {
   // routes can never disagree about pipeline state.
   const freshness = await probeAggregationFreshness();
   const stale = freshness.stale;
+  // Paused is reported separately from stale so the MCP can say "frozen on
+  // purpose, here's why" instead of the ambiguous "jobs may not have run".
+  // Both can't be true at once — probeAggregationFreshness forces stale=false
+  // while paused — but a reader that only knows `stale` still behaves sanely.
+  const paused = freshness.paused;
 
   // 3. Skills with anomaly signals
   const threats = await query<{
@@ -220,6 +225,13 @@ app.get('/network/status', async (c) => {
   return c.json({
     timestamp: new Date().toISOString(),
     stale,
+    paused,
+    ...(paused
+      ? {
+          paused_reason: freshness.schedule_reason,
+          paused_since: freshness.suspended_at,
+        }
+      : {}),
     degraded,
     ...(degraded ? { degraded_reason: 'network-status query failed' } : {}),
     totals,

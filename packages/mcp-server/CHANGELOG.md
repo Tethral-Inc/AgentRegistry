@@ -1,3 +1,25 @@
+## 2.14.0 (2026-07-22)
+
+Tell a deliberate pause apart from a broken pipeline. Between 2026-07-12
+and 2026-07-22 the aggregation cron was suspended on purpose, and
+`get_network_status` printed "DATA MAY BE STALE — background jobs may not
+have run recently" while `check_environment` reported the network as
+`down`. The rollups really were frozen, but nothing was broken, and the
+output gave a reader no way to tell which.
+
+- **`get_network_status` renders a pause as a pause.** When the API
+  reports `paused`, the banner now names the date and the operator's
+  stated reason — "AGGREGATION PAUSED since 2026-07-12 — figures below
+  are frozen at that point, not current" — instead of the ambiguous
+  stale warning. Genuine staleness still renders as before.
+- **`check_environment` accepts the new `paused` status.** Its response
+  schema is validated, so without this the tool would hard-fail parsing
+  a perfectly healthy backend response.
+
+Backend counterpart: migration 000028 adds `job_schedules`, which
+declares each job's expected cadence so `/health` derives its thresholds
+from the real schedule rather than assuming a 15-minute one.
+
 ## 2.11.1 (2026-05-01)
 
 Dashboard deeplink. The link printed by `get_my_agent` (and every lens

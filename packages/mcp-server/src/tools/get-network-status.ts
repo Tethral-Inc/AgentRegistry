@@ -39,7 +39,15 @@ export function getNetworkStatusTool(server: McpServer, apiUrl: string) {
           return { content: [{ type: 'text' as const, text }] };
         }
 
-        if (data.stale) {
+        // Paused is a different claim from stale: the rollups below are frozen
+        // on purpose, at a known date, for a stated reason. Saying "may not have
+        // run recently" for a deliberate suspension sent readers hunting a
+        // broken cron for 10 days in July 2026 — name the real state instead.
+        if (data.paused) {
+          const since = data.paused_since ? ` since ${String(data.paused_since).slice(0, 10)}` : '';
+          const why = data.paused_reason ? ` — ${data.paused_reason}` : '';
+          text += `\nAGGREGATION PAUSED${since} — figures below are frozen at that point, not current${why}.\n`;
+        } else if (data.stale) {
           text += `\nDATA MAY BE STALE — background jobs may not have run recently.\n`;
         }
 
