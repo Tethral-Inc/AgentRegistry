@@ -11,12 +11,12 @@
     "migrate:down": "node scripts/run-migration.mjs down"
   },
   "dependencies": {
-    "hono": "^4.12.31"
+    "hono": "^4.13.5"
   },
   "devDependencies": {
     "typescript": "^5.4",
     "@types/node": "^20",
-    "vitest": "^4.1.10",
+    "vitest": "^5.0.2",
     "turbo": "^2.10.6"
   },
   "engines": {
